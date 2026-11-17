@@ -21,6 +21,10 @@ E2E 首次需要 `npx playwright install chromium`，Linux CI 可加 `--with-dep
 - 原生 radio 方向键、设置开闭、Escape/外侧点击、首尾 Tab 循环和焦点返回。
 - 配色/夜景/减少动画的持久化、恢复默认、禁止 localStorage 时只在当前生效、系统减少动态效果优先。
 
+## Sprint 2.5 验收（2026-11-18，Asia/Macau）
+
+`npm run check`：74/74 单元/API 测试、类型、Lint、生产构建通过。校验 10 条 WAV 的许可、哈希、PCM 峰值、静音、动态和接缝。`npx playwright test`（`PLAYWRIGHT_CHANNEL=chrome`、`PLAYWRIGHT_API_PORT=43001`）：57/57，通过 375、768、1440px。音频图采样实际解码的 PCM，测试输出走静音支路；专业听审、硬件声压、真机锁屏和整夜未验证。3001 被占用时使用专用回环端口，其值由 Playwright 传给 Vite 代理。
+
 ## Sprint 2 执行记录（2026-11-18，Asia/Macau）
 
 Windows / Node 24.21.0 / npm 11.19.0，未新增 npm 依赖。

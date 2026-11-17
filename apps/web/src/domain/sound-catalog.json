@@ -1,0 +1,12 @@
+{
+  "rain": { "name": "雨声", "english": "Gentle Rain", "category": "nature" },
+  "ocean": { "name": "海浪", "english": "Soft Ocean", "category": "nature" },
+  "wind": { "name": "微风", "english": "Soft Breeze", "category": "nature" },
+  "window-rain": { "name": "窗边雨声", "english": "Window Rain", "category": "nature" },
+  "stream": { "name": "轻柔溪流", "english": "Gentle Stream", "category": "nature" },
+  "tide": { "name": "远处潮汐", "english": "Distant Tide", "category": "nature" },
+  "leaves": { "name": "树叶沙沙声", "english": "Forest Leaves", "category": "nature" },
+  "pink": { "name": "粉红噪音", "english": "Pink Noise", "category": "steady" },
+  "white": { "name": "白噪音", "english": "White Noise", "category": "steady" },
+  "fan": { "name": "柔和风扇声", "english": "Soft Fan", "category": "steady" }
+}

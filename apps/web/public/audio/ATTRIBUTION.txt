@@ -1,21 +1,73 @@
 JHaven 环境音来源与署名
-各录音原始页面均标注 CC0-1.0；允许修改、再分发和商业使用，保留署名以便追溯。
+外部录音采用 CC0-1.0。JHaven 合成 WAV 为项目自制素材，由 JHaven 随产品分发。
 许可：https://creativecommons.org/publicdomain/zero/1.0/
 
 rain.wav — Soft rain.WAV
 作者：barkenov
 来源：https://freesound.org/people/barkenov/sounds/640655/
-处理：公开 HQ MP3 预览的第 5–29 秒；下混单声道 32kHz，尾部 3 秒线性交叉渐变，峰值归一到 0.65，输出 21 秒循环。非 LUFS 校准。
-SHA-256: 620fb721a3f16b55c0d5de0b03075c3cdaa8a76fd410466788e4ae61dca745ad
+许可：CC0-1.0
+处理：公开 HQ 预览 5–29 秒，单声道下混，3 秒交叉渐变。6.5 kHz 低通、RMS 整形前目标 0.075、0.16 以上软峰值整形。
+SHA-256: b788c4b5b80ad15793992ed27befdbe350c8884477aee1a46b74ded00d45288f
 
 ocean.wav — Calm ocean waves
 作者：SamsterBirdies
 来源：https://freesound.org/people/SamsterBirdies/sounds/578524/
+许可：CC0-1.0
 处理：公开 HQ MP3 预览的第 5–29 秒；下混单声道 32kHz，尾部 3 秒线性交叉渐变，峰值归一到 0.65，输出 21 秒循环。非 LUFS 校准。
 SHA-256: f72ba0045b8dbc95de831cfc823d8d3b13b5ea741704c55923da827de76ce16e
 
 wind.wav — Ambiance_Wind_Forest_Trees_Loop_01.wav
 作者：Nox_Sound
 来源：https://freesound.org/people/Nox_Sound/sounds/530908/
+许可：CC0-1.0
 处理：公开 HQ MP3 预览的第 5–29 秒；下混单声道 32kHz，尾部 3 秒线性交叉渐变，峰值归一到 0.65，输出 21 秒循环。非 LUFS 校准。
 SHA-256: 33a3a3119b31a8343a431feb62313470d5fc522ce4c15566fd5f0dc159429231
+
+window-rain.wav — Rain_Hitting_Window_9
+作者：SignatureSoundsOrg
+来源：https://freesound.org/people/SignatureSoundsOrg/sounds/869851/
+许可：CC0-1.0
+处理：公开 HQ 预览 5–29 秒，单声道下混，3 秒交叉渐变。6.5 kHz 低通、RMS 整形前目标 0.075、0.16 以上软峰值整形。
+SHA-256: f803f0072acd46a901d13a36de3b3f9e9dc282704cb8c9923063e8047e727ab3
+
+stream.wav — Small brook, stream, water sound
+作者：SamsterBirdies
+来源：https://freesound.org/people/SamsterBirdies/sounds/584269/
+许可：CC0-1.0
+处理：公开 HQ 预览 5–29 秒，单声道下混，3 秒交叉渐变。6.5 kHz 低通、RMS 整形前目标 0.075、0.16 以上软峰值整形。
+SHA-256: dea6d7142b50490f994b01b035880792d8beaf7e3f92dd40e30b725b4be8d693
+
+tide.wav — Distant waves breaking on the shore
+作者：apintofmild
+来源：https://freesound.org/people/apintofmild/sounds/866070/
+许可：CC0-1.0
+处理：公开 HQ 预览 5–29 秒，单声道下混，3 秒交叉渐变。6.5 kHz 低通、RMS 整形前目标 0.075、0.16 以上软峰值整形。
+SHA-256: 23313bb3c719b4520885a5a56972046d1d3681f3501046c700621d3849201ee1
+
+leaves.wav — Soft Wind in the Trees - Leaves rustle
+作者：Borgory
+来源：https://freesound.org/people/Borgory/sounds/751473/
+许可：CC0-1.0
+处理：公开 HQ 预览 5–29 秒，单声道下混，3 秒交叉渐变。6.5 kHz 低通、RMS 整形前目标 0.075、0.16 以上软峰值整形。
+SHA-256: 9a203f1b9ea251ebe34dc7b40e58767e9a5eb51a49ef0dff6b27241b64ca5bde
+
+pink.wav — 粉红噪音
+作者：JHaven
+来源：scripts/prepare-audio.mjs
+许可：LicenseRef-JHaven-Original
+处理：确定性合成；去直流、等功率交叉渐变、RMS 及峰值整形。
+SHA-256: 3768f0ed576f1a6bcda4b0614e0833460fa58ddf92a826b67dc57e1b7e7bf1b8
+
+white.wav — 白噪音
+作者：JHaven
+来源：scripts/prepare-audio.mjs
+许可：LicenseRef-JHaven-Original
+处理：确定性合成；去直流、等功率交叉渐变、RMS 及峰值整形。
+SHA-256: 6230d9849caa46d12b5a7dccf4e55e165cd2a89322b5ce0253e0974901c5c43f
+
+fan.wav — 柔和风扇声
+作者：JHaven
+来源：scripts/prepare-audio.mjs
+许可：LicenseRef-JHaven-Original
+处理：确定性合成；去直流、等功率交叉渐变、RMS 及峰值整形。
+SHA-256: cacd6e96d87d52215f27f8aa5bc5d2aa5ac8273ad854518637f5f41f829b6276

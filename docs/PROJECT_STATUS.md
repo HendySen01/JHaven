@@ -3,13 +3,15 @@
 ## 1. 项目基本信息
 
 - 名称：JHaven，Your Quiet Haven, Every Night.
-- 当前版本：0.1.0-alpha.2。
-- 当前阶段：Sprint 2 — 沉浸式环境音引擎与声音场景。
+- 当前版本：0.1.0-alpha.3。
+- 当前阶段：Sprint 2.5 — 声音库已通过数字及浏览器验收，Sprint 3 账户待开始。
 - 最近更新时间：2026-11-18（Asia/Macau）。
-- 整体状态：Sprint 2 核心功能及当前环境可执行的验收已完成，完整检查、Chrome/Edge 回归和三档视觉检查通过；尚无账户、数据库、私人日记或 AI。真机/锁屏/听感限制见第 5、6 节。
+- 整体状态：13 个候选审核后上线 10 条普通背景音，A 阶段许可、数字质检和浏览器功能验证通过。下一阶段为注册、登录及真实 MySQL 持久化。
 - 仓库：https://github.com/HendySen01/JHaven 。本轮开始时工作区干净，已在 main 跟踪 origin/main；旧状态中的 master/无 Commit 信息已按实际 Git 修正。
 
 ## 2. 已完成功能
+
+Sprint 2.5：在原 3 条实录基础上新增 4 条 CC0 实录和 3 条自制音。重整细雨瞬态，兼容旧配比，新增分类、搜索、收藏、独立试听、静音、证据页和两套预设。Moodist/MDN 仅参考，未引入新依赖或 Skills。具体依据、来源和数字测量见 SOUND_EVIDENCE 与 AUDIO_ASSETS。
 
 Sprint 1：沉浸式首页、四种今晚状态建议、场景列表/详情、设置、界面偏好、日记未开放说明、About/404、基础 API 与工程检查。
 
@@ -63,6 +65,9 @@ Sprint 2 已实现并有相关验证：
 
 ## 6. 最近一次测试结果
 
+- Sprint 2.5：`npm run check` 通过 74 项单元/API 测试及类型、Lint、构建，10 条音轨通过构建前许可与 PCM 检查。Chrome 使用 `PLAYWRIGHT_API_PORT=43001` 执行 `npx playwright test`，57/57 通过三档视口。默认 3001 在测试重跑时被占用，改用专用回环端口。
+- 试验包括十轨真实解码、环形 BufferSource、单独试听、数字静音、收藏恢复及 6 秒实际定时渐弱。专业听审、真机和整夜验证仍待执行。
+
 - 日期：2026-11-18（Asia/Macau），Windows / Node 24.21.0 / npm 11.19.0。
 - `npm run check`：格式、ESLint、三包与工具类型检查、73/73 Vitest/API、生产构建通过；其中新增音频/持久化受控测试 38 项。
 - `npm run audio:verify`：三条音轨的许可字段、SHA-256、大小、WAV 格式和时长通过，根构建前自动执行。
@@ -85,6 +90,8 @@ Safari/真机音频听审与后台兼容性可作为内测准备并行事项，�
 
 ## 8. 最近一次开发记录
 
+- Sprint 2.5 完成声音资源审核、库及浏览器验证。A 阶段建议提交 `feat: expand and validate JHaven sound library`。接下来实现账户与 MySQL，访客继续使用声音库。
+
 - 任务：Sprint 2 环境音引擎与声音场景。
 - 新增：音频服务、类型、规则/存储、store/composable、6 个播放器组件、独立样式、原始页面署名和三条 WAV、制作/校验工具、受控与浏览器音频测试、AUDIO_ENGINE/AUDIO_ASSETS 文档。
 - 修改：App 生命周期与跨路由控制、移动播放条底部空间、现有场景/首页/推荐/介绍文案、静态服务器音频 404、版本/锁文件/构建前校验和文档。
@@ -94,6 +101,5 @@ Safari/真机音频听审与后台兼容性可作为内测准备并行事项，�
 ## 9. Git 版本信息
 
 - 当前分支：main，跟踪 origin/main；origin=https://github.com/HendySen01/JHaven.git。
-- 本轮开始已确认 Commit：beab93b5a14c3b89a64573705782373d242a8fb3，feat: build JHaven sleep home experience。
-- 工作版本：0.1.0-alpha.2，Sprint 2 改动尚未提交，不填写本次不存在的 Commit Hash。
-- 收尾仅只读 Git 检查；建议 feat: implement JHaven ambient audio engine，命令见 COMMIT_GUIDE。
+- 工作版本：0.1.0-alpha.3。本轮开始时 HEAD 为已确认的 Sprint 2 提交 `924383b`，工作区干净。
+- Sprint 2.5 暂未提交，提交历史以 `git log` 为准。

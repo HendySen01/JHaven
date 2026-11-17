@@ -54,6 +54,77 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
+.sound-grid {
+  margin-top: 16px;
+}
+.library-transport {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 12px 0;
+  background: var(--page);
+  border-radius: 12px;
+}
+.library-transport .player-control-row {
+  padding: 8px 12px;
+  gap: 8px;
+}
+.ambient-player :is(input, select, button, a) {
+  scroll-margin-top: 110px;
+}
+.sound-filters,
+.sound-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.sound-filters label {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 180px;
+  min-width: 0;
+  color: var(--soft);
+  font-size: 14px;
+}
+.sound-filters input,
+.sound-filters select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--page);
+  padding: 8px 12px;
+}
+.sound-actions {
+  margin-top: 8px;
+  gap: 8px;
+}
+.sound-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--soft);
+  background: var(--surface);
+  font-size: 13px;
+}
+.sound-action[aria-pressed='true'] {
+  background: var(--surface-raised);
+  color: var(--accent);
+}
+.sound-evidence section {
+  margin: 24px 0;
+  line-height: 1.8;
+}
+.sound-evidence section a {
+  color: var(--soft);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 .audio-track {
   border: 1px solid var(--line);
   border-radius: 16px;

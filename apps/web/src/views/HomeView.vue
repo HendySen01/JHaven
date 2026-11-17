@@ -27,7 +27,7 @@ const settings = usePreferencesStore();
           ><a class="quiet-link" href="#scenes">探索夜晚的声音<span aria-hidden="true">↓</span></a>
         </div>
         <p class="hero-note">
-          <MoonStar :size="14" aria-hidden="true" />三种自然实录 · 由你轻轻开启
+          <MoonStar :size="14" aria-hidden="true" />自然实录与稳定背景音 · 由你开启
         </p>
       </div>
       <div v-if="settings.preferences.showLandscape" class="scene-caption" aria-hidden="true">

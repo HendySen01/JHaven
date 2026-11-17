@@ -1,4 +1,5 @@
 import { volumeToGain } from '../../domain/audio';
+import { TRACK_GAIN_LIMIT } from '../../types/audio';
 import type { TrackId, TrackLoadStatus } from '../../types/audio';
 import { GainEnvelope } from './GainEnvelope';
 
@@ -98,7 +99,7 @@ export class AudioTrack {
     if (this.loadStatus === 'loading') this.loadStatus = this.buffer ? 'ready' : 'idle';
   }
   setVolume(volume: number) {
-    this.envelope.rampTo(volumeToGain(volume, 0.3));
+    this.envelope.rampTo(volumeToGain(volume, TRACK_GAIN_LIMIT));
   }
   start(volume: number) {
     if (this.cleanup) {

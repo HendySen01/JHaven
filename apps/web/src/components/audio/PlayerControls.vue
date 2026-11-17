@@ -37,7 +37,11 @@ const labels = {
         v-else
         class="button button-primary"
         type="button"
-        :disabled="status === 'loading' || status === 'stopping' || !audio.selectedCount"
+        :disabled="
+          status === 'loading' ||
+          status === 'stopping' ||
+          (!audio.selectedCount && !audio.auditionId)
+        "
         @click="audio.play"
       >
         <Play :size="17" aria-hidden="true" />{{

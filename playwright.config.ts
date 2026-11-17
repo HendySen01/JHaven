@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const apiPort = process.env.PLAYWRIGHT_API_PORT ?? '3001';
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -26,13 +28,14 @@ export default defineConfig({
   webServer: [
     {
       command: 'npm run start -w @jhaven/server',
-      url: 'http://127.0.0.1:3001/api/health',
-      env: { PORT: '3001', HOST: '127.0.0.1', NODE_ENV: 'test' },
+      url: `http://127.0.0.1:${apiPort}/api/health`,
+      env: { PORT: apiPort, HOST: '127.0.0.1', NODE_ENV: 'test' },
       reuseExistingServer: false,
     },
     {
       command: 'npm run preview -w @jhaven/web',
       url: 'http://127.0.0.1:4173',
+      env: { JHAVEN_PROXY_PORT: apiPort },
       reuseExistingServer: false,
     },
   ],

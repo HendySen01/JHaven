@@ -5,6 +5,56 @@ test.beforeEach(async ({ page }) => {
   await installAudioProbe(page);
 });
 
+test('声音库筛选、收藏、单独试听、默认收声选项及静音', async ({ page }) => {
+  await page.goto('/relax');
+  const player = page.locator('#ambient-player');
+  await player.getByRole('combobox', { name: '声音分类' }).selectOption('steady');
+  await expect(player.getByRole('switch')).toHaveCount(3);
+  await player.getByRole('searchbox', { name: '搜索声音' }).fill('pink');
+  await expect(player.getByRole('switch')).toHaveCount(1);
+  await player.getByRole('button', { name: '收藏粉红噪音' }).click();
+  await player.getByRole('button', { name: '试听粉红噪音', exact: true }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0.00001);
+  expect(await readAudioProbe(page)).toMatchObject({ contexts: 1, active: 1, decoded: 1 });
+  await player.getByRole('button', { name: '静音', exact: true }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).rms).toBe(0);
+  await player.getByRole('button', { name: '取消静音' }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0.00001);
+  await player.getByRole('button', { name: '停止试听粉红噪音' }).click();
+  await expect(player.getByRole('switch', { name: '开启粉红噪音' })).not.toBeChecked();
+  await expect(player.getByRole('combobox', { name: '停止时间' })).toHaveValue('20');
+  await page.reload();
+  await player.getByRole('combobox', { name: '声音分类' }).selectOption('favorites');
+  await expect(player.getByRole('button', { name: '收藏粉红噪音' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await player.getByRole('link', { name: '用途与研究依据' }).click();
+  await expect(page.getByRole('heading', { name: '声音用途与研究依据' })).toBeVisible();
+});
+
+test('完整目录的十条 WAV 在同一原生音频图解码和混合', async ({ page }) => {
+  await page.goto('/relax');
+  const player = page.locator('#ambient-player');
+  const switches = await player.getByRole('switch').all();
+  expect(switches).toHaveLength(10);
+  for (const track of switches) await track.check();
+  await player.getByRole('button', { name: '播放混音', exact: true }).click();
+  await expect(player.locator('.player-status')).toContainText('正在播放');
+  await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0.00001);
+  expect(await readAudioProbe(page)).toMatchObject({ contexts: 1, active: 10, decoded: 10 });
+  expect(
+    await page.evaluate(() =>
+      [...window.__jhavenAudioProbe.voices].every(
+        (voice) =>
+          voice.loop && voice.buffer!.getChannelData(0).some((sample) => Math.abs(sample) > 0.001),
+      ),
+    ),
+  ).toBe(true);
+  await player.getByRole('button', { name: '停止', exact: true }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
+});
+
 test('返回详情保留自定义混音，损坏或受限存储可恢复', async ({ page }) => {
   await page.goto('/relax/rain');
   const player = page.locator('#ambient-player');

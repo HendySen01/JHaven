@@ -22,6 +22,11 @@ export const router = createRouter({
       meta: { title: '睡眠日记' },
     },
     {
+      path: '/sound-evidence',
+      component: () => import('../views/SoundEvidenceView.vue'),
+      meta: { title: '声音用途与研究依据' },
+    },
+    {
       path: '/about',
       component: () => import('../views/AboutView.vue'),
       meta: { title: '关于 Alpha' },

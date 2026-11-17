@@ -92,3 +92,7 @@
 ### 后续引入检查
 
 记录具体文件/版本、原始链接、Vue 兼容性、运行与构建依赖、代码许可、素材许可、修改及商业使用条件、署名位置和验证结果。优先检查安装脚本和外部网络访问；不清楚则不引入，使用权利清晰的素材或独立实现。
+
+## Sprint 2.5 声音库
+
+新增四条 Freesound 实录，分别来自 SignatureSoundsOrg、SamsterBirdies、apintofmild 和 Borgory。分条 CC0 权利核验与处理记录见 [AUDIO_ASSETS](AUDIO_ASSETS.md)。稳定背景音为确定性项目自制。Moodist 只作信息组织参考，MDN 用于核对 Web Audio。LeiBox 和 Impeccable 查阅公开资料后沿用原生表单及现有夜间风格，未采用新的外部组件或技能脚本。

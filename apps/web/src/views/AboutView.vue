@@ -6,8 +6,8 @@ const phases = [
   {
     number: '01',
     title: '让夜晚，有自己的样子',
-    status: 'Sprint 2 · 环境音 Alpha',
-    description: '选择今晚状态、混合三种环境实录、保存本地场景与定时渐弱。私人记录尚未开放。',
+    status: 'Sprint 2.5 · 声音库 Alpha',
+    description: '选择今晚状态，试听和混合自然实录与稳定背景音，保存本地场景与定时渐弱。',
   },
   {
     number: '02',
@@ -35,8 +35,8 @@ const phases = [
     <div class="foundation-notice">
       <Check :size="19" aria-hidden="true" />
       <p>
-        <strong>当前版本：Sprint 2 · 环境音 Alpha</strong
-        ><br />你可以混合雨声、海浪和微风，保存本地场景，设置定时与渐弱。日记与账户尚未开放。
+        <strong>当前版本：声音库 Alpha</strong
+        ><br />你可以试听和混合声音，保存收藏与场景，设置定时与渐弱。日记与账户尚未开放。
       </p>
     </div>
 

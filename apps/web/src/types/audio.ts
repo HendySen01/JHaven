@@ -1,5 +1,10 @@
-export const TRACK_IDS = ['rain', 'ocean', 'wind'] as const;
-export type TrackId = (typeof TRACK_IDS)[number];
+import catalog from '../domain/sound-catalog.json';
+
+export type TrackId = keyof typeof catalog;
+export const TRACK_IDS = Object.keys(catalog) as TrackId[];
+export const TRACKS = catalog;
+// 即使所有音轨在切换过程中短暂重叠，源峰值不超过 0.66 时仍保留输出余量。
+export const TRACK_GAIN_LIMIT = Math.min(0.3, 0.9 / (TRACK_IDS.length * 0.66));
 export type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'stopping' | 'error';
 export type TrackLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 export interface TrackConfig {
@@ -32,8 +37,3 @@ export interface SoundPreset {
   name: string;
   mix: AudioMix;
 }
-export const TRACKS: Record<TrackId, { name: string; url: string; author: string }> = {
-  rain: { name: '雨声', url: '/audio/rain.wav', author: 'barkenov' },
-  ocean: { name: '海浪', url: '/audio/ocean.wav', author: 'SamsterBirdies' },
-  wind: { name: '微风', url: '/audio/wind.wav', author: 'Nox_Sound' },
-};

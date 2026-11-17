@@ -5,6 +5,22 @@ import { useAudioStore } from '../stores/audio';
 
 afterEach(() => vi.unstubAllGlobals());
 describe('声音预设持久化', () => {
+  it('从原三轨格式保留配比与自定义场景，并对收藏执行白名单校验', () => {
+    const { rain, ocean, wind } = defaultAudio().mix;
+    const mix = { rain: { ...rain, volume: 21 }, ocean, wind };
+    const loaded = parseSavedAudio(
+      JSON.stringify({
+        ...defaultAudio(),
+        mix,
+        favorites: ['pink', 'pink', 'missing'],
+        presets: [{ id: 'custom-old', name: '旧场景', mix }],
+      }),
+    );
+    expect(loaded.mix.rain.volume).toBe(21);
+    expect(loaded.mix.pink.enabled).toBe(false);
+    expect(loaded.presets[0]?.mix.stream.enabled).toBe(false);
+    expect(loaded.favorites).toEqual(['pink']);
+  });
   it('与内置配比相同的自定义场景仍恢复自己的名称', () => {
     const map = new Map<string, string>();
     vi.stubGlobal('localStorage', {

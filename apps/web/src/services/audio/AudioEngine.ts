@@ -1,7 +1,6 @@
 import { clampVolume, copyMix, defaultAudio, parseMix, volumeToGain } from '../../domain/audio';
 import {
   TRACK_IDS,
-  TRACKS,
   type AudioMix,
   type AudioSnapshot,
   type PlaybackStatus,
@@ -26,7 +25,7 @@ export class AudioEngine {
   private mix = defaultAudio().mix;
   private status: PlaybackStatus = 'idle';
   private intent: 'idle' | 'playing' | 'paused' = 'idle';
-  private masterVolume = 60;
+  private masterVolume = defaultAudio().masterVolume;
   private fadeSeconds = 15;
   private timerManuallyPaused = false;
   private error: string | null = null;
@@ -91,7 +90,7 @@ export class AudioEngine {
     for (const id of TRACK_IDS)
       this.tracks.set(
         id,
-        new AudioTrack(id, TRACKS[id].url, context, this.fade, this.emit, this.options.fetcher),
+        new AudioTrack(id, `/audio/${id}.wav`, context, this.fade, this.emit, this.options.fetcher),
       );
     context.onstatechange = () => {
       if (this.disposed || this.context !== context || this.intent !== 'playing') return;

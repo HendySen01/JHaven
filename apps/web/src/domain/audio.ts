@@ -1,49 +1,57 @@
-import { TRACK_IDS, type AudioMix, type SoundPreset } from '../types/audio';
+import { TRACK_IDS, type AudioMix, type SoundPreset, type TrackId } from '../types/audio';
 
 export function clampVolume(value: number) {
   return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0;
 }
-// 为三轨最大音量预留混音余量；不是医学或响度校准参数。
 export function volumeToGain(value: number, headroom = 1) {
   return (clampVolume(value) / 100) ** 2 * headroom;
 }
-export function copyMix(mix: AudioMix): AudioMix {
-  return { rain: { ...mix.rain }, ocean: { ...mix.ocean }, wind: { ...mix.wind } };
+const legacyTrackIds = new Set<TrackId>(['rain', 'ocean', 'wind']);
+export function copyMix(mix: Partial<AudioMix>): AudioMix {
+  return Object.fromEntries(
+    TRACK_IDS.map((id) => [id, { enabled: false, volume: 40, ...mix[id] }]),
+  ) as AudioMix;
+}
+export function singleTrackMix(id: TrackId, volume = 45) {
+  return copyMix({ [id]: { enabled: true, volume } });
 }
 export const BUILTIN_PRESETS: SoundPreset[] = [
   {
     id: 'rain',
     name: '雨夜',
-    mix: {
+    mix: copyMix({
       rain: { enabled: true, volume: 65 },
       ocean: { enabled: false, volume: 40 },
       wind: { enabled: true, volume: 20 },
-    },
+    }),
   },
   {
     id: 'coast',
     name: '静谧海岸',
-    mix: {
+    mix: copyMix({
       rain: { enabled: false, volume: 40 },
       ocean: { enabled: true, volume: 65 },
       wind: { enabled: true, volume: 25 },
-    },
+    }),
   },
   {
     id: 'breeze',
     name: '微风',
-    mix: {
+    mix: copyMix({
       rain: { enabled: false, volume: 40 },
       ocean: { enabled: false, volume: 40 },
       wind: { enabled: true, volume: 60 },
-    },
+    }),
   },
+  { id: 'brook', name: '溪边', mix: singleTrackMix('stream') },
+  { id: 'steady', name: '平稳背景', mix: singleTrackMix('pink') },
 ];
 export function parseMix(value: unknown): AudioMix {
   if (typeof value !== 'object' || value === null) throw new Error('混音格式无效');
-  const result = {} as AudioMix;
+  const result = copyMix({});
   for (const id of TRACK_IDS) {
     const item: unknown = (value as Record<string, unknown>)[id];
+    if (item === undefined && !legacyTrackIds.has(id)) continue;
     if (
       typeof item !== 'object' ||
       item === null ||
@@ -67,14 +75,16 @@ export interface SavedAudio {
   masterVolume: number;
   presets: SoundPreset[];
   currentPresetId: string | null;
+  favorites: TrackId[];
 }
 export function defaultAudio(): SavedAudio {
   return {
     version: 1,
     mix: copyMix(BUILTIN_PRESETS[0]!.mix),
-    masterVolume: 60,
+    masterVolume: 45,
     presets: [],
     currentPresetId: 'rain',
+    favorites: [],
   };
 }
 export function parseSavedAudio(raw: string | null): SavedAudio {
@@ -123,11 +133,13 @@ export function parseSavedAudio(raw: string | null): SavedAudio {
     value.currentPresetId.length <= 80
       ? value.currentPresetId
       : null;
+  const favorites = 'favorites' in value && Array.isArray(value.favorites) ? value.favorites : [];
   return {
     version: 1,
     mix: parseMix(value.mix),
     masterVolume: value.masterVolume,
     presets,
     currentPresetId,
+    favorites: TRACK_IDS.filter((id) => favorites.includes(id)),
   };
 }

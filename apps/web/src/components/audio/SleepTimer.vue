@@ -4,7 +4,11 @@ import { useAudioEngine } from '../../composables/useAudioEngine';
 const audio = useAudioEngine();
 const initialMinutes = audio.snapshot.timer.duration / 60;
 const minutes = ref(
-  initialMinutes === 0 || [10, 20, 30].includes(initialMinutes) ? String(initialMinutes) : 'custom',
+  initialMinutes === 0
+    ? '20'
+    : [10, 20, 30].includes(initialMinutes)
+      ? String(initialMinutes)
+      : 'custom',
 );
 const custom = ref(initialMinutes || 10);
 const fade = ref(audio.snapshot.fadeSeconds);

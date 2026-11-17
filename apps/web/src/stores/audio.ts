@@ -6,13 +6,18 @@ import {
   copyMix,
   defaultAudio,
   parseSavedAudio,
+  singleTrackMix,
 } from '../domain/audio';
 import { TRACK_IDS, type AudioMix, type SoundPreset, type TrackId } from '../types/audio';
 import { AudioEngine } from '../services/audio/AudioEngine';
 
 export const useAudioStore = defineStore('audio', () => {
   const mix = ref<AudioMix>(defaultAudio().mix);
-  const masterVolume = ref(60);
+  const masterVolume = ref(defaultAudio().masterVolume);
+  const favorites = ref<TrackId[]>([]);
+  const auditionId = ref<TrackId | null>(null);
+  let normalTimer: { duration: number; fade: number } | null = null;
+  let unmutedVolume = defaultAudio().masterVolume;
   const presets = ref<SoundPreset[]>([]);
   const currentName = ref('雨夜');
   const currentId = ref<string | null>('rain');
@@ -30,6 +35,13 @@ export const useAudioStore = defineStore('audio', () => {
       engine.setMasterVolume(masterVolume.value);
       unsubscribe = engine.subscribe((value) => {
         snapshot.value = value;
+        if (auditionId.value && value.status === 'idle') {
+          const timer = normalTimer;
+          auditionId.value = null;
+          normalTimer = null;
+          engine?.applyMix(mix.value);
+          if (timer) engine?.setTimer(timer.duration, timer.fade);
+        }
       });
     }
     return engine;
@@ -42,6 +54,7 @@ export const useAudioStore = defineStore('audio', () => {
       mix.value = saved.mix;
       masterVolume.value = saved.masterVolume;
       presets.value = saved.presets;
+      favorites.value = saved.favorites;
       identify(saved.currentPresetId);
     } catch {
       storageMessage.value = '本地声音偏好无法读取，已使用默认混音。你可以重新设置。';
@@ -67,6 +80,7 @@ export const useAudioStore = defineStore('audio', () => {
           masterVolume: masterVolume.value,
           presets: presets.value,
           currentPresetId: currentId.value,
+          favorites: favorites.value,
         }),
       );
       storageMessage.value = '声音偏好已保存在当前浏览器，不上传；刷新取消计时，不自动播放。';
@@ -77,6 +91,7 @@ export const useAudioStore = defineStore('audio', () => {
     }
   }
   function applyPreset(preset: SoundPreset) {
+    if (auditionId.value) engine?.stop(0);
     mix.value = copyMix(preset.mix);
     currentName.value = preset.name;
     currentId.value = preset.id;
@@ -88,6 +103,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (preset) applyPreset(preset);
   }
   function updateTrack(id: TrackId, patch: Partial<AudioMix[TrackId]>) {
+    if (auditionId.value) engine?.stop(0);
     mix.value = copyMix(mix.value);
     mix.value[id] = { ...mix.value[id], ...patch };
     ensureEngine().applyMix(mix.value);
@@ -97,7 +113,27 @@ export const useAudioStore = defineStore('audio', () => {
   function setMaster(value: number) {
     ensureEngine().setMasterVolume(value);
     masterVolume.value = snapshot.value.masterVolume;
+    if (masterVolume.value > 0) unmutedVolume = masterVolume.value;
     persist();
+  }
+  function toggleMute() {
+    if (masterVolume.value > 0) unmutedVolume = masterVolume.value;
+    setMaster(masterVolume.value > 0 ? 0 : unmutedVolume);
+  }
+  function toggleFavorite(id: TrackId) {
+    favorites.value = favorites.value.includes(id)
+      ? favorites.value.filter((favorite) => favorite !== id)
+      : [...favorites.value, id];
+    persist();
+  }
+  function audition(id: TrackId) {
+    if (snapshot.value.status !== 'idle') return;
+    const player = ensureEngine();
+    normalTimer = { duration: snapshot.value.timer.duration, fade: snapshot.value.fadeSeconds };
+    player.applyMix(singleTrackMix(id, 55));
+    player.setTimer(12, 5);
+    auditionId.value = id;
+    void player.play();
   }
   function savePreset(name: string) {
     const trimmed = name.trim();
@@ -170,6 +206,8 @@ export const useAudioStore = defineStore('audio', () => {
     unsubscribe = null;
     const previous = engine;
     engine = null;
+    auditionId.value = null;
+    normalTimer = null;
     if (previous) void previous.dispose();
     const initial = new AudioEngine();
     initial.applyMix(mix.value);
@@ -179,6 +217,8 @@ export const useAudioStore = defineStore('audio', () => {
   return {
     mix,
     masterVolume,
+    favorites,
+    auditionId,
     presets,
     currentName,
     currentId,
@@ -191,6 +231,9 @@ export const useAudioStore = defineStore('audio', () => {
     applyBuiltin,
     updateTrack,
     setMaster,
+    toggleMute,
+    toggleFavorite,
+    audition,
     savePreset,
     deletePreset,
     play,
