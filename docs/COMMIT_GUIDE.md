@@ -1,45 +1,37 @@
-# Sprint 2 提交说明
+# Sprint 2.5 与 Sprint 3 提交说明
 
-## 当前事实
+当前 main 跟踪 origin/main，起点为 Sprint 2 的已确认提交。当前没有暂存。本轮已审查的源文件与素材可分两次提交。测试数据库、临时凭据、原始下载、构建、测试报告及补丁均在忽略目录。
 
-- 本轮开始时 main 跟踪 origin/main，工作区干净，已确认最近 Commit 为 beab93b5a14c3b89a64573705782373d242a8fb3（Sprint 1）。
-- origin 已配置为 https://github.com/HendySen01/JHaven.git，不重复 remote add，不猜测远端当前是否又有新提交。
-- 本轮没有暂存、commit、push、生产部署、改分支或修改 Git 配置。
-- 版本为 0.1.0-alpha.2；不在状态文件填写本次尚未创建的 Commit Hash。历史用 git log 查看。
-- 上轮无历史/master 的首次提交说明已失效，不能直接照搬。
+A 阶段的独立补丁位于 `artifacts/sprint25-sound-library.patch`。它来自 B 开始前的验收快照，包含音轨二进制、播放器、证据和 A 阶段状态。使用 `--cached` 将这个快照单独暂存，即可保留工作区里的 B 阶段修改。A 验收为 74 项单元/API 和 57 项 Chrome，通过类型、Lint、生产构建及 PCM 校验。
 
-## 本次提交范围
+```powershell
+Set-Location D:\Projects\JHaven
+$jhGit = @('-c', 'safe.directory=D:/Projects/JHaven')
+git @jhGit status --short --branch
+git @jhGit diff --cached --name-only
+git @jhGit apply --cached --check artifacts/sprint25-sound-library.patch
+git @jhGit apply --cached artifacts/sprint25-sound-library.patch
+git @jhGit diff --cached --check
+git @jhGit diff --cached --stat
+git @jhGit diff --cached
+git @jhGit commit -m "feat: expand and validate JHaven sound library"
+```
 
-- 应用级音频引擎、轨道/计时/包络、类型、store/composable、混音/定时/全局控制 UI。
-- 三条逐项核查 CC0 的实录循环 WAV，manifest、署名、显式制作与构建校验工具。
-- 现有首页/场景/推荐/关于文案、生命周期、独立音频样式及 Nginx 音频 404 规则。
-- 增益/并发/计时/清理/存储的受控测试、真实 Chrome/Edge 音频与 UI 回归。
-- 根/工作区版本和锁文件，以及产品、架构、资源、安全、设计、路线、测试和状态文档。
+执行 A 提交后，核对剩余差异。B 阶段包含账户 UI、公共契约、MySQL 数据与会话实现、依赖和许可、真实 API/浏览器测试及配套文档，82 项单元/API 和 63 项 Chrome 通过。以下路径仅适用于本次已审查的工作区。期间有新的本地修改时，按具体文件暂存。
 
-不包含 artifacts 内原始下载/截图、node_modules、dist、测试报告、真实 .env、密钥或用户内容。三条 WAV 是本轮明确授权并需要分发的业务资源，应提交，不能因二进制而遗漏。
+```powershell
+git @jhGit status --short
+git @jhGit add -- AGENTS.md README.md apps/server apps/web/package.json apps/web/public/THIRD_PARTY_NOTICES.txt
+git @jhGit add -- apps/web/src/App.vue apps/web/src/components/NightNavigation.vue apps/web/src/main.ts apps/web/src/router/index.ts apps/web/src/stores/auth.ts apps/web/src/styles/auth.css apps/web/src/views/AboutView.vue apps/web/src/views/AccountView.vue apps/web/src/views/AuthView.vue
+git @jhGit add -- docs package.json package-lock.json packages/shared/package.json packages/shared/src/auth.ts packages/shared/src/index.ts playwright.config.ts tests/e2e/auth.spec.ts
+git @jhGit diff --cached --check
+git @jhGit diff --cached --stat
+git @jhGit diff --cached
+git @jhGit commit -m "feat: implement JHaven user authentication"
+```
 
-## 用户手动提交命令
+确认需要推送时，当前分支命令为：
 
-以下命令由用户执行，本轮只提供，不自动暂存或提交。运行前先检查最终 PROJECT_STATUS/TESTING 是否有阻断问题，再审查所有暂存差异。
-
-    Set-Location D:\Projects\JHaven
-    $jhGit = @('-c', 'safe.directory=D:/Projects/JHaven')
-    git @jhGit status --short
-    git @jhGit diff --check
-    git @jhGit add -- .gitattributes AGENTS.md README.md package.json package-lock.json apps/server/package.json apps/web/package.json apps/web/index.html
-    git @jhGit add -- apps/web/src apps/web/public/audio packages/shared/package.json packages/shared/src/index.ts tests/e2e
-    git @jhGit add -- scripts/prepare-audio.mjs scripts/verify-audio.mjs deploy/nginx.conf docs
-    git @jhGit diff --cached --check
-    git @jhGit diff --cached --stat
-    git @jhGit diff --cached
-    git @jhGit commit -m "feat: implement JHaven ambient audio engine"
-
-目录级路径仅因本轮已审查其中全部新增/修改而列出；用户执行前有新改动时应改为逐文件暂存。不得使用 git add . 或提交未确认文件。
-
-## 用户需要推送时
-
-当前实际分支是 main，origin 已存在。只有在用户决定发布本地提交后才执行：
-
-    git -c safe.directory=D:/Projects/JHaven push origin main
-
-若远端已变化，先核对差异并正常整合，不使用 force 覆盖。Git 所有者问题通过单次 safe.directory 处理，本轮不改全局信任列表。
+```powershell
+git @jhGit push origin main
+```

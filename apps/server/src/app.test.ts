@@ -47,7 +47,12 @@ describe('API 基础契约', () => {
 
 describe('运行配置', () => {
   it('无需环境文件即可使用本地默认配置', () => {
-    expect(loadConfig({})).toEqual({ NODE_ENV: 'development', HOST: '127.0.0.1', PORT: 3001 });
+    expect(loadConfig({})).toMatchObject({
+      NODE_ENV: 'development',
+      HOST: '127.0.0.1',
+      PORT: 3001,
+      APP_ORIGIN: 'http://127.0.0.1:5173',
+    });
   });
 
   it.each(['', '0', '65536', '3001.5', 'invalid'])('拒绝非法端口 %j', (port) => {

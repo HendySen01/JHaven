@@ -21,9 +21,18 @@ E2E 首次需要 `npx playwright install chromium`，Linux CI 可加 `--with-dep
 - 原生 radio 方向键、设置开闭、Escape/外侧点击、首尾 Tab 循环和焦点返回。
 - 配色/夜景/减少动画的持久化、恢复默认、禁止 localStorage 时只在当前生效、系统减少动态效果优先。
 
+## Sprint 3 验收（2026-11-18，Asia/Macau）
+
+- MySQL Community Server 9.6.0，独立目录、回环端口 43306、随机测试账号和 `jhaven_test_` 库。`npm run db:migrate` 首次应用两条迁移，再次确认无重复。MySQL 8.4 与生产 HTTPS 未实测。
+- 将专用测试库 `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` 注入当前进程后，设 `JHAVEN_TEST_MYSQL=1`，`npm run check` 通过 82 项单元/API、格式、Lint、类型和生产构建。真实库测试包括重复用户名、密码错误一致性、密码哈希、跨 App 会话恢复、双用户隔离、Cookie 轮换/撤销/过期及生产 Cookie 属性。测试只对 `jhaven_test_` 前缀隔离库开放。
+- 保持同一测试库，设置 `PLAYWRIGHT_CHANNEL=chrome`、`PLAYWRIGHT_API_PORT=43001`，执行 `npx playwright test`，63/63 通过 375、768、1440px。覆盖注册和登录校验、错误、受保护路由、刷新、退出及全部声音回归。Playwright 为 API 配置预览站点 Origin。未提供独立测试库时，真实数据库用例明确跳过。
+- `npm run dev` 在 Vite 默认 5173 与 API 专用 43002 同时启动。HTTP 页面及 `/api/auth/status` 经 Vite 代理验证为 200。停止本轮独立 MySQL 后，通过同一代理验证账户就绪为 503 `DATABASE_UNAVAILABLE`，雨声 WAV 仍返回 200。测试使用临时账户，连接配置与截图报告在忽略目录中。
+
 ## Sprint 2.5 验收（2026-11-18，Asia/Macau）
 
 `npm run check`：74/74 单元/API 测试、类型、Lint、生产构建通过。校验 10 条 WAV 的许可、哈希、PCM 峰值、静音、动态和接缝。`npx playwright test`（`PLAYWRIGHT_CHANNEL=chrome`、`PLAYWRIGHT_API_PORT=43001`）：57/57，通过 375、768、1440px。音频图采样实际解码的 PCM，测试输出走静音支路；专业听审、硬件声压、真机锁屏和整夜未验证。3001 被占用时使用专用回环端口，其值由 Playwright 传给 Vite 代理。
+
+追加使用 Playwright 原生音频探针，从本地开发页连续观测全音量十轨 65.04 秒。采样峰值 0.1746，实际样本率 48 kHz，解码缓冲共 8,784,000 单声道 Float32 帧，约 35.14 MB 的样本数据。原有 10 个节点未重建，无重复解码，停止后活跃节点为 0。观测范围是抽样数字信号及节点，总进程内存和硬件听感仍待验证。
 
 ## Sprint 2 执行记录（2026-11-18，Asia/Macau）
 

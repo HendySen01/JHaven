@@ -8,9 +8,12 @@ import { usePreferencesStore } from './stores/preferences';
 import { useAudioEngine } from './composables/useAudioEngine';
 import AmbientPlayer from './components/audio/AmbientPlayer.vue';
 import PlayerDock from './components/audio/PlayerDock.vue';
+import { useAuthStore } from './stores/auth';
 const audio = useAudioEngine();
+const auth = useAuthStore();
 audio.initialize();
 onMounted(() => {
+  void auth.restore();
   window.addEventListener('pagehide', audio.dispose);
   document.addEventListener('visibilitychange', audio.tick);
 });

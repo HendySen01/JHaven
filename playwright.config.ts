@@ -29,7 +29,12 @@ export default defineConfig({
     {
       command: 'npm run start -w @jhaven/server',
       url: `http://127.0.0.1:${apiPort}/api/health`,
-      env: { PORT: apiPort, HOST: '127.0.0.1', NODE_ENV: 'test' },
+      env: {
+        PORT: apiPort,
+        HOST: '127.0.0.1',
+        NODE_ENV: 'test',
+        APP_ORIGIN: 'http://127.0.0.1:4173',
+      },
       reuseExistingServer: false,
     },
     {

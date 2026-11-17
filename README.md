@@ -8,18 +8,18 @@ JHaven 是以科学睡眠知识为基础，逐步融合环境音、睡前放松�
 
 ## 当前交付
 
-当前版本为 `0.1.0-alpha.3`，处于 **Sprint 2.5 声音库 Alpha 阶段，账户与日记记录尚未开放**。
+当前版本为 `0.1.0-alpha.4`，处于 **Sprint 3 账户 Alpha 阶段**。访客可直接使用声音库，运行账户需要 MySQL。
 
 - 已实现：沉浸式首页、状态建议、十轨声音库与混音、独立音量、暂停/继续/停止、内置/本地自定义场景、计时/渐弱、跨页面控制、设置、About/404 与 API 检查。
 - 本地存储：界面偏好、声音配比、总音量与自定义场景只存当前浏览器，不上传；今晚状态仅内存。刷新会取消播放与计时，不自动开声；没有假日记。
 - 已建立：前后端分离工作区、严格类型检查、格式与静态检查、Vitest/API 测试、Playwright 桌面与移动冒烟测试。
-- 声音库目前有 7 条 CC0 实录和 3 条项目自制音，支持搜索、分类、收藏与短试听。账户、MySQL、日记及引导待开发。 [声音用途与证据](docs/SOUND_EVIDENCE.md)
+- 声音库目前有 7 条 CC0 实录和 3 条项目自制音，支持搜索、分类、收藏与短试听。账户注册、登录、会话恢复和退出已实现。日记、引导和账户同步待开发。 [声音用途与证据](docs/SOUND_EVIDENCE.md)
 
-跨会话开发先读 [工程约定](AGENTS.md) 与 [项目状态](docs/PROJECT_STATUS.md)。源码和验证结果优先于状态摘要。仓库为 https://github.com/HendySen01/JHaven ，当前 main 跟踪 origin/main；本轮未提交或推送，操作见 [提交说明](docs/COMMIT_GUIDE.md)。
+跨会话开发先读 [工程约定](AGENTS.md) 与 [项目状态](docs/PROJECT_STATUS.md)。源码和验证结果优先于状态摘要。仓库为 https://github.com/HendySen01/JHaven ，当前 main 跟踪 origin/main；本轮建议分两次提交，操作见 [提交说明](docs/COMMIT_GUIDE.md)。
 
 声音体验：进入「声音场景」，选择预设或手动混音，点击播放。可以另存到当前浏览器、设置定时与结束前渐弱；手机锁屏/后台行为取决于浏览器，不能保证。详见 [音频架构](docs/AUDIO_ENGINE.md) 与 [素材清单](docs/AUDIO_ASSETS.md)。
 
-`npm run audio:verify` 校验音轨目录、质量和的来源字段、SHA-256、大小与格式；根构建前自动执行。常规安装不下载音频；重新制作只由维护者显式执行 `scripts/prepare-audio.mjs`。
+`npm run audio:verify` 校验音轨目录、数字质量与来源字段、SHA-256、大小与格式；根构建前自动执行。常规安装不下载音频；重新制作只由维护者显式执行 `scripts/prepare-audio.mjs`。
 
 ## 环境与启动
 
@@ -34,7 +34,18 @@ npm run dev
 - API：[http://127.0.0.1:3001/api/health](http://127.0.0.1:3001/api/health)
 - 按 `Ctrl+C` 停止两端与共享包监听。若端口已被占用，启动会报错，不会静默切换。
 
-**首次运行不需要环境文件、数据库或密钥。** 后端默认只绑定本机。自定义时复制 `apps/server/.env.example` 为同目录 `.env`；Node 原生加载该文件，Shell 已有变量优先。前端开发与预览代理默认指向 `127.0.0.1:3001`，改变 API 端口时同步修改 `apps/web/vite.config.ts`。
+访客声音库可直接启动。启用注册与登录前，请创建专用 MySQL 数据库及数据库账号，按以下顺序操作。
+
+```powershell
+Copy-Item apps/server/.env.example apps/server/.env
+# 编辑 apps/server/.env，填入 DB_HOST、DB_NAME、DB_USER、DB_PASSWORD
+npm run db:migrate
+npm run dev
+```
+
+仅在本地尚无 `.env` 时复制示例。首次迁移需要目标库的建表和索引权限，生产部署使用单独迁移账号。运行时账户须能读写会话与用户记录。默认 `APP_ORIGIN=http://127.0.0.1:5173`，浏览器应访问这一来源。生产配置使用实际 HTTPS 来源。数据库错误会写入启动提示，`/api/auth/status` 返回 503。数据库与 Cookie 配置见 [账户与会话](docs/AUTH.md)。
+
+服务 API 改端口时，同步设置 `PORT` 和 `JHAVEN_PROXY_PORT`。测试端口冲突时，可用 `PLAYWRIGHT_API_PORT` 选择专用端口。数据库测试需要已创建的 `jhaven_test_` 前缀隔离库及其凭据，并显式设置 `JHAVEN_TEST_MYSQL=1`。测试环境使用独立配置，详情见 [验证记录](docs/TESTING.md)。
 
 `npm run dev` 会先构建共享包。单独使用 `npm run dev:web` 或 `npm run dev:server` 前先运行 `npm run build -w @jhaven/shared`；单独启动前端时，服务检查会显示连接失败，符合真实状态。
 

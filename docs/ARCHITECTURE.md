@@ -15,7 +15,7 @@
 packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 ```
 
-开发时 Vite 代理 `/api` 到本地 Express；生产时静态托管与 API 反向代理保持同源。未开启通配 CORS，没有 Cookie、鉴权接口或数据写入接口。健康检查仅证明 API 进程可响应，不证明数据库或未来业务就绪。
+开发时 Vite 将 `/api` 代理至本地 Express，生产静态站点与 API 保持同一来源。账户使用 HttpOnly Cookie 和固定 Origin。进程存活和账户数据库就绪分别由 `/api/health` 与 `/api/auth/status` 提供。
 
 ## 已采用的技术
 
@@ -39,10 +39,10 @@ packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 
 ## API 契约
 
-唯一已实现接口为 `GET /api/health`，不接受查询参数。成功：
+基础服务存活检查为 `GET /api/health`，不接受查询参数。成功：
 
 ```json
-{ "status": "ok", "service": "jhaven-api", "stage": "ambient-audio" }
+{ "status": "ok", "service": "jhaven-api", "stage": "account-auth" }
 ```
 
 错误统一为：
@@ -58,6 +58,10 @@ packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 ```
 
 已处理未知路由、查询参数、JSON 解析、16 KiB 正文限制、编码异常及未知服务异常；响应不含堆栈，带请求编号与 no-store。前端校验健康响应，5 秒超时后给出可重试提示，不向用户显示原始网络异常。
+
+## 账户链路
+
+Vue 表单和 Express 共用 Zod 账户契约。Pinia 通过同源 `/api/auth/me` 恢复身份，路由守卫负责导航。受保护 `/api/account` 每次从有效 Cookie 会话查询自身资料。Express 将写请求限制为指定 Origin 的 JSON，使用有界限流和异步 scrypt，参数化查询走 mysql2 连接池。MySQL 保存用户与会话摘要。显式 SQL 迁移由命名锁保护；`/api/auth/status` 独立表示数据库和结构就绪。 [账户与会话](AUTH.md) [数据库](DATABASE.md)
 
 ## 后续模块边界
 

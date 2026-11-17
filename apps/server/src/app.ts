@@ -3,11 +3,18 @@ import { APP_INFO, type HealthResponse } from '@jhaven/shared';
 import express from 'express';
 import helmet from 'helmet';
 import { z } from 'zod';
+import type { Pool } from 'mysql2/promise';
+import { loadConfig, type Config } from './config.js';
+import { createAuthRouter } from './auth/routes.js';
 import { AppError, errorHandler } from './middleware/error-handler.js';
 
-export function createApp() {
+export function createApp({
+  config = loadConfig({}),
+  database,
+}: { config?: Config; database?: Pool | undefined } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  if (config.TRUST_LOOPBACK_PROXY === '1') app.set('trust proxy', 'loopback');
   app.use(helmet());
   app.use((_request, response, next) => {
     const requestId = randomUUID();
@@ -29,6 +36,15 @@ export function createApp() {
     };
     response.json(body);
   });
+
+  app.use(
+    '/api',
+    createAuthRouter({
+      pool: database,
+      origin: config.APP_ORIGIN,
+      secure: config.NODE_ENV === 'production',
+    }),
+  );
 
   app.use((_request, _response, next) => {
     next(new AppError(404, 'NOT_FOUND', '未找到请求的接口。'));

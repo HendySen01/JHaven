@@ -96,3 +96,7 @@
 ## Sprint 2.5 声音库
 
 新增四条 Freesound 实录，分别来自 SignatureSoundsOrg、SamsterBirdies、apintofmild 和 Borgory。分条 CC0 权利核验与处理记录见 [AUDIO_ASSETS](AUDIO_ASSETS.md)。稳定背景音为确定性项目自制。Moodist 只作信息组织参考，MDN 用于核对 Web Audio。LeiBox 和 Impeccable 查阅公开资料后沿用原生表单及现有夜间风格，未采用新的外部组件或技能脚本。
+
+## Sprint 3 账户
+
+`mysql2@3.24.6`（MIT）是唯一新直接依赖，用于池化连接、TLS 和参数化查询。第三方声明与传递依赖清单已重新生成。MySQL Community Server 9.6.0（GPL）为本机独立测试服务，项目发布物不包含服务器二进制。密码派生使用 Node 内置 scrypt。审查参考 OWASP 账户、会话和 CSRF 文档。Trail of Bits Skills、LeiBox 与 Impeccable 只评估公开材料，未安装、导入或执行。本轮未调用外部 Skills。 [mysql2 许可](https://github.com/sidorares/node-mysql2/blob/master/License)
