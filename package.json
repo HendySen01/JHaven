@@ -1,0 +1,48 @@
+{
+  "name": "jhaven",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": ">=24.12.0 <25",
+    "npm": ">=11 <12"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "predev": "npm run build -w @jhaven/shared",
+    "dev": "concurrently --kill-others --names shared,api,web \"npm run dev -w @jhaven/shared\" \"npm run dev -w @jhaven/server\" \"npm run dev -w @jhaven/web\"",
+    "dev:web": "npm run dev -w @jhaven/web",
+    "dev:server": "npm run dev -w @jhaven/server",
+    "typecheck": "npm run build -w @jhaven/shared && npm run typecheck --workspaces && tsc -p tsconfig.tools.json",
+    "build": "npm run build -w @jhaven/shared && npm run build -w @jhaven/server && npm run build -w @jhaven/web",
+    "start": "npm run start -w @jhaven/server",
+    "preview": "npm run preview -w @jhaven/web",
+    "test": "npm run build -w @jhaven/shared && vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "licenses:report": "node scripts/report-licenses.mjs",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.1",
+    "@types/node": "24.10.1",
+    "concurrently": "10.0.7",
+    "eslint": "10.15.0",
+    "eslint-plugin-vue": "10.12.1",
+    "globals": "17.14.0",
+    "prettier": "3.10.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.73.0",
+    "vitest": "5.1.0",
+    "vue-eslint-parser": "10.4.2"
+  }
+}

@@ -1,0 +1,39 @@
+<script setup lang="ts">
+import { ref, watch, watchEffect } from 'vue';
+import { useRoute } from 'vue-router';
+import { APP_INFO } from '@jhaven/shared';
+import NightNavigation from './components/NightNavigation.vue';
+import SettingsPanel from './components/SettingsPanel.vue';
+import { usePreferencesStore } from './stores/preferences';
+const settingsOpen = ref(false);
+const settings = usePreferencesStore();
+const route = useRoute();
+settings.initialize();
+watchEffect(() => {
+  document.documentElement.dataset.palette = settings.preferences.palette;
+  document.documentElement.dataset.reduceMotion = String(settings.preferences.reduceMotion);
+  document.documentElement.dataset.landscape = String(settings.preferences.showLandscape);
+});
+watch(
+  () => route.fullPath,
+  () => {
+    settingsOpen.value = false;
+  },
+);
+</script>
+<template>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <div class="app-shell">
+    <NightNavigation @settings="settingsOpen = true" />
+    <main id="main-content" tabindex="-1"><RouterView /></main>
+    <footer class="site-footer">
+      <p>{{ APP_INFO.tagline }}</p>
+      <p>不必追赶睡眠，只为休息留一点空间。</p>
+      <div class="footer-meta">
+        <span>JHaven · {{ APP_INFO.version }} · 场景预览</span
+        ><RouterLink to="/about#boundaries">使用边界与隐私</RouterLink>
+      </div>
+    </footer>
+  </div>
+  <SettingsPanel v-if="settingsOpen" @close="settingsOpen = false" />
+</template>
