@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('开始放松与三个真实场景详情，没有播放伪状态', async ({ page }) => {
+test('开始放松与三个场景详情，不会自动播放', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: '开始放松' }).click();
   await expect(page).toHaveURL('/relax');
@@ -15,14 +15,15 @@ test('开始放松与三个真实场景详情，没有播放伪状态', async ({
       /nav-active/,
     );
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(name!);
-    await expect(page.getByText('视觉预览 · 无音频')).toBeVisible();
-    await expect(page.getByRole('button', { name: /播放|暂停/ })).toHaveCount(0);
+    await expect(page.getByText('CC0 实录 · 可混合播放')).toBeVisible();
+    await expect(page.locator('.player-status')).toContainText('尚未播放');
     await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
     await page.getByRole('link', { name: '返回场景选择' }).click();
     await expect(page.getByRole('link', { name: `查看${name}场景` })).toContainText('已选场景');
   }
   await page.reload();
-  await expect(page.getByText('已选场景')).toHaveCount(0);
+  await expect(page.getByText('已选场景')).toHaveCount(1);
+  await expect(page.locator('.player-status')).toContainText('尚未播放');
 });
 
 test('今晚状态实时更新建议并链接到对应入口', async ({ page }) => {

@@ -23,7 +23,9 @@ onMounted(() => void service.check());
         <CircleHelp v-else :size="18" aria-hidden="true" />
         {{ label }}
       </p>
-      <p class="text-muted text-sm mt-2">此检查仅确认服务响应，声音与日记功能仍在开发中。</p>
+      <p class="text-muted text-sm mt-2">
+        此检查仅确认服务响应。环境音在浏览器播放，日记记录仍待开放。
+      </p>
     </div>
     <button
       class="button button-secondary"

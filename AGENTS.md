@@ -3,7 +3,7 @@
 ## 目标与范围
 
 - 打造适合夜晚使用的睡眠习惯与放松 Web 应用，标语为 `Your Quiet Haven, Every Night.`。
-- 当前为 Sprint 1 场景与交互预览。首页、状态建议、场景详情与本地界面偏好可用；真实音频、日记记录、账户、数据库和 AI 均未实现。具体状态以 `docs/PROJECT_STATUS.md` 与 `docs/ROADMAP.md` 为准。
+- 当前为 Sprint 2 环境音 Alpha。首页、状态建议、三轨声音混合、场景/本地预设、定时渐弱与界面偏好可用；日记记录、账户、数据库和 AI 均未实现。具体状态以 `docs/PROJECT_STATUS.md` 与 `docs/ROADMAP.md` 为准。
 - 未完成能力必须标为「待开发」，不能伪造播放、记录、成功提示或用户数据。
 - 不宣称诊断、治疗失眠、临床效果或保证入睡，不默认向第三方发送私人内容。
 
@@ -13,6 +13,8 @@
 - `apps/web/src/components` 放可复用组件，`views` 放页面，`stores` 放跨组件状态，`lib` 放独立逻辑。
 - `apps/server/src` 放服务代码；未来按业务模块组织路由、服务和数据访问。`packages/shared` 只放两端共用契约，不引入 Node 或 DOM 专属代码。
 - Vue 使用 `<script setup lang="ts">`；优先原生语义元素、明确的 props/emits 和局部状态。所有按钮必须有真实操作。
+- 音频由应用级单一引擎管理，组件不得各自创建 Context；维护意图版本号、可取消包络及 pagehide/根卸载释放。路由切换保留播放，刷新不恢复播放或计时。详见 `docs/AUDIO_ENGINE.md`。
+- 替换音轨前逐项核查作者/许可/再分发并更新 audio manifest、署名和资源文档，运行 `npm run audio:verify`。不能用 Mock 结果替代真实浏览器音频验证。
 - 界面遵循 `docs/DESIGN_SYSTEM.md`：响应式、键盘可用、可见焦点、触屏目标、减少动态效果、禁止自动播放。
 
 ## 数据与安全

@@ -1,20 +1,31 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, ArrowRight, VolumeX } from '@lucide/vue';
+import { ArrowLeft, ArrowRight, Play } from '@lucide/vue';
 import SceneArtwork from '../components/SceneArtwork.vue';
 import { findScene } from '../domain/evening';
 import { useEveningStore } from '../stores/evening';
+import { useAudioEngine } from '../composables/useAudioEngine';
+const audio = useAudioEngine();
 const route = useRoute();
 const evening = useEveningStore();
 const scene = computed(() => findScene(route.params.sceneId));
 watch(
   scene,
   (value) => {
-    if (value) evening.selectedScene = value.id;
+    if (value) {
+      evening.selectedScene = value.id;
+    }
   },
   { immediate: true },
 );
+function playScene() {
+  if (!scene.value) return;
+  const same = audio.currentId === scene.value.id;
+  if (!same) audio.applyBuiltin(scene.value.id);
+  if (same && audio.snapshot.status === 'playing') audio.pause();
+  else void audio.play();
+}
 </script>
 <template>
   <div class="wide-page page-enter">
@@ -25,7 +36,7 @@ watch(
       <div class="scene-detail">
         <div class="detail-art">
           <SceneArtwork :scene="scene.id" /><span class="detail-preview-badge"
-            >视觉预览 · 无音频</span
+            >CC0 实录 · 可混合播放</span
           >
         </div>
         <section class="detail-copy" aria-labelledby="scene-title">
@@ -34,13 +45,21 @@ watch(
           <p class="detail-mood">{{ scene.mood }}</p>
           <p class="page-lead">{{ scene.description }}</p>
           <p class="scene-texture">{{ scene.texture }}</p>
-          <div class="audio-unavailable">
-            <VolumeX :size="19" aria-hidden="true" />
-            <div>
-              <strong>真实声音，还在路上</strong>
-              <p>本阶段仅可选择和浏览场景。音频、多轨混合与定时停止将在后续 Sprint 实现。</p>
-            </div>
-          </div>
+          <p class="audio-hint">
+            点击播放此场景会应用它的起始配比。仅浏览不会改变当前混音；下方可独立调节、另存和设置定时。配比无医学含义。
+          </p>
+          <button
+            class="button button-primary detail-play"
+            type="button"
+            :disabled="audio.snapshot.status === 'loading' || audio.snapshot.status === 'stopping'"
+            @click="playScene"
+          >
+            <Play :size="17" aria-hidden="true" />{{
+              audio.snapshot.status === 'playing' && audio.currentId === scene.id
+                ? '暂停此场景'
+                : '播放此场景'
+            }}
+          </button>
           <RouterLink class="button button-secondary" to="/relax"
             >再看看其他场景<ArrowRight :size="16" aria-hidden="true"
           /></RouterLink>

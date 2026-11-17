@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 export const APP_INFO = {
   name: 'JHaven',
-  version: '0.1.0-alpha.1',
-  stage: 'ui-preview',
+  version: '0.1.0-alpha.2',
+  stage: 'ambient-audio',
   tagline: 'Your Quiet Haven, Every Night.',
 } as const;
 

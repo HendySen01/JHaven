@@ -5,7 +5,9 @@
 ```text
 浏览器 Vue SPA
   ├── Vue Router：/、/relax、/relax/:sceneId、/journal、/about、404
-  ├── Pinia：service（内存）、evening（内存）、preferences（浏览器本地）
+  ├── Pinia：service/evening（内存）、preferences/audio（本地配置，运行态仅内存）
+  ├── AudioEngine → AudioTrack → Gain → Fade → Master → AudioContext.destination
+  ├── AudioTimer：单调时钟 + 音频线程增益计划
   └── GET /api/health
          ↓ 同源代理
      Express API → 统一错误响应
@@ -40,7 +42,7 @@ packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 唯一已实现接口为 `GET /api/health`，不接受查询参数。成功：
 
 ```json
-{ "status": "ok", "service": "jhaven-api", "stage": "ui-preview" }
+{ "status": "ok", "service": "jhaven-api", "stage": "ambient-audio" }
 ```
 
 错误统一为：
@@ -59,9 +61,15 @@ packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 
 ## 后续模块边界
 
-Sprint 1 组件：`NightNavigation`/`JHavenLogo` 负责导航品牌，`MoodSelector` 负责原生单选与建议，`AmbientSceneCard`/`SceneArtwork` 负责元数据与静态插画，`PrimaryButton` 为带真实路由的主操作，`SettingsPanel`/`ModalPanel` 负责偏好与原生对话框。App 只编排全局导航、偏好、设置开闭与页面。
+Sprint 2 音频已经实现：`services/audio` 分离上下文/轨道/单调计时/增益包络，应用级 store 与 composable 供各组件复用。App 负责 pagehide/根卸载清理和跨页面控制条，路由卸载不停止全局声音。原生 fetch 以包装函数调用，避免浏览器接收者错误。
 
-界面偏好键为 `jhaven.ui-preferences.v1`：仅版本、配色、减少动画、显示夜景。读取进行类型与枚举校验并过滤额外字段；损坏或访问受限回退默认值，写失败不阻断当前调整并明确未持久化。系统减少动态效果始终优先；不跨标签页实时同步，也不发送到服务端。今晚状态和所选场景不进 localStorage。
+三条短 CC0 自托管 WAV 使用 AudioBufferSource 原生 loop；每轨缓存一个已解码 buffer、至多一个当前 voice。加载任务共享，已经开始的解码可复用，版本号阻止迟到播放。每轨、总音量、渐弱分别管理。暂停保留位置与计时；停止清理 voice；页面卸载关闭 Context。
+
+`jhaven.audio.v1` 仅保存音量/启用配置、自定义场景与已选 ID。严格白名单、枚举与边界校验，不保存或恢复播放/计时，也不上传。来源、状态机、计时/渐弱与浏览器限制详见 `AUDIO_ENGINE.md` 和 `AUDIO_ASSETS.md`。
+
+Sprint 1 组件：`NightNavigation`/`JHavenLogo` 负责导航品牌，`MoodSelector` 负责原生单选与建议，`AmbientSceneCard`/`SceneArtwork` 负责元数据与静态插画，`PrimaryButton` 为带真实路由的主操作，`SettingsPanel`/`ModalPanel` 负责偏好与原生对话框。App 编排全局导航、偏好、设置、页面和应用级音频生命周期。
+
+界面偏好键为 `jhaven.ui-preferences.v1`：仅版本、配色、减少动画、显示夜景。读取进行类型与枚举校验并过滤额外字段；损坏或访问受限回退默认值，写失败不阻断当前调整并明确未持久化。系统减少动态效果始终优先；不跨标签页实时同步，也不发送到服务端。今晚状态与最近浏览的场景只在内存；声音混音及当前预设 ID 由独立音频存储保存。
 
 - 后端业务按 auth、diaries、presets、sessions、preferences 组织；路由负责解析和权限入口，服务负责业务，repository 负责参数化 SQL。
 - Web Audio 放在独立可释放的音频模块，Vue 组件通过明确 API 操作，不把 AudioContext 深度代理为响应式对象。

@@ -5,7 +5,7 @@ test('首页、真实服务连接与导航可用', async ({ page }) => {
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('让世界慢一点');
-  await expect(page.getByText('音频待开放', { exact: true })).toHaveCount(3);
+  await expect(page.getByRole('link', { name: /查看.*场景/ })).toHaveCount(3);
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await page.getByRole('link', { name: '关于', exact: true }).click();
   await expect(page).toHaveURL(/\/about$/);

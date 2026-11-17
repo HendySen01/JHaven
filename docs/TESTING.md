@@ -21,6 +21,28 @@ E2E 首次需要 `npx playwright install chromium`，Linux CI 可加 `--with-dep
 - 原生 radio 方向键、设置开闭、Escape/外侧点击、首尾 Tab 循环和焦点返回。
 - 配色/夜景/减少动画的持久化、恢复默认、禁止 localStorage 时只在当前生效、系统减少动态效果优先。
 
+## Sprint 2 执行记录（2026-11-18，Asia/Macau）
+
+Windows / Node 24.21.0 / npm 11.19.0，未新增 npm 依赖。
+
+| 检查                                                                                                   | 实际结果                                                                                     |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `npm run check`                                                                                        | 格式、ESLint、三包及工具类型检查、73/73 Vitest/API、生产构建通过                             |
+| `npm run audio:verify`（构建前自动执行）                                                               | 三条 CC0 清单字段、SHA-256、字节长度、32kHz 单声道 WAV 与 21 秒时长通过                      |
+| `PLAYWRIGHT_CHANNEL=chrome` 下 `npm run test:e2e`，布局修复后用 `npx playwright test` 复测同一最终构建 | 51/51，通过 375px 触屏仿真、768px 平板和 1440px 桌面矩阵                                     |
+| `PLAYWRIGHT_CHANNEL=msedge` 下 `npx playwright test tests/e2e/audio.spec.ts --project=desktop-1440`    | 最终 7/7 核心音频用例通过，系统 Edge、桌面 1440px                                            |
+| 本地开发与截图                                                                                         | `npm run dev` 可启动；三档播放器与控制条截图已逐张检查；无横向溢出，移动端隐私入口遮挡已修复 |
+
+新增 38 项受控单元测试覆盖音量边界、预设/存储校验、重复播放、并发切换、迟到解码、停止重启、暂停/取消/重设计时、包络恢复、权限拒绝、下载/解码失败与超时、节点/监听/Context 释放。加上原有 35 项 API/UI 逻辑测试，共 73 项。Mock 只验证控制流，不代表真实声音播放。
+
+新增 7 项浏览器用例在三个视口运行：真实三轨非零 PCM 混合、原生音量键盘操作、暂停/继续/跨页停止、预设/自定义保存恢复删除、损坏/受限存储、刷新不自动播放、6 秒实际定时渐弱、解码错误重试、拒绝 resume、慢加载中停止、Context 挂起/恢复与 pagehide 关闭。加上原有 30 项 UI/API 场景，总计 51 项。全局播放条可见时也验证隐私入口可点击。
+
+浏览器探针仅放在 tests 中，使用原生 AudioContext、解码器、BufferSource 和 GainNode，以 Analyser 采样实际非零 PCM，再经静音支路连接 destination，避免打扰设备使用者。成功路径未放宽自动播放策略；拒绝权限/坏音频等通过故障注入。没有进行扬声器或耳机听感评估，不能把采样结果当成真机或整夜稳定性结论。
+
+首轮 Chrome 为 30 通过/18 失败，发现原生 fetch 以类属性接收者调用导致 Illegal invocation，包装调用修复后 48/48 通过。扩展后的首轮 51 项中 3 项在异步 SPA 导航完成前触发返回，增加目标页面就绪等待后全矩阵通过。早期 Mock 复用已消费 Response 也已修正。视觉检查发现 375px 全局控制条覆盖页脚隐私链接，补底部空间并回归。一次测试启动因开发服务占用 3001 被明确拒绝，停止本轮服务后重跑，未通过复用其他实例绕过检查。
+
+截图和检查脚本位于忽略提交的 artifacts：`sprint2-player-375.png`、`sprint2-player-768.png`、`sprint2-player-1440.png`、对应 `sprint2-relax-*.png` 与 `sprint2-dock-*.png`、`sprint2-visual.json`。Chrome 报告归档在 `artifacts/sprint2-chrome-report`；最终 Edge 报告在 playwright-report。本地截图/报告、原始下载和 dist 不提交。
+
 ## Sprint 1 执行记录（2026-11-18，Asia/Macau）
 
 Windows / Node 24.21.0 / npm 11.19.0，未新增依赖。
@@ -55,4 +77,4 @@ Windows / Node 24.21.0 / npm 11.19.0，未新增依赖。
 
 ## 未覆盖范围
 
-未实现的音频、后台/锁屏、权限、MySQL、认证、日记与 AI 不存在功能测试。Safari、Firefox、真实 iOS/Android、Nginx 配置实际加载与生产宿主尚未验证。未来对外内测前必须补齐相应业务和设备测试，不据此声称临床效果或性能指标。
+Safari、Firefox、真实 iOS/Android、手机锁屏/整夜和音轨硬件听感未验证；本轮 Chrome/Edge、触屏仿真与权限故障注入不能替代它们。生产 Nginx 配置实际加载与宿主尚未验证。MySQL、认证、日记与 AI 未实现，无相应业务测试。未来对外内测前须补齐所需业务、设备及听感验证，不据此声称临床效果或性能指标。

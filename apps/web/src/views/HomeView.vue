@@ -2,13 +2,13 @@
 import { ArrowUpRight, BookOpen, MoonStar } from '@lucide/vue';
 import { APP_INFO } from '@jhaven/shared';
 import { scenes } from '../domain/evening';
-import { useEveningStore } from '../stores/evening';
+import { useAudioEngine } from '../composables/useAudioEngine';
 import { usePreferencesStore } from '../stores/preferences';
 import MoonBackground from '../components/MoonBackground.vue';
 import MoodSelector from '../components/MoodSelector.vue';
 import PrimaryButton from '../components/PrimaryButton.vue';
 import AmbientSceneCard from '../components/AmbientSceneCard.vue';
-const evening = useEveningStore();
+const audio = useAudioEngine();
 const settings = usePreferencesStore();
 </script>
 <template>
@@ -27,7 +27,7 @@ const settings = usePreferencesStore();
           ><a class="quiet-link" href="#scenes">探索夜晚的声音<span aria-hidden="true">↓</span></a>
         </div>
         <p class="hero-note">
-          <MoonStar :size="14" aria-hidden="true" />Alpha 场景预览 · 真实音频即将到来
+          <MoonStar :size="14" aria-hidden="true" />三种自然实录 · 由你轻轻开启
         </p>
       </div>
       <div v-if="settings.preferences.showLandscape" class="scene-caption" aria-hidden="true">
@@ -46,13 +46,15 @@ const settings = usePreferencesStore();
             >全部场景<ArrowUpRight :size="16" aria-hidden="true"
           /></RouterLink>
         </div>
-        <p class="section-intro">先看看风景，感受自己的偏好。当前仅提供视觉预览，不会播放声音。</p>
+        <p class="section-intro">
+          一场雨，一片海，一阵风。选好喜欢的场景，点击播放后声音才会开始。
+        </p>
         <div class="scene-grid">
           <AmbientSceneCard
             v-for="scene in scenes"
             :key="scene.id"
             :scene="scene"
-            :selected="evening.selectedScene === scene.id"
+            :selected="audio.currentId === scene.id"
           />
         </div>
       </section>

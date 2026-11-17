@@ -1,0 +1,21 @@
+JHaven 环境音来源与署名
+各录音原始页面均标注 CC0-1.0；允许修改、再分发和商业使用，保留署名以便追溯。
+许可：https://creativecommons.org/publicdomain/zero/1.0/
+
+rain.wav — Soft rain.WAV
+作者：barkenov
+来源：https://freesound.org/people/barkenov/sounds/640655/
+处理：公开 HQ MP3 预览的第 5–29 秒；下混单声道 32kHz，尾部 3 秒线性交叉渐变，峰值归一到 0.65，输出 21 秒循环。非 LUFS 校准。
+SHA-256: 620fb721a3f16b55c0d5de0b03075c3cdaa8a76fd410466788e4ae61dca745ad
+
+ocean.wav — Calm ocean waves
+作者：SamsterBirdies
+来源：https://freesound.org/people/SamsterBirdies/sounds/578524/
+处理：公开 HQ MP3 预览的第 5–29 秒；下混单声道 32kHz，尾部 3 秒线性交叉渐变，峰值归一到 0.65，输出 21 秒循环。非 LUFS 校准。
+SHA-256: f72ba0045b8dbc95de831cfc823d8d3b13b5ea741704c55923da827de76ce16e
+
+wind.wav — Ambiance_Wind_Forest_Trees_Loop_01.wav
+作者：Nox_Sound
+来源：https://freesound.org/people/Nox_Sound/sounds/530908/
+处理：公开 HQ MP3 预览的第 5–29 秒；下混单声道 32kHz，尾部 3 秒线性交叉渐变，峰值归一到 0.65，输出 21 秒循环。非 LUFS 校准。
+SHA-256: 33a3a3119b31a8343a431feb62313470d5fc522ce4c15566fd5f0dc159429231

@@ -66,10 +66,29 @@
 
 实际使用的 Skills：`leibox` 用于实时目录与具体条目核查；`sites:sites` 仅使用现有仓库、本地验证流程，不注册 Site 或发布。未使用 Impeccable/Anthropic Skills，不安装未知脚本。相关限制不代表这些项目整体不可用于产品。
 
-### 本轮自有素材
+### Sprint 1 自有素材（历史）
 
 月亮、山线、水面、页面布局、文案和 favicon 由本项目独立编写；无外部照片、音频、远程字体、商标或视频。Lucide 图标按上述许可保留声明。
 
-## 后续引入检查
+## Sprint 2 音频资源与工具评估
+
+本轮未新增 npm 依赖或第三方运行脚本，沿用现有 Vue/Pinia/Lucide、Vitest/Playwright。自有音频服务与组件独立实现，不修改第三方源码。
+
+| 资源                       | 地址                                                           | 本轮实际用途                                                                          | 许可证/集成与修改                                            | 注意事项                                                                                             |
+| -------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Moodist                    | https://github.com/remvze/moodist                              | 阅读 src/data/sounds、stores/sound/preset/sleep-timer、hooks/use-sound 与组件生命周期 | 代码 MIT；仅架构研究，未复制源码、素材或安装 Howler/React    | 借鉴音轨元数据/播放意图/预设分离和任务 token；原仓库没有逐条可确认的本轮音频来源链，因此未使用其 MP3 |
+| Freesound / barkenov       | https://freesound.org/people/barkenov/sounds/640655/           | 雨声实录                                                                              | 原条目 CC0-1.0，下载公开 HQ 预览并剪辑/下混/交叉渐变后自托管 | 作者、地址、修改和文件 SHA-256 见 AUDIO_ASSETS 与 public/audio/manifest.json                         |
+| Freesound / SamsterBirdies | https://freesound.org/people/SamsterBirdies/sounds/578524/     | 海浪实录                                                                              | 原条目 CC0-1.0，同上处理；不是从 Moodist 转取                | 无账号下载、无付费资源，保留自愿署名                                                                 |
+| Freesound / Nox_Sound      | https://freesound.org/people/Nox_Sound/sounds/530908/          | 林间风实录                                                                            | 原条目 CC0-1.0，同上处理                                     | 可能包含自然树叶/鸟声，不伪称纯白噪音                                                                |
+| MDN Web Audio 文档         | https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API | 核对 Context、Buffer/Source、Gain、resume、媒体元素与时钟边界                         | 仅技术参考，不复制示例代码或媒体                             | 本项目使用 AudioBufferSource 原生 loop 与增益自动化，未混用媒体元素方案                              |
+| LeiBox                     | https://github.com/leishifu666/LeiBox                          | 使用本地 skill 重新检索音量/滑块/开关                                                 | 无合适音量条目，未下载源码或执行组件脚本                     | revision 与前轮一致；泛检索只命中其他用途滑块，精确音量无结果；使用原生 range/checkbox 独立实现      |
+| Impeccable                 | https://github.com/pbakaus/impeccable                          | 重新评估 README 与现有 UI 的适配价值                                                  | 无本地对应 Skill，未安装/执行或复制                          | 保留现有设计，通过类型/交互/视觉检查；不为已有需求增加新安装权限                                     |
+| Anthropic Skills           | https://github.com/anthropics/skills                           | 阅读 README 的独立 SKILL.md/资源组织方式                                              | 未安装、执行或复制任一 Skill                                 | 当前工具足够；没有据 README 对全仓库代码/素材作统一授权推断                                          |
+
+三条原始页面已分别核查 [CC0](https://creativecommons.org/publicdomain/zero/1.0/) 标记与商业/修改/分发说明。素材清单见 AUDIO_ASSETS.md，静态署名在 apps/web/public/audio/ATTRIBUTION.txt；不暗示作者背书。语音/音乐/未知素材未引入。
+
+实际使用 Skills：leibox 的实时查询与本地 Sites 开发/预览流程。未安装外部 Skill、未执行仓库安装脚本。制作工具为本仓库独立 Node 脚本，使用已安装 Playwright 和 Chrome 的 OfflineAudioContext；普通 npm 安装不下载素材，构建只做本地校验。
+
+### 后续引入检查
 
 记录具体文件/版本、原始链接、Vue 兼容性、运行与构建依赖、代码许可、素材许可、修改及商业使用条件、署名位置和验证结果。优先检查安装脚本和外部网络访问；不清楚则不引入，使用权利清晰的素材或独立实现。

@@ -3,7 +3,9 @@ import { ArrowLeft } from '@lucide/vue';
 import AmbientSceneCard from '../components/AmbientSceneCard.vue';
 import { scenes } from '../domain/evening';
 import { useEveningStore } from '../stores/evening';
+import { useAudioEngine } from '../composables/useAudioEngine';
 const evening = useEveningStore();
+const audio = useAudioEngine();
 </script>
 <template>
   <div class="wide-page page-enter">
@@ -12,7 +14,7 @@ const evening = useEveningStore();
     >
     <p class="eyebrow">CHOOSE YOUR EVENING</p>
     <h1 tabindex="-1">今晚，想在哪里停留？</h1>
-    <p class="page-lead">选一处场景，看看它的氛围。不需要立刻做决定。</p>
+    <p class="page-lead">选一处场景，或混合自己的夜晚。只有你点击播放，声音才会开始。</p>
     <div v-if="evening.recommendation" class="recommendation-banner">
       <strong>{{ evening.recommendation.title }}</strong>
       <p>{{ evening.recommendation.text }}</p>
@@ -20,13 +22,13 @@ const evening = useEveningStore();
         >{{ evening.recommendation.action }}<span aria-hidden="true">↗</span></RouterLink
       >
     </div>
-    <p class="preview-notice">视觉预览 · 音频引擎待开发，当前不会播放声音。</p>
+    <a class="quiet-link" href="#ambient-player">打开混音台<span aria-hidden="true">↓</span></a>
     <div class="scene-grid">
       <AmbientSceneCard
         v-for="scene in scenes"
         :key="scene.id"
         :scene="scene"
-        :selected="evening.selectedScene === scene.id"
+        :selected="audio.currentId === scene.id"
       />
     </div>
     <p class="gentle-note">场景选择只代表你的偏好，不是睡眠诊断或治疗建议。</p>

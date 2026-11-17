@@ -52,7 +52,7 @@ const recommendations = {
   },
   sounds: {
     title: '去海边，留一会儿',
-    text: '你想听一些声音，可以先了解海岸场景。目前仅提供视觉预览，真实音频将在后续开放。',
+    text: '你想听一些声音，可以试试静谧海岸。进入后由你主动播放，也可以调整海浪与微风的配比。',
     sceneId: 'coast',
     to: '/relax/coast',
     action: '看看海岸',

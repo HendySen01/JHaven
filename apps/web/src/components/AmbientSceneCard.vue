@@ -2,6 +2,8 @@
 import { ArrowUpRight, CloudRain, Waves, Wind, Check } from '@lucide/vue';
 import type { Scene } from '../domain/evening';
 import SceneArtwork from './SceneArtwork.vue';
+import { useAudioEngine } from '../composables/useAudioEngine';
+const audio = useAudioEngine();
 defineProps<{ scene: Scene; selected?: boolean }>();
 const icons = { rain: CloudRain, waves: Waves, wind: Wind };
 </script>
@@ -11,10 +13,11 @@ const icons = { rain: CloudRain, waves: Waves, wind: Wind };
     class="scene-card"
     :class="{ 'scene-selected': selected }"
     :aria-label="`查看${scene.name}场景`"
+    @click="audio.applyBuiltin(scene.id)"
   >
     <div class="scene-art-wrap">
       <SceneArtwork :scene="scene.id" />
-      <span class="scene-preview-label">视觉预览</span>
+      <span class="scene-preview-label">CC0 实录</span>
       <span v-if="selected" class="scene-selected-label"
         ><Check :size="12" aria-hidden="true" />已选场景</span
       >
@@ -31,7 +34,7 @@ const icons = { rain: CloudRain, waves: Waves, wind: Wind };
       </div>
       <p>{{ scene.mood }}</p>
       <div class="scene-card-foot">
-        <span>{{ scene.texture }}</span><span>音频待开放</span>
+        <span>{{ scene.texture }}</span><span>选择混音 ↗</span>
       </div>
     </div>
   </RouterLink>

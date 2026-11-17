@@ -6,14 +6,14 @@ const phases = [
   {
     number: '01',
     title: '让夜晚，有自己的样子',
-    status: 'Sprint 1 · 界面与交互',
-    description: '选择今晚状态、浏览场景、调整界面偏好。声音播放与私人记录尚未开放。',
+    status: 'Sprint 2 · 环境音 Alpha',
+    description: '选择今晚状态、混合三种环境实录、保存本地场景与定时渐弱。私人记录尚未开放。',
   },
   {
     number: '02',
     title: '让朋友真正用起来',
     status: 'Alpha · 计划中',
-    description: '逐步加入环境音、可退出的放松引导、账户与私人睡眠日记。',
+    description: '逐步加入可退出的放松引导、账户与私人睡眠日记，并补齐真机音频验证。',
   },
   {
     number: '03',
@@ -35,8 +35,8 @@ const phases = [
     <div class="foundation-notice">
       <Check :size="19" aria-hidden="true" />
       <p>
-        <strong>当前版本：Sprint 1 · 场景与交互预览</strong
-        ><br />你可以选择今晚状态、查看场景和调整界面偏好。真实音频、日记与账户尚未开放。
+        <strong>当前版本：Sprint 2 · 环境音 Alpha</strong
+        ><br />你可以混合雨声、海浪和微风，保存本地场景，设置定时与渐弱。日记与账户尚未开放。
       </p>
     </div>
 
@@ -73,8 +73,9 @@ const phases = [
         <article>
           <h3>让隐私留在你手中</h3>
           <p>
-            本版本仅将配色、减少动画与夜景显示偏好保存在当前浏览器的
-            localStorage。今晚状态与场景选择只存内存，不上传；没有账户、日记、AI 或分析追踪服务。
+            界面和声音偏好、自定义场景仅保存在当前浏览器的
+            localStorage，不上传。今晚状态仅存内存。刷新不自动播放或恢复计时；没有账户、日记、AI
+            或分析追踪服务。
           </p>
         </article>
       </div>

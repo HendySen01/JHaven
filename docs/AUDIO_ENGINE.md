@@ -1,0 +1,101 @@
+# 环境音引擎
+
+版本 `0.1.0-alpha.2`，Sprint 2。真实录音由本项目静态自托管，见 [资源清单](AUDIO_ASSETS.md)。不自动播放，不接入 AI 或账户服务。
+
+## 播放架构
+
+```text
+雨声 AudioBufferSource → 轨道 Gain ┐
+海浪 AudioBufferSource → 轨道 Gain ├→ Fade Gain → Master Gain → destination
+微风 AudioBufferSource → 轨道 Gain ┘
+```
+
+每个应用实例最多一个当前 AudioContext，首次点击播放时才创建，并在同一手势调用栈内调用 resume，再等待加载。初始化 store、进入页面、恢复本地偏好都不会创建 Context 或播放声音。
+
+- `services/audio/AudioEngine.ts`：Context、状态、意图版本号、混音、全局增益与生命周期。
+- `AudioTrack.ts`：单轨下载/解码、缓存、单一循环 voice、音量、暂停位置与释放。
+- `AudioTimer.ts`：独立单调时钟，暂停、恢复、重设、取消与剩余时间。
+- `GainEnvelope.ts`：可取消线性包络及未来渐弱计划。
+- `stores/audio.ts`：应用级共享状态、本地预设与非敏感偏好；不将原生节点深度代理。
+- `composables/useAudioEngine.ts`：组件共享入口，不能各自创建或销毁引擎。
+- `components/audio/`：混音台、单轨、音量、播放控制、定时与跨页面控制条。
+
+选择 AudioBufferSourceNode 是因为三条短循环可驻留内存并使用原生 loop，不靠无限创建实例或结束事件重新播放。长音频以后再评估 MediaElementAudioSourceNode：它适合媒体元素流式加载，但需要处理元素、网络、跨域与循环衔接；本轮没有同时引入第二套播放方式。
+
+## 音轨生命周期与并发
+
+每轨按需加载，同轨加载任务共享。检查 HTTP、8 MiB 上限、下载与解码合计 15 秒超时及解码结果，失败可重试。解码后仅缓存一份 AudioBuffer；native decodeAudioData 无取消接口，已经开始的解码会复用，旧播放意图由引擎版本号失效，不能迟到开声。超时或 dispose 会结束等待并丢弃迟到结果；dispose 也强制失效、清除超时。底层解码本身仍由浏览器完成，不能宣称已经取消其原生运算。
+
+原生 fetch 使用函数包装调用，避免存为类属性后以错误接收者调用导致浏览器 Illegal invocation。这类问题不能仅靠 Node Mock 测试发现。
+
+每轨最多一个当前 voice。重复播放复用加载任务/现有 voice；快速预设切换只接受最后的配置。关闭单轨以约 180ms 降低轨道增益，再断开节点；快速重开可取消旧清理任务。暂停保存循环偏移；继续时用缓存创建新的一次性 BufferSource；停止归零偏移并释放 voice。
+
+暂停约 120ms、主动停止约 350ms 渐弱；旧清理回调和旧增益计划可取消，重新播放不会被旧任务停止。部分轨道加载失败时整体停止并展示错误，不伪装成完整混音成功。
+
+## 状态转换
+
+| 当前状态              | 事件                      | 结果                                                                |
+| --------------------- | ------------------------- | ------------------------------------------------------------------- |
+| idle / paused / error | 用户播放                  | loading → 确认 Context running 且音轨启动成功后 playing；否则 error |
+| loading / playing     | 重复播放                  | 复用当前操作，不新增 voice                                          |
+| playing / loading     | 更新混音                  | 最新配置生效，必要时 loading，完成后 playing                        |
+| playing               | 暂停                      | stopping → paused，冻结计时与循环偏移                               |
+| 任意活动状态          | 主动停止 / 全部关闭       | stopping → idle（无 voice 时直接 idle），取消计时                   |
+| playing               | Context 被浏览器挂起/中断 | paused、提示用户，冻结计时、释放 voice；系统自行恢复不自动开声      |
+| playing               | 定时到期                  | 预先渐弱后 idle，释放 voice、取消计时                               |
+| 任意                  | pagehide / 应用卸载       | 中断加载，释放节点/缓冲/监听，关闭 Context                          |
+
+组件换页不释放全局引擎；非环境音页面显示共享控制条，返回继续操作同一混音。仅浏览详情不改变正在使用的配置；点击场景卡片或“播放此场景”才应用预设。页面隐藏不强制暂停，以实际 Context 状态为准；返回可见时重新计算截止状态。
+
+## 音量与渐弱
+
+UI 使用 0–100。每轨增益为 `0.3 × (音量 / 100)²`，总音量使用 `(总音量 / 100)²`，输入有限且限制范围；固定三轨保留混音余量。增益变更采用约 120ms 线性自动化，不把瞬时大跳变直接写入 gain.value。参数是产品选择，不代表医学作用或可保证的设备声压。
+
+Fade Gain 独立于 Master 与每轨偏好。渐弱、暂停或停止都不会改写保存的轨道音量。包络记录时间/起终值，以实际 AudioContext.currentTime 计算当前值，使用 cancelScheduledValues + setValueAtTime + linearRampToValueAtTime 取消并替换计划，不依赖兼容性不完整的 cancelAndHoldAtTime。
+
+定时渐弱提前安排在音频线程，后台 JS tick 被节流时也能按音频时钟降到静音；tick 仅刷新 UI 和清理节点。取消/暂停计时恢复全局渐弱增益，重新设定只留下一个包络。渐弱最长为定时长度；短于渐弱时长的定时也会先轻柔开声，再渐弱，不会全程静音却显示播放。
+
+## 定时行为
+
+不定时、10/20/30 分钟、自定义 0.1–180 分钟。渐弱可选 5/15/30/60 秒。自定义短时选项用于实际短暂停留与验证，不将测试参数隐藏为业务完成。
+
+- 以 performance.now 的单调时间和起点/剩余量计算，不按 interval 次数减秒。
+- 播放准备完成后开始计时；暂停声音冻结计时，继续恢复。
+- 可单独暂停/继续计时；切换预设与音量不会重设计时，也不会恢复用户手动暂停的计时。
+- 重新计时以当前完整时长开始；取消后恢复正常音量；提前停止取消计时。
+- 刷新、pagehide 或新页面会话取消计时，不恢复倒计时、不自动播放；仅恢复配置。
+- 浏览器/操作系统休眠时两个时钟都可能冻结或被暂停。手机锁屏、后台播放与硬件输出不能保证。页面返回时校正状态，不能承诺闹钟级可靠性。
+
+## 本地预设与隐私
+
+localStorage 键 `jhaven.audio.v1`：
+
+```json
+{
+  "version": 1,
+  "mix": {
+    "rain": { "enabled": true, "volume": 65 },
+    "ocean": { "enabled": false, "volume": 40 },
+    "wind": { "enabled": true, "volume": 20 }
+  },
+  "masterVolume": 60,
+  "currentPresetId": "rain",
+  "presets": []
+}
+```
+
+自定义场景含 id/name/mix，最多 20 个、名称 1–40 字符且不能同名；至少启用一个音轨。不接受本地 URL、额外轨道、无效类型、越界音量、重复 ID 或未知版本；只保留白名单字段，忽略 playing/timer/token 等额外字段。无效存储回退默认并提示。写入受限时保持本次可用，明确未保存；删除也只影响本浏览器。
+
+相同配比可以起自己的名字，恢复时优先匹配有效的已选 ID；调整后识别为自定义混音。不保存播放状态、定时截止点、日记、今晚状态或身份令牌。未来账户同步必须另行设计授权、隔离、迁移与删除。
+
+## 文件与资源成本
+
+每条 WAV 21 秒、32kHz、16-bit mono、1,344,044 字节，三条合计 4,032,132 字节。只加载启用轨道，解码 PCM 帧数由实际 Context sampleRate 决定。例如在 48kHz 时三轨 Float32 单声道约 12.1 MB，不含浏览器和节点开销；这是格式计算，不是性能实测。
+
+`npm run audio:verify` 核对授权字段、SHA-256、文件长度和 WAV 格式，根构建前自动运行。已提交资源可直接使用，常规安装/构建不联网下载音频。`scripts/prepare-audio.mjs` 是显式维护工具，使用现有 Playwright/系统 Chrome 离线处理；原始预览放忽略提交的 artifacts。发布静态目录需包含整个 audio 目录；Nginx 对缺失音频返回 404，不走 SPA fallback。
+
+## 验证与限制
+
+受控 Mock 覆盖增益、状态和清理；真实浏览器测试使用原生 Context/解码器/节点，采样实际非零 PCM，测试输出走静音支路以免打扰使用者。拒绝播放场景通过故障注入验证反馈，成功场景没有放宽自动播放策略。测试不等于硬件听感、真实手机、锁屏或整夜稳定性验证。具体执行结果见 TESTING.md。
+
+参考：[Web Audio](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)、[BufferSource](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode)、[AudioBuffer](https://developer.mozilla.org/en-US/docs/Web/API/AudioBuffer)、[resume](https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/resume)、[媒体元素源](https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/createMediaElementSource)、[单调时钟](https://developer.mozilla.org/en-US/docs/Web/API/Performance/now)。

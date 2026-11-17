@@ -1,6 +1,6 @@
 {
   "name": "@jhaven/server",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "start": "node --env-file-if-exists=.env dist/index.js"
   },
   "dependencies": {
-    "@jhaven/shared": "0.1.0-alpha.1",
+    "@jhaven/shared": "0.1.0-alpha.2",
     "express": "5.3.0",
     "helmet": "8.3.0",
     "zod": "4.6.7"
