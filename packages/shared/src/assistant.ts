@@ -22,7 +22,7 @@ export const assistantSource = z.strictObject({
   summary: z.string().min(1).max(240),
 });
 export const assistantStatus = z.strictObject({
-  provider: z.literal('openai').nullable(),
+  provider: z.enum(['openai', 'deepseek']).nullable(),
   knowledgeVersion: z.string(),
 });
 export const assistantEvent = z.discriminatedUnion('type', [
@@ -35,7 +35,15 @@ export const assistantEvent = z.discriminatedUnion('type', [
   }),
   z.strictObject({
     type: z.literal('error'),
-    code: z.enum(['timeout', 'upstream', 'upstream_rate', 'invalid_output']),
+    code: z.enum([
+      'timeout',
+      'upstream',
+      'upstream_rate',
+      'invalid_output',
+      'authentication',
+      'balance',
+      'model_unavailable',
+    ]),
   }),
 ]);
 export type AssistantEvent = z.infer<typeof assistantEvent>;

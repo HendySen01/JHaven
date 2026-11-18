@@ -21,12 +21,14 @@ export function createAssistantRouter({
   origin,
   provider,
   dailyLimit,
+  dailyBudget = 0.1,
   timeoutMs = 12_000,
   now = Date.now,
 }: {
   origin: string;
   provider?: AssistantProvider | undefined;
   dailyLimit: number;
+  dailyBudget?: number;
   timeoutMs?: number;
   now?: () => number;
 }) {
@@ -36,6 +38,7 @@ export function createAssistantRouter({
   let nextCleanup = 0,
     day = -1,
     modelCalls = 0,
+    reservedCost = 0,
     inflight = 0;
 
   router.get('/status', (request, response) => {
@@ -73,8 +76,14 @@ export function createAssistantRouter({
     if (day !== currentDay) {
       day = currentDay;
       modelCalls = 0;
+      reservedCost = 0;
     }
-    if (selected && (modelCalls >= dailyLimit || inflight >= 3)) {
+    // 每次预留至少 0.01 美元，覆盖最多 2400 输入 token 和 96 输出 token。
+    // 不退款可覆盖断线时未收到 usage 的请求；价格变化后需重新审阅。
+    if (
+      selected &&
+      (modelCalls >= dailyLimit || reservedCost + 0.01 > dailyBudget + 1e-9 || inflight >= 3)
+    ) {
       response.setHeader(
         'Retry-After',
         inflight >= 3 ? 15 : Math.ceil(((day + 1) * 86_400_000 - timestamp) / 1000),
@@ -97,6 +106,7 @@ export function createAssistantRouter({
       return;
     }
     modelCalls++;
+    reservedCost += 0.01;
     inflight++;
     send({ type: 'text', text: plan.text + '\n\n' });
     const timeout = AbortSignal.timeout(timeoutMs);

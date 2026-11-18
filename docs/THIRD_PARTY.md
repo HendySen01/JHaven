@@ -1,5 +1,7 @@
 # 第三方来源与许可登记
 
+Sprint 6B 直接使用 DeepSeek 官方服务，复用 Node Fetch/SSE 代码，无新增 SDK、组件或 Skills。参考官方模型、流式接口与思考模式文档，接口服务的使用按供应商条款执行。 [官方文档](https://api-docs.deepseek.com/api/create-chat-completion/)
+
 核查日期：2026-11-18。依赖版本以根锁文件为准；本文件不代替原许可。仓库公开、可下载、可署名不等于获得产品化授权。
 
 ## 已采用的依赖

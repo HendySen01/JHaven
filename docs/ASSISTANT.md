@@ -1,5 +1,17 @@
 # 睡前助手
 
+## Sprint 6B DeepSeek
+
+核对日期 2026-11-18。配置 `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL=https://api.deepseek.com` 和 `DEEPSEEK_MODEL=deepseek-flash` 后优先使用 DeepSeek。官方另有 `deepseek-v4-pro`，仅接受这两个当前模型及官方根地址或 `/v1`，防止凭据被转发到任意地址。旧模型名应在配置中更新。 [官方模型及价格](https://api-docs.deepseek.com/quick_start/pricing/)
+
+复用 SSE 适配器，DeepSeek 请求使用 `max_tokens=96` 和 `thinking.type=disabled`。继续使用审核摘要及枚举措辞校验。模型尚不自由生成知识解释或识别新的推荐意图，站内意图与引用仍由已有确定性规则生成。 [接口](https://api-docs.deepseek.com/api/create-chat-completion/) [思考模式](https://api-docs.deepseek.com/guides/thinking_mode/)
+
+401/403、402、429、404/422 与服务器错误分别显示认证、余额、限流、模型配置和服务异常提示。用户可重试或使用本地知识。每请求超时 12 秒，最多三并发、每 IP 十分钟八次，最多三条本地上下文且模型只接收当次 400 字符输入。固定提示与输入保守预留 2400 token，输出上限 96。
+
+新增 `AI_DAILY_BUDGET_USD=0.10`，每次模型请求按 0.01 美元预留，失败或取消不退回，同时受每日请求数限制。这是依据核对日价格设置的进程内保守额度，供应商调价或自定义 OpenAI 模型后须重新核算。重启、多实例会分别计数，实际财务上限仍须由供应商设置。此字段不代表已获付费测试授权。
+
+本次只核对配置字段存在性，未输出密钥。当前未配置 DeepSeek 密钥，真实连接未测试、付费调用为零。本轮无数据库迁移，无新依赖或 Skills。
+
 ## 使用与配置
 
 打开 `/assistant`。访客与登录用户均可使用审核知识、来源链接和站内推荐。选择“可将本次输入发送给 OpenAI”后，本页才会请求模型；可以取消同意、改用本地知识、停止、重试或清空。刷新、离开和登录身份切换时，浏览器清除对话。服务端不存聊天，不读取用户日记、身份或其他账户数据。

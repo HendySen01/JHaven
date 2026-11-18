@@ -3,7 +3,7 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { findKnowledge } from './knowledge.js';
-import { openAiProvider, type AssistantProvider } from './provider.js';
+import { openAiProvider, deepSeekProvider, type AssistantProvider } from './provider.js';
 import type { AssistantEvent } from '@jhaven/shared';
 import { once } from 'node:events';
 import type { Server } from 'node:http';
@@ -266,4 +266,59 @@ it('OpenAI SSE 只转发限定上下文，解析分片并隔离密钥', async ()
     messages: [{ role: 'system' }, { role: 'user', content: '想听雨声' }],
   });
   expect(init?.body).not.toContain('fixture-key');
+});
+
+it.each([
+  [401, 'authentication'],
+  [402, 'balance'],
+  [429, 'upstream_rate'],
+  [404, 'model_unavailable'],
+  [503, 'upstream'],
+])('DeepSeek HTTP %s 返回安全错误', async (status, code) => {
+  const fake = vi.fn<typeof fetch>(
+    async () => new Response('sensitive upstream body', { status: Number(status) }),
+  );
+  const adapter = deepSeekProvider('fixture', 'deepseek-flash', 'https://api.deepseek.com', fake);
+  await expect(adapter.choose('想放松', new AbortController().signal)).rejects.toMatchObject({
+    code,
+  });
+});
+it('DeepSeek SSE、当前模型及禁用思考参数正确', async () => {
+  const fake = vi.fn<typeof fetch>(
+    async () =>
+      new Response(
+        'data: ' +
+          JSON.stringify({
+            choices: [
+              { delta: { content: JSON.stringify(responseChoice) }, finish_reason: 'stop' },
+            ],
+          }) +
+          '\n\ndata: [DONE]\n\n',
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+  );
+  await expect(
+    deepSeekProvider('fixture', 'deepseek-flash', 'https://api.deepseek.com', fake).choose(
+      '放松',
+      new AbortController().signal,
+    ),
+  ).resolves.toEqual(responseChoice);
+  expect(fake.mock.calls[0]?.[0]).toBe('https://api.deepseek.com/chat/completions');
+  expect(JSON.parse(String(fake.mock.calls[0]?.[1]?.body))).toMatchObject({
+    model: 'deepseek-flash',
+    thinking: { type: 'disabled' },
+    max_tokens: 96,
+  });
+  expect(() => loadConfig({ DEEPSEEK_MODEL: 'deepseek-chat' })).toThrow();
+  expect(() => loadConfig({ DEEPSEEK_BASE_URL: 'http://localhost' })).toThrow();
+});
+it('预算不足时阻止调用且本地仍可用', async () => {
+  const provider = testProvider();
+  const api = request(
+    createApp({ assistantProvider: provider, config: loadConfig({ AI_DAILY_BUDGET_USD: '0.01' }) }),
+  );
+  await post(api, ['雨声'], true).expect(200);
+  await post(api, ['雨声'], true).expect(429);
+  await post(api, ['雨声'], false).expect(200);
+  expect(provider.choose).toHaveBeenCalledTimes(1);
 });

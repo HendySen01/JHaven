@@ -1,6 +1,9 @@
 import { assistantEvent, type AssistantEvent } from '@jhaven/shared';
 
 export const assistantErrors: Record<string, string> = {
+  authentication: '模型认证失败，请联系站点维护者。可改用本地知识。',
+  balance: '模型账户余额不足，可改用本地知识。',
+  model_unavailable: '配置的模型暂不可用，可改用本地知识。',
   timeout: '这次回复超过等待时间，可以重试或使用本地知识。',
   upstream: '模型暂时不可用，可以重试或使用本地知识。',
   upstream_rate: '模型服务暂时限流，可以稍后重试或使用本地知识。',

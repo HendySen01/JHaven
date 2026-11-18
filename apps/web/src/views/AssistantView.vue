@@ -30,6 +30,7 @@ const turns = ref<Turn[]>([]);
 const active = ref(false);
 const consent = ref(false);
 const configured = ref(false);
+const providerName = ref('OpenAI');
 const checking = ref(true);
 const privacy = ref(false);
 const pending = ref<AssistantAction | null>(null);
@@ -46,7 +47,11 @@ onMounted(async () => {
       credentials: 'omit',
       signal: AbortSignal.any([statusController.signal, AbortSignal.timeout(4000)]),
     });
-    if (res.ok) configured.value = assistantStatus.parse(await res.json()).provider === 'openai';
+    if (res.ok) {
+      const provider = assistantStatus.parse(await res.json()).provider;
+      configured.value = provider !== null;
+      providerName.value = provider === 'deepseek' ? 'DeepSeek' : 'OpenAI';
+    }
   } catch {
     configured.value = false;
   } finally {
@@ -160,15 +165,19 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
       <div v-if="privacy" class="assistant-privacy">
         <p>
           消息通过 JHaven 服务处理。开启 AI 模式后，本次输入可能发送给
-          OpenAI；请勿粘贴私人日记或凭据。助手不会读取账户里的睡眠日记。
+          {{ providerName }}；请勿粘贴私人日记或凭据。助手不会读取账户里的睡眠日记。
         </p>
         <p>本站不长期保存聊天。离开页面或清空对话会清除浏览器内存记录。</p>
         <p>
           第三方对已发送内容的留存适用其平台政策。<a
-            href="https://developers.openai.com/api/docs/guides/your-data"
+            :href="
+              providerName === 'DeepSeek'
+                ? 'https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html'
+                : 'https://developers.openai.com/api/docs/guides/your-data'
+            "
             target="_blank"
             rel="noopener noreferrer"
-            >查看 OpenAI 数据说明</a
+            >查看 {{ providerName }} 数据说明</a
           >
         </p>
         <RouterLink class="quiet-link" to="/relaxation-evidence">放松依据与边界</RouterLink>
@@ -177,7 +186,8 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
         当前可用审核知识和站内推荐，模型服务未启用。
       </p>
       <label v-if="configured" class="assistant-consent">
-        <input v-model="consent" type="checkbox" /> 可将本次输入发送给 OpenAI，启用 AI 措辞
+        <input v-model="consent" type="checkbox" /> 可将本次输入发送给 {{ providerName }}，启用 AI
+        措辞
       </label>
       <ul v-if="!turns.length" class="assistant-quick">
         <li v-for="question in quick" :key="question">

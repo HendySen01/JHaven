@@ -6,11 +6,19 @@ export const modelChoice = z.strictObject({
 });
 export type ModelChoice = z.infer<typeof modelChoice>;
 export interface AssistantProvider {
-  readonly name: 'openai';
+  readonly name: 'openai' | 'deepseek';
   choose(message: string, signal: AbortSignal): Promise<unknown>;
 }
 export class ProviderError extends Error {
-  constructor(readonly code: 'upstream' | 'upstream_rate' | 'invalid_output') {
+  constructor(
+    readonly code:
+      | 'upstream'
+      | 'upstream_rate'
+      | 'invalid_output'
+      | 'authentication'
+      | 'balance'
+      | 'model_unavailable',
+  ) {
     super(code);
   }
 }
@@ -25,10 +33,29 @@ const chunkSchema = z.object({
     .max(1),
 });
 export function openAiProvider(key: string, model: string, fetcher = fetch): AssistantProvider {
+  return chatProvider(key, model, 'https://api.openai.com/v1', 'openai', fetcher);
+}
+export function deepSeekProvider(
+  key: string,
+  model: string,
+  baseUrl: string,
+  fetcher = fetch,
+): AssistantProvider {
+  if (!['https://api.deepseek.com', 'https://api.deepseek.com/v1'].includes(baseUrl))
+    throw new Error('DeepSeek 地址必须为官方 HTTPS 接口');
+  return chatProvider(key, model, baseUrl, 'deepseek', fetcher);
+}
+function chatProvider(
+  key: string,
+  model: string,
+  baseUrl: string,
+  name: AssistantProvider['name'],
+  fetcher: typeof fetch,
+): AssistantProvider {
   return {
-    name: 'openai',
+    name,
     async choose(message, signal) {
-      const response = await fetcher('https://api.openai.com/v1/chat/completions', {
+      const response = await fetcher(baseUrl + '/chat/completions', {
         method: 'POST',
         redirect: 'error',
         signal,
@@ -36,8 +63,9 @@ export function openAiProvider(key: string, model: string, fetcher = fetch): Ass
         body: JSON.stringify({
           model,
           stream: true,
-          store: false,
-          max_completion_tokens: 96,
+          ...(name === 'deepseek'
+            ? { max_tokens: 96, thinking: { type: 'disabled' } }
+            : { store: false, max_completion_tokens: 96 }),
           response_format: { type: 'json_object' },
           messages: [
             {
@@ -55,7 +83,15 @@ export function openAiProvider(key: string, model: string, fetcher = fetch): Ass
         !response.headers.get('content-type')?.includes('text/event-stream')
       ) {
         await response.body?.cancel().catch(() => undefined);
-        throw new ProviderError(response.status === 429 ? 'upstream_rate' : 'upstream');
+        const codes: Record<number, ProviderError['code']> = {
+          401: 'authentication',
+          402: 'balance',
+          403: 'authentication',
+          404: 'model_unavailable',
+          422: 'model_unavailable',
+          429: 'upstream_rate',
+        };
+        throw new ProviderError(codes[response.status] ?? 'upstream');
       }
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
       let buffer = '',

@@ -8,7 +8,7 @@ import { loadConfig, type Config } from './config.js';
 import { createAuthRouter } from './auth/routes.js';
 import { AppError, errorHandler } from './middleware/error-handler.js';
 import { createAssistantRouter } from './assistant/routes.js';
-import { openAiProvider, type AssistantProvider } from './assistant/provider.js';
+import { openAiProvider, deepSeekProvider, type AssistantProvider } from './assistant/provider.js';
 
 export function createApp({
   config = loadConfig({}),
@@ -48,15 +48,18 @@ export function createApp({
 
   const assistant =
     assistantProvider ??
-    (config.AI_OPENAI_API_KEY && config.AI_DAILY_REQUEST_LIMIT > 0
-      ? openAiProvider(config.AI_OPENAI_API_KEY, config.AI_OPENAI_MODEL)
-      : undefined);
+    (config.DEEPSEEK_API_KEY && config.AI_DAILY_REQUEST_LIMIT > 0
+      ? deepSeekProvider(config.DEEPSEEK_API_KEY, config.DEEPSEEK_MODEL, config.DEEPSEEK_BASE_URL)
+      : config.AI_OPENAI_API_KEY && config.AI_DAILY_REQUEST_LIMIT > 0
+        ? openAiProvider(config.AI_OPENAI_API_KEY, config.AI_OPENAI_MODEL)
+        : undefined);
   app.use(
     '/api/assistant',
     createAssistantRouter({
       origin: config.APP_ORIGIN,
       provider: assistant,
       dailyLimit: config.AI_DAILY_REQUEST_LIMIT,
+      dailyBudget: config.AI_DAILY_BUDGET_USD,
       ...(assistantTimeoutMs === undefined ? {} : { timeoutMs: assistantTimeoutMs }),
     }),
   );

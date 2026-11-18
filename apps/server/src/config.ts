@@ -21,6 +21,12 @@ const environmentSchema = z.object({
     .regex(/^[\w.-]{1,80}$/)
     .default('gpt-4.1-mini'),
   AI_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(0).max(500).default(120),
+  DEEPSEEK_API_KEY: z.string().trim().max(512).optional(),
+  DEEPSEEK_BASE_URL: z
+    .enum(['https://api.deepseek.com', 'https://api.deepseek.com/v1'])
+    .default('https://api.deepseek.com'),
+  DEEPSEEK_MODEL: z.enum(['deepseek-flash', 'deepseek-v4-pro']).default('deepseek-flash'),
+  AI_DAILY_BUDGET_USD: z.coerce.number().min(0).max(10).default(0.1),
 });
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
