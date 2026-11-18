@@ -201,7 +201,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
           <p class="assistant-question">{{ turn.question }}</p>
           <div class="assistant-reply">
             <p v-if="turn.mode" class="assistant-reply-mode">
-              {{ turn.mode === 'model' ? 'AI 辅助措辞' : '本地知识' }}
+              {{ turn.mode === 'model' ? 'AI 辅助回答' : '本地知识' }}
             </p>
             <p v-if="turn.text" class="assistant-text">{{ turn.text }}</p>
             <p v-if="turn.note" class="assistant-muted" role="status">{{ turn.note }}</p>
@@ -218,6 +218,12 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
                 </li>
               </ul>
             </details>
+            <p
+              v-if="turn.result?.reason && turn.result.reason !== turn.text"
+              class="assistant-muted"
+            >
+              {{ turn.result.reason }}
+            </p>
             <div
               v-if="index === turns.length - 1 && turn.result?.actions.length"
               class="assistant-actions"

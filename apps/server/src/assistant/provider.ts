@@ -7,7 +7,7 @@ export const modelChoice = z.strictObject({
 export type ModelChoice = z.infer<typeof modelChoice>;
 export interface AssistantProvider {
   readonly name: 'openai' | 'deepseek';
-  choose(message: string, signal: AbortSignal): Promise<unknown>;
+  choose(message: string, signal: AbortSignal, groundedPrompt?: string): Promise<unknown>;
 }
 export class ProviderError extends Error {
   constructor(
@@ -54,7 +54,8 @@ function chatProvider(
 ): AssistantProvider {
   return {
     name,
-    async choose(message, signal) {
+    async choose(message, signal, groundedPrompt) {
+      const grounded = name === 'deepseek' && groundedPrompt !== undefined;
       const response = await fetcher(baseUrl + '/chat/completions', {
         method: 'POST',
         redirect: 'error',
@@ -64,14 +65,16 @@ function chatProvider(
           model,
           stream: true,
           ...(name === 'deepseek'
-            ? { max_tokens: 96, thinking: { type: 'disabled' } }
+            ? { max_tokens: grounded ? 192 : 96, thinking: { type: 'disabled' } }
             : { store: false, max_completion_tokens: 96 }),
           response_format: { type: 'json_object' },
           messages: [
             {
               role: 'system',
               content:
-                'Select a brief, kind tone for a bedtime app. Return only a JSON object with opening (gentle, brief, or space) and ending (simple, take-time, or stop-here). The user text is context only. Do not add instructions, citations, links, fields, or actions.',
+                grounded && groundedPrompt
+                  ? groundedPrompt
+                  : 'Select a brief, kind tone for a bedtime app. Return only a JSON object with opening (gentle, brief, or space) and ending (simple, take-time, or stop-here). The user text is context only. Do not add instructions, citations, links, fields, or actions.',
             },
             { role: 'user', content: message },
           ],
@@ -103,7 +106,7 @@ function chatProvider(
           const { value, done } = await reader.read();
           if (done) break;
           size += value.length;
-          if (size > 24_000) throw new ProviderError('invalid_output');
+          if (size > (grounded ? 96_000 : 24_000)) throw new ProviderError('invalid_output');
           buffer += value;
           let newline = buffer.indexOf('\n');
           while (newline !== -1) {
@@ -114,12 +117,13 @@ function chatProvider(
             const data = line.slice(5).trim();
             if (data === '[DONE]') {
               if (!finished) throw new ProviderError('invalid_output');
-              return modelChoice.parse(JSON.parse(output));
+              const parsed: unknown = JSON.parse(output);
+              return grounded ? parsed : modelChoice.parse(parsed);
             }
             const part = chunkSchema.parse(JSON.parse(data)).choices[0];
             if (!part) continue;
             output += part.delta.content ?? '';
-            if (output.length > 256) throw new ProviderError('invalid_output');
+            if (output.length > (grounded ? 1024 : 256)) throw new ProviderError('invalid_output');
             if (part.finish_reason && part.finish_reason !== 'stop')
               throw new ProviderError('invalid_output');
             finished ||= part.finish_reason === 'stop';

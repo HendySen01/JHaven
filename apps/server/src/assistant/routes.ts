@@ -5,6 +5,7 @@ import { AppError } from '../middleware/error-handler.js';
 import { assistantPlan } from './rules.js';
 import { knowledgeVersion } from './knowledge.js';
 import { modelChoice, ProviderError, type AssistantProvider } from './provider.js';
+import { groundedPrompt, groundedResult } from './grounded.js';
 
 const ipWindow = 10 * 60_000;
 const opening = {
@@ -71,14 +72,17 @@ export function createAssistantRouter({
     clients.set(ip, bucket);
 
     const plan = assistantPlan(input.data.messages);
-    const selected = plan.model && input.data.useModel ? provider : undefined;
+    const chosen = input.data.useModel ? provider : undefined;
+    const grounded =
+      chosen?.name === 'deepseek' && (plan.model || ('grounded' in plan && plan.grounded));
+    const selected = plan.model || grounded ? chosen : undefined;
     const currentDay = Math.floor(timestamp / 86_400_000);
     if (day !== currentDay) {
       day = currentDay;
       modelCalls = 0;
       reservedCost = 0;
     }
-    // 每次预留至少 0.01 美元，覆盖最多 2400 输入 token 和 96 输出 token。
+    // 每次预留 0.01 美元，覆盖有界提示、用户输入和输出。
     // 不退款可覆盖断线时未收到 usage 的请求；价格变化后需重新审阅。
     if (
       selected &&
@@ -98,17 +102,24 @@ export function createAssistantRouter({
     };
     response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
     response.setHeader('X-Accel-Buffering', 'no');
-    send({ type: 'start', mode: selected ? 'model' : 'local' });
-    if (!selected) {
+    const sendLocal = () => {
+      send({ type: 'start', mode: 'local' });
       send({ type: 'text', text: plan.text });
       send({ type: 'done', sources: plan.sources, actions: plan.actions });
+    };
+    if (!selected) {
+      sendLocal();
       response.end();
       return;
     }
     modelCalls++;
     reservedCost += 0.01;
     inflight++;
-    send({ type: 'text', text: plan.text + '\n\n' });
+    if (grounded) response.flushHeaders();
+    else {
+      send({ type: 'start', mode: 'model' });
+      send({ type: 'text', text: plan.text + '\n\n' });
+    }
     const timeout = AbortSignal.timeout(timeoutMs);
     const signal = AbortSignal.any([controller.signal, timeout]);
     let cancel: (() => void) | undefined;
@@ -119,17 +130,46 @@ export function createAssistantRouter({
         signal.throwIfAborted();
         signal.addEventListener('abort', abort, { once: true });
       });
+      const latest = input.data.messages.at(-1)!;
       const raw = await Promise.race([
-        selected.choose(input.data.messages.at(-1)!, signal),
+        grounded
+          ? selected.choose(latest, signal, groundedPrompt(plan.sources))
+          : selected.choose(latest, signal),
         aborted,
       ]);
+      if (grounded) {
+        const reply = groundedResult(
+          raw,
+          plan.sources,
+          latest,
+          'intent' in plan ? plan.intent : undefined,
+        );
+        if (!reply) {
+          sendLocal();
+          return;
+        }
+        send({ type: 'start', mode: 'model' });
+        send({ type: 'text', text: reply.text });
+        send({
+          type: 'done',
+          sources: [...reply.sources],
+          actions: reply.actions,
+          reason: reply.reason,
+        });
+        return;
+      }
       const choice = modelChoice.safeParse(raw);
       if (!choice.success) throw new ProviderError('invalid_output');
       send({ type: 'text', text: opening[choice.data.opening] + '\n\n' });
       send({ type: 'text', text: ending[choice.data.ending] });
       send({ type: 'done', sources: plan.sources, actions: plan.actions });
     } catch (error) {
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted) {
+        if (grounded && error instanceof ProviderError && error.code === 'invalid_output') {
+          sendLocal();
+          return;
+        }
+        if (grounded) send({ type: 'start', mode: 'model' });
         send({
           type: 'error',
           code: timeout.aborted
@@ -138,6 +178,7 @@ export function createAssistantRouter({
               ? error.code
               : 'upstream',
         });
+      }
     } finally {
       cancel?.();
       inflight--;

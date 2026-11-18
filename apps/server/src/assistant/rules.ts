@@ -1,25 +1,26 @@
-import { assistantAction, type AssistantAction } from '@jhaven/shared';
+import type { AssistantAction } from '@jhaven/shared';
 import { findKnowledge } from './knowledge.js';
+import { actionForIntent, insufficientEvidence, clarification } from './grounded.js';
 
 const rules = [
   {
     match: /思绪|想太多|脑子|待办|停不下来|racing thoughts|to-do/i,
-    action: { kind: 'practice', id: 'thoughts', mood: 'busy' },
+    intent: 'thoughts',
   },
-  { match: /海浪|海岸|\bocean\b/i, action: { kind: 'scene', id: 'coast', mood: 'sounds' } },
-  { match: /微风|\bbreeze\b/i, action: { kind: 'scene', id: 'breeze', mood: 'sounds' } },
+  { match: /海浪|海岸|\bocean\b/i, intent: 'coast' },
+  { match: /微风|\bbreeze\b/i, intent: 'breeze' },
   {
     match: /雨声|雨夜|背景音|太吵|嘈杂|噪音|\b(?:rain|noisy)\b/i,
-    action: { kind: 'scene', id: 'rain', mood: 'noisy' },
+    intent: 'rain',
   },
-  { match: /身体|body scan/i, action: { kind: 'practice', id: 'body', mood: 'quiet' } },
+  { match: /身体|body scan/i, intent: 'body' },
   {
     match: /放松|呼吸|relax|breathing/i,
-    action: { kind: 'practice', id: 'breathing', mood: 'quiet' },
+    intent: 'breathing',
   },
   {
     match: /没有睡意|没睡意|暂无睡意|还不困|睡不着|not sleepy|wind down/i,
-    action: { kind: 'practice', id: 'unwind', mood: 'awake' },
+    intent: 'unwind',
   },
 ] as const;
 
@@ -78,15 +79,16 @@ export function assistantPlan(messages: string[]) {
   const rule =
     currentRule ?? (followUp ? rules.find(({ match }) => match.test(relevant)) : undefined);
   const sources = findKnowledge(relevant);
-  if (!rule && !sources.length)
-    return fixed(
-      '目前的知识库没有可核验的资料支持这个问题。可以试着问睡前习惯、背景声音或放松练习。',
-    );
-  const actions = rule ? [assistantAction.parse(rule.action)] : [];
+  if (!rule && !sources.length) {
+    const vague = /不知道|不确定|建议一下|帮帮我|做点什么|说不清/.test(latest);
+    return { ...fixed(vague ? clarification : insufficientEvidence), grounded: true };
+  }
+  const actions = rule ? [actionForIntent(rule.intent)] : [];
   return {
     text: sources[0]?.summary ?? '如果你愿意，可以先打开下面的选项，按自己的节奏决定是否开始。',
     sources,
     actions,
     model: true,
+    intent: rule?.intent,
   };
 }

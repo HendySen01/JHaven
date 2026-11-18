@@ -32,6 +32,7 @@ export const assistantEvent = z.discriminatedUnion('type', [
     type: z.literal('done'),
     sources: z.array(assistantSource).max(3),
     actions: z.array(assistantAction).max(2),
+    reason: z.string().min(1).max(100).optional(),
   }),
   z.strictObject({
     type: z.literal('error'),
@@ -48,3 +49,4 @@ export const assistantEvent = z.discriminatedUnion('type', [
 ]);
 export type AssistantEvent = z.infer<typeof assistantEvent>;
 export type AssistantAction = z.infer<typeof assistantAction>;
+export type AssistantSource = z.infer<typeof assistantSource>;

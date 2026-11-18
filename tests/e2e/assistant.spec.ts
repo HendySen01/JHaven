@@ -2,6 +2,54 @@ import { expect, test } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { installAudioProbe, readAudioProbe } from './audio-probe.js';
 
+test('有来源的 AI 回答保留推荐理由与确认步骤', async ({ page }) => {
+  await page.route('**/api/assistant/status', (route) =>
+    route.fulfill({ json: { provider: 'deepseek', knowledgeVersion: '2026-11-18.1' } }),
+  );
+  await page.route('**/api/assistant/chat', (route) =>
+    route.fulfill({
+      contentType: 'application/x-ndjson',
+      body:
+        [
+          { type: 'start', mode: 'model' },
+          { type: 'text', text: '你可以先留意自己的感受。白噪声改善睡眠的证据不明确。' },
+          {
+            type: 'done',
+            sources: [
+              {
+                id: 'auditory-review',
+                title: '审核来源',
+                url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC9163611/',
+                published: '2022-06-01',
+                population: '成人',
+                evidence: '系统综述',
+                limits: '结果不确定',
+                summary: '改善睡眠的证据不明确',
+              },
+            ],
+            actions: [{ kind: 'scene', id: 'rain', mood: 'noisy' }],
+            reason: '先低音量试听',
+          },
+        ]
+          .map((event) => JSON.stringify(event))
+          .join('\n') + '\n',
+    }),
+  );
+  await page.goto('/assistant');
+  await page.getByRole('checkbox', { name: /DeepSeek/ }).check();
+  await page.getByRole('button', { name: '白噪声有助睡眠吗？' }).click();
+  await expect(page.getByText('AI 辅助回答')).toBeVisible();
+  await expect(page.getByText('先低音量试听')).toBeVisible();
+  await page.getByText('查看来源与证据').click();
+  await expect(page.getByRole('link', { name: '审核来源' })).toHaveAttribute(
+    'href',
+    'https://pmc.ncbi.nlm.nih.gov/articles/PMC9163611/',
+  );
+  await page.getByRole('button', { name: '推荐 · 雨夜' }).click();
+  await expect(page).toHaveURL('/assistant');
+  await expect(page.getByRole('button', { name: '确认前往' })).toBeFocused();
+});
+
 test.beforeEach(async ({ page }, info) => {
   // 三个视口共用本地代理，用文档保留地址为每个测试模拟独立访客。
   const address = createHash('sha256')

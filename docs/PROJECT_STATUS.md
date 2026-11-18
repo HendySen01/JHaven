@@ -3,7 +3,7 @@
 ## 1. 项目基本信息
 
 - JHaven，Your Quiet Haven, Every Night.
-- 当前版本 0.1.0-alpha.7。Sprint 6 睡前助手和 DeepSeek 接入已完成。正式库已应用 001–006。
+- 当前版本 0.1.0-alpha.7。Sprint 6C 已实现意图理解及证据回答。正式库已应用 001–006。
 - 最近更新时间 2026-11-18（Asia/Macau）。当前分支 main 跟踪 origin/main。
 
 ## 2. 已完成功能
@@ -53,6 +53,13 @@
 | 助手模型预算按进程计算     | 重启重置，多实例分别计数     | 对外启用模型前验证供应商与网关额度               |
 
 ## 6. 最近一次测试结果
+
+### Sprint 6C 意图理解与证据回答（2026-11-18）
+
+- DeepSeek 可返回结构化意图、澄清与无证据结果。模型组织解释，服务端校验本次引用、插入审核摘要，并通过现有审核清单映射推荐和理由。校验失败显示本地知识。前端保留推荐确认和手动启动。
+- 本轮使用 Mock，真实付费请求为 0。自由表述筛查不等同于语义证明，真实模型表现待另行授权验证。无数据库迁移、依赖或 Skill 增量。 [设计边界](ASSISTANT.md)
+- 隔离 MySQL 下 `npm run check` 通过格式、ESLint、类型检查、113/113 项单元与 API 测试及生产构建。
+- Chrome 的 `npm run test:e2e` 通过 93/93，覆盖 375、768 与 1440px，包含三档新增的 AI 回答与推荐确认检查。生产代理、Safari、Firefox 与移动真机未送测。
 
 ### Sprint 6B DeepSeek 本机验收（2026-11-18）
 
@@ -134,9 +141,11 @@
 
 ## 7. 下一阶段任务
 
-继续验证供应商能力、正式 HTTPS、目标 MySQL 8.4 和真机体验。推进账号删除、密码找回、数据导出及备份恢复。
+继续验证部署入口的 HTTPS、SSE 流式代理、供应商预算和实际设备兼容性。
 
 ## 8. 最近一次开发记录
+
+- Sprint 6C 扩展 DeepSeek 结构化回答、审核引用、推荐理由和安全降级，补充后端与浏览器回归。建议提交 `feat: add grounded AI sleep conversations`。
 
 - Sprint 6B 扩展供应商适配器和服务端环境校验，新增 DeepSeek 错误与预算测试，同步 UI 供应商标识。建议提交 `feat: integrate DeepSeek API into JHaven assistant`。保留本轮开始时已有的三份验收文档改动。
 

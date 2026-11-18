@@ -21,6 +21,101 @@ const frames = (text: string) =>
     .split('\n')
     .map((line) => JSON.parse(line) as AssistantEvent);
 
+it('DeepSeek 理解无关键词的需求，动作仍由服务端清单决定', async () => {
+  const choose = vi.fn(async () => ({ kind: 'suggest', intent: 'coast' }));
+  const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
+  expect(findKnowledge('想听潮水一阵一阵拍过来')).toEqual([]);
+  const result = frames((await post(api, ['想听潮水一阵一阵拍过来'], true).expect(200)).text);
+  expect(result[0]).toEqual({ type: 'start', mode: 'model' });
+  expect(result.at(-1)).toMatchObject({
+    sources: [],
+    actions: [{ kind: 'scene', id: 'coast', mood: 'sounds' }],
+    reason: expect.any(String),
+  });
+  const ambiguous = request(
+    createApp({
+      assistantProvider: { name: 'deepseek', choose: async () => ({ kind: 'clarify' }) },
+    }),
+  );
+  const clarification = frames((await post(ambiguous, ['说不清该做什么'], true)).text);
+  expect(clarification[0]).toEqual({ type: 'start', mode: 'model' });
+  expect(clarification[1]).toMatchObject({ text: expect.stringContaining('还是做个短练习') });
+  expect(clarification.at(-1)).toMatchObject({ actions: [], sources: [] });
+});
+
+it('引用仅来自本次检索，审核原文保留在模型组织的回答中', async () => {
+  const choose = vi.fn(async () => ({
+    kind: 'answer',
+    sourceId: 'caffeine',
+    answer: '你可以先留意晚间喝浓茶后的感受。{evidence}',
+    intent: 'rain',
+  }));
+  const result = frames(
+    (
+      await post(
+        request(createApp({ assistantProvider: { name: 'deepseek', choose } })),
+        ['浓茶会影响睡眠吗'],
+        true,
+      )
+    ).text,
+  );
+  expect(choose).toHaveBeenCalledWith(
+    '浓茶会影响睡眠吗',
+    expect.any(AbortSignal),
+    expect.stringContaining('"id":"caffeine"'),
+  );
+  expect(result[1]).toMatchObject({
+    text: expect.stringContaining('你可以先留意晚间喝浓茶后的感受。咖啡因可能影响入睡'),
+  });
+  expect(result.at(-1)).toMatchObject({
+    actions: [],
+    sources: [
+      {
+        id: 'caffeine',
+        url: 'https://www.nhlbi.nih.gov/health/sleep-deprivation/healthy-sleep-habits',
+      },
+    ],
+  });
+});
+
+it.each([
+  { kind: 'answer', sourceId: 'invented', answer: '可以换个思路看看。{evidence}', intent: null },
+  { kind: 'answer', sourceId: 'caffeine', answer: '保证马上入睡。{evidence}', intent: null },
+  {
+    kind: 'answer',
+    sourceId: 'caffeine',
+    answer: '请打开这个站外链接。{evidence}',
+    intent: null,
+    url: 'https://outside.example',
+  },
+  { kind: 'suggest', intent: 'admin' },
+])('无依据引用、不安全内容和越权结构降级为本地知识', async (mock) => {
+  const api = request(
+    createApp({ assistantProvider: { name: 'deepseek', choose: async () => mock } }),
+  );
+  const result = frames((await post(api, ['浓茶会影响睡眠吗'], true)).text);
+  expect(result[0]).toEqual({ type: 'start', mode: 'local' });
+  expect(result.at(-1)).toMatchObject({ actions: [], sources: [{ id: 'caffeine' }] });
+});
+it.each([
+  [{ kind: 'unknown' }, 'model'],
+  [{ kind: 'suggest', intent: 'rain' }, 'local'],
+] as const)('缺乏睡眠证据时返回资料不足，并拒绝无关推荐 (%j)', async (reply, mode) => {
+  const question = '睡前看蓝色圆点能改善睡眠吗？';
+  expect(findKnowledge(question)).toEqual([]);
+  const choose = vi.fn(async () => reply);
+  const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
+  const result = frames((await post(api, [question], true).expect(200)).text);
+  expect(choose).toHaveBeenCalledWith(
+    question,
+    expect.any(AbortSignal),
+    expect.stringContaining('Reviewed evidence: []'),
+  );
+  expect(result[0]).toEqual({ type: 'start', mode });
+  expect(result[1]).toMatchObject({ text: expect.stringContaining('没有可核验') });
+  expect(result.at(-1)).toMatchObject({ sources: [], actions: [] });
+});
+
 it('检索审核来源、证据局限和未知问题', async () => {
   expect(findKnowledge('白噪声真的有助眠效果吗')[0]).toMatchObject({
     id: 'auditory-review',
