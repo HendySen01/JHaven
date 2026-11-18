@@ -1,6 +1,6 @@
 {
   "name": "@jhaven/server",
-  "version": "0.1.0-alpha.6",
+  "version": "0.1.0-alpha.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "start": "node --env-file-if-exists=.env dist/index.js"
   },
   "dependencies": {
-    "@jhaven/shared": "0.1.0-alpha.6",
+    "@jhaven/shared": "0.1.0-alpha.7",
     "express": "5.3.0",
     "helmet": "8.3.0",
     "mysql2": "3.24.6",

@@ -42,7 +42,7 @@ packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 基础服务存活检查为 `GET /api/health`，不接受查询参数。成功：
 
 ```json
-{ "status": "ok", "service": "jhaven-api", "stage": "relaxation" }
+{ "status": "ok", "service": "jhaven-api", "stage": "sleep-assistant" }
 ```
 
 错误统一为：
@@ -74,6 +74,10 @@ Vue 表单和 Express 共用 Zod 账户契约。Pinia 通过同源 `/api/auth/me
 - 练习进入前的活动混音继续运行，用户可主动停止它。练习启动的声音占用同一个应用级引擎，使用临时混音和独立计时，完成或离开时释放音源、取消练习计时并恢复原配置。
 - `/api/space/relaxation` 沿用会话、账户标识、写请求 Origin 和 JSON 校验。支持主动保存、查最近 50 条及逐条删除；重复请求按账户与随机标识去重。研究边界见 [RELAXATION_EVIDENCE](RELAXATION_EVIDENCE.md)。
 
+## 睡前助手
+
+Vue 助手页通过独立无凭据接口接收 NDJSON。Express 的助手模块独立于账户路由及 MySQL，使用版本化的审核内容、确定性推荐和可替换的供应商接口。OpenAI 适配器当前仅接受两个枚举，所有动作及来源在服务端决定。 [配置与边界](ASSISTANT.md)
+
 ## 后续模块边界
 
 Sprint 2.5 从 `sound-catalog.json` 扩展至 10 条声音，静态文件按需加载。目录、清单与二进制在构建前逐项比对。试听复用单一引擎，暂存原配置和定时，上限 12 秒。分类与收藏在设备端处理，原三轨配比和自定义场景可继续读取。
@@ -92,6 +96,6 @@ Sprint 1 组件：`NightNavigation`/`JHavenLogo` 负责导航品牌，`MoodSelec
 - Web Audio 放在独立可释放的音频模块，Vue 组件通过明确 API 操作，不把 AudioContext 深度代理为响应式对象。
 - 推荐逻辑为可单测的纯规则函数，知识内容审核与交互独立于音频引擎。
 - MySQL 只在数据功能开始时引入，迁移、外键、时区与删除规则见 `DATABASE.md`。
-- AI 当前没有依赖、密钥、服务和假接口。后续独立增加授权流程与服务端适配层。
+- OpenAI 为可选辅助，规则与知识可独立使用。后续供应商接入沿用主动授权、输出白名单和本地降级。
 
 不引入微服务、消息队列、Redis、Kubernetes 或复杂云基础设施。最终宿主与域名尚未选择，不自动发布。

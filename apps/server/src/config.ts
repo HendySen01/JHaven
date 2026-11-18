@@ -15,6 +15,12 @@ const environmentSchema = z.object({
   DB_PASSWORD: z.string().optional(),
   DB_TLS: z.enum(['0', '1']).default('0'),
   TRUST_LOOPBACK_PROXY: z.enum(['0', '1']).default('0'),
+  AI_OPENAI_API_KEY: z.string().trim().max(512).optional(),
+  AI_OPENAI_MODEL: z
+    .string()
+    .regex(/^[\w.-]{1,80}$/)
+    .default('gpt-4.1-mini'),
+  AI_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(0).max(500).default(120),
 });
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {

@@ -2,11 +2,12 @@ import { z } from 'zod';
 export * from './auth.js';
 export * from './space.js';
 export * from './relaxation.js';
+export * from './assistant.js';
 
 export const APP_INFO = {
   name: 'JHaven',
-  version: '0.1.0-alpha.6',
-  stage: 'relaxation',
+  version: '0.1.0-alpha.7',
+  stage: 'sleep-assistant',
   tagline: 'Your Quiet Haven, Every Night.',
 } as const;
 

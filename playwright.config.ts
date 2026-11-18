@@ -34,6 +34,7 @@ export default defineConfig({
         HOST: '127.0.0.1',
         NODE_ENV: 'test',
         APP_ORIGIN: 'http://127.0.0.1:4173',
+        TRUST_LOOPBACK_PROXY: '1',
       },
       reuseExistingServer: false,
     },

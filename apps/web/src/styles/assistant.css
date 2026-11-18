@@ -1,0 +1,140 @@
+.assistant-page {
+  max-width: 54rem;
+  position: relative;
+}
+@media (max-width: 540px) {
+  .main-nav a {
+    padding-inline: 5px;
+  }
+}
+.assistant-intro {
+  margin-block-end: 2rem;
+}
+.assistant-symbol {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border: 1px solid rgb(197 181 249 / 32%);
+  border-radius: 50%;
+  color: #d5c7fa;
+  background: #24213b;
+  margin-block-end: 0.8rem;
+}
+.assistant-panel {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid rgb(197 181 249 / 24%);
+  border-radius: 1.4rem;
+  padding: clamp(0.95rem, 4vw, 1.8rem);
+  background:
+    radial-gradient(at 95% 0%, rgb(67 52 105 / 38%), transparent 55%), rgb(15 16 34 / 92%);
+}
+.assistant-mode,
+.assistant-actions,
+.assistant-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: center;
+}
+.assistant-mode {
+  justify-content: space-between;
+}
+.assistant-panel .quiet-link,
+.assistant-reply summary {
+  min-height: 44px;
+}
+.assistant-panel input {
+  accent-color: #baa3ed;
+}
+.assistant-muted,
+.assistant-reply-mode,
+.assistant-sources p {
+  color: #bfbad2;
+  font-size: 0.88rem;
+}
+.assistant-consent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+.assistant-thread,
+.assistant-quick,
+.assistant-sources {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.assistant-thread,
+.assistant-turn {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.assistant-turn {
+  padding-block: 0.5rem;
+}
+.assistant-question,
+.assistant-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistant-question {
+  justify-self: end;
+  max-width: 90%;
+  background: #2a2545;
+  border-radius: 1rem 1rem 0.28rem 1rem;
+  padding: 0.7rem 1rem;
+}
+.assistant-reply {
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  background: #1c1c31;
+  border-radius: 1rem 1rem 1rem 0.28rem;
+  padding: 0.8rem 1rem;
+}
+.assistant-reply summary {
+  align-content: center;
+  cursor: pointer;
+  margin-top: 0.3rem;
+}
+.assistant-sources li {
+  margin-block-end: 0.7rem;
+  overflow-wrap: anywhere;
+}
+.assistant-privacy,
+.assistant-confirm {
+  padding: 0.75rem;
+  border: 1px solid rgb(197 181 249 / 24%);
+  border-radius: 0.75rem;
+}
+.assistant-compose {
+  display: grid;
+  gap: 0.55rem;
+  border-top: 1px solid rgb(197 181 249 / 24%);
+  padding-top: 1rem;
+}
+.assistant-compose textarea {
+  background: #111225;
+  border: 1px solid #716783;
+  border-radius: 0.8rem;
+  color: inherit;
+  padding: 0.7rem;
+  width: 100%;
+  resize: vertical;
+}
+.assistant-compose textarea::placeholder {
+  color: #aba5bb;
+}
+.assistant-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

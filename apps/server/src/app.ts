@@ -7,11 +7,20 @@ import type { Pool } from 'mysql2/promise';
 import { loadConfig, type Config } from './config.js';
 import { createAuthRouter } from './auth/routes.js';
 import { AppError, errorHandler } from './middleware/error-handler.js';
+import { createAssistantRouter } from './assistant/routes.js';
+import { openAiProvider, type AssistantProvider } from './assistant/provider.js';
 
 export function createApp({
   config = loadConfig({}),
   database,
-}: { config?: Config; database?: Pool | undefined } = {}) {
+  assistantProvider,
+  assistantTimeoutMs,
+}: {
+  config?: Config;
+  database?: Pool | undefined;
+  assistantProvider?: AssistantProvider;
+  assistantTimeoutMs?: number;
+} = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (config.TRUST_LOOPBACK_PROXY === '1') app.set('trust proxy', 'loopback');
@@ -37,6 +46,20 @@ export function createApp({
     response.json(body);
   });
 
+  const assistant =
+    assistantProvider ??
+    (config.AI_OPENAI_API_KEY && config.AI_DAILY_REQUEST_LIMIT > 0
+      ? openAiProvider(config.AI_OPENAI_API_KEY, config.AI_OPENAI_MODEL)
+      : undefined);
+  app.use(
+    '/api/assistant',
+    createAssistantRouter({
+      origin: config.APP_ORIGIN,
+      provider: assistant,
+      dailyLimit: config.AI_DAILY_REQUEST_LIMIT,
+      ...(assistantTimeoutMs === undefined ? {} : { timeoutMs: assistantTimeoutMs }),
+    }),
+  );
   app.use(
     '/api',
     createAuthRouter({

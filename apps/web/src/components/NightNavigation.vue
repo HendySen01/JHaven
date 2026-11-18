@@ -20,6 +20,7 @@ defineEmits<{ settings: [] }>();
         >声音场景</RouterLink
       >
       <RouterLink to="/journal" active-class="nav-active">睡眠日记</RouterLink>
+      <RouterLink to="/assistant" active-class="nav-active">睡前助手</RouterLink>
       <RouterLink to="/about" active-class="nav-active">关于</RouterLink>
     </nav>
     <div class="site-header-actions">

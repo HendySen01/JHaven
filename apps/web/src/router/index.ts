@@ -30,6 +30,11 @@ export const router = createRouter({
       meta: { title: '放松练习的依据与边界' },
     },
     {
+      path: '/assistant',
+      component: () => import('../views/AssistantView.vue'),
+      meta: { title: 'AI 睡前助手' },
+    },
+    {
       path: '/journal',
       component: () => import('../views/JournalView.vue'),
       meta: { title: '睡眠日记' },

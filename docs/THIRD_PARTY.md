@@ -105,6 +105,12 @@
 
 [Moodist](https://github.com/remvze/moodist) 作为场景管理参考。[Apache ECharts](https://github.com/apache/echarts) 仅评估，本任务的少量系列使用自建 SVG 和原生数据表。[LeiBox](https://github.com/leishifu666/LeiBox) 与 [Impeccable](https://github.com/pbakaus/impeccable) 仅查看官方项目说明。实际实现复用 Vue、Pinia、Zod、现有播放器和语义化表单，没有引入上述项目的代码、远程脚本、新依赖或外部 Skills。
 
+## Sprint 6 资源说明
+
+- 评估 Vercel AI SDK 的流式生成及供应商抽象（Apache-2.0），本阶段固定接一条 Chat Completions 接口，使用 Node 原生 Fetch 和独立适配器，无新增运行依赖。 [许可证](https://github.com/vercel/ai/blob/main/LICENSE) [流式生成文档](https://ai-sdk.dev/docs/ai-sdk-core/generating-text)
+- 可选 OpenAI Chat Completions API 是第三方服务，默认关闭。本站只发送主动授权的有限输入，并验证返回的表达 ID。 [接口规范](https://developers.openai.com/api/reference/resources/chat) [数据政策](https://developers.openai.com/api/docs/guides/your-data)
+- 助手界面复用现有 Vue、Lucide 与原生表单。本阶段无需额外引入 LeiBox、Impeccable 或安全审查 Skills，未安装其代码或运行脚本。
+
 ## Sprint 5 资源说明
 
 - 练习界面复用现有 Vue 组件、原生 HTML 和项目样式。按当前可访问性及临时播放器状态需要，未集成额外的引导组件、LeiBox 或第三方 Skills。
