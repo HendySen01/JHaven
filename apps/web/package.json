@@ -1,6 +1,6 @@
 {
   "name": "@jhaven/web",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort"
   },
   "dependencies": {
-    "@jhaven/shared": "0.1.0-alpha.4",
+    "@jhaven/shared": "0.1.0-alpha.5",
     "@lucide/vue": "1.74.0",
     "pinia": "3.0.4",
     "vue": "3.5.45",

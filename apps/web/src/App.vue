@@ -9,17 +9,56 @@ import { useAudioEngine } from './composables/useAudioEngine';
 import AmbientPlayer from './components/audio/AmbientPlayer.vue';
 import PlayerDock from './components/audio/PlayerDock.vue';
 import { useAuthStore } from './stores/auth';
+import { personalSpace } from '@jhaven/shared';
+import { spaceRequest } from './lib/space';
+import { BUILTIN_PRESETS } from './domain/audio';
 const audio = useAudioEngine();
 const auth = useAuthStore();
 audio.initialize();
+watch(
+  () => auth.user?.id,
+  (id, _previous, cleanup) => {
+    audio.clearAccountMix();
+    if (!id || audio.snapshot.status !== 'idle') return;
+    const controller = new AbortController();
+    cleanup(() => controller.abort());
+    void spaceRequest(id, '', 'GET', undefined, controller.signal)
+      .then((value) => {
+        if (
+          controller.signal.aborted ||
+          auth.user?.id !== id ||
+          audio.snapshot.status !== 'idle' ||
+          audio.accountMix
+        )
+          return;
+        const data = personalSpace.parse(value);
+        const preference = data.preferences;
+        if (!preference) return;
+        const scenes = preference.scene?.kind === 'preset' ? data.presets : BUILTIN_PRESETS;
+        audio.applyAccountMix(
+          scenes.find((p) => p.id === preference.scene?.id) ?? null,
+          preference.volume,
+          preference.timerMinutes,
+        );
+      })
+      .catch(() => undefined);
+  },
+  { flush: 'sync' },
+);
+function refreshVisibleAccount() {
+  if (document.visibilityState === 'visible' && auth.user && !auth.pending)
+    void auth.refreshAccount();
+}
 onMounted(() => {
   void auth.restore();
   window.addEventListener('pagehide', audio.dispose);
   document.addEventListener('visibilitychange', audio.tick);
+  document.addEventListener('visibilitychange', refreshVisibleAccount);
 });
 onBeforeUnmount(() => {
   window.removeEventListener('pagehide', audio.dispose);
   document.removeEventListener('visibilitychange', audio.tick);
+  document.removeEventListener('visibilitychange', refreshVisibleAccount);
   audio.dispose();
 });
 const settingsOpen = ref(false);

@@ -44,7 +44,7 @@ test('今晚状态实时更新建议并链接到对应入口', async ({ page }) 
   }
   await page.getByRole('status').getByRole('link', { name: '了解睡眠日记' }).click();
   await expect(page).toHaveURL('/journal');
-  await expect(page.getByText('记录功能尚未开放', { exact: false })).toBeVisible();
+  await expect(page.getByRole('link', { name: '登录后记录' })).toBeVisible();
   await expect(page.locator('textarea')).toHaveCount(0);
   await page.getByRole('link', { name: '回到今晚' }).click();
   await expect(page.getByRole('radio', { name: '想记录今天' })).toBeChecked();

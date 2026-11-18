@@ -66,7 +66,7 @@ const recommendations = {
   },
   journal: {
     title: '今天，也值得被轻轻记住',
-    text: '你想记录今天，可以先了解日记入口。记录功能尚未开放，当前不会保存任何日记。',
+    text: '想记录今天，可以登录后记下作息和休息感。',
     sceneId: null,
     to: '/journal',
     action: '了解睡眠日记',

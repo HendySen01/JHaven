@@ -24,7 +24,7 @@ onMounted(() => void service.check());
         {{ label }}
       </p>
       <p class="text-muted text-sm mt-2">
-        此检查仅确认服务响应。环境音在浏览器播放，日记记录仍待开放。
+        此检查仅确认服务响应。环境音可在浏览器播放，私人记录需要账户与数据库。
       </p>
     </div>
     <button

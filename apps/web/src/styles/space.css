@@ -1,0 +1,139 @@
+.space-page {
+  max-width: 880px;
+}
+.space-section {
+  margin-top: 32px;
+  padding: clamp(14px, 3vw, 24px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.space-section h2 {
+  font-size: clamp(19px, 3vw, 25px);
+  margin-bottom: 10px;
+}
+.space-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-block: 10px;
+}
+.space-form,
+.space-fields {
+  display: grid;
+  gap: 12px;
+}
+.space-form {
+  padding-block: 12px;
+}
+.space-fields {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+}
+.space-page label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--soft);
+}
+.space-page input:not([type='checkbox']),
+.space-page select,
+.space-page textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--page);
+}
+.space-page textarea {
+  resize: vertical;
+}
+.space-page .quiet-link,
+.space-details summary {
+  min-height: 44px;
+}
+.space-details {
+  margin-block: 15px;
+}
+.space-details summary {
+  cursor: pointer;
+}
+.space-tracks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 8px 16px;
+}
+.space-tracks > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 66px;
+  gap: 8px;
+}
+.space-page .space-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.space-list {
+  list-style: none;
+  padding: 0;
+}
+.space-list li {
+  padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.diary-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-block: 8px;
+  font-size: 14px;
+}
+.diary-times dt {
+  color: var(--muted);
+}
+.diary-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.trend-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0;
+  gap: 10px;
+}
+.trend-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.trend-svg {
+  width: 100%;
+  display: block;
+}
+.trend-svg text {
+  font-size: 14px;
+  fill: var(--muted);
+}
+.trend-svg g:not([stroke]) > line {
+  stroke: var(--line);
+}
+.space-table {
+  overflow-x: auto;
+  max-width: 100%;
+  font-size: 13px;
+  color: var(--soft);
+}
+.space-table th,
+.space-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}

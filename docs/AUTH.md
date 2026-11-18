@@ -17,6 +17,6 @@
 
 `GET /api/health` 是基础进程存活探测，账户部署的就绪探测应使用 `/api/auth/status`。数据库关闭、迁移缺失或配置缺失时，账户错误有明确提示，访客可以继续使用声音库。运行账户前显式迁移。生产使用独立迁移账号与最小权限运行账号，生产 Origin 必须是实际 HTTPS 来源。MySQL 跨主机连接启用 `DB_TLS=1` 并配置信任链。
 
-访客可播放、收藏、保存自定义场景与定时。声音收藏、设备音量、配比、场景及界面设置均为浏览器设备偏好，登录不会上传、覆盖或合并它们。登录身份只存在 Cookie、服务端会话与前端内存中。当前账户页只显示自己的用户名。日记、跨设备同步、账户删除及密码找回待开发。
+访客可播放、收藏及保存设备预设。登录后可保存账户预设、账户默认播放设置和私人日记，设备数据仅在主动导入时传送。`/api/space` 统一验证会话及客户端预期账户，写请求沿用同源 JSON 校验并限流。日记和账户数据只留在组件内存，退出或切换账号时中止读取、撤销播放器中的账户临时设置，并清空私人数据。账号删除和密码找回待开发。 [个人空间](PERSONAL_SPACE.md)
 
 参考 [OWASP 密码存储](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)、[会话管理](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)、[CSRF 防护](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)。

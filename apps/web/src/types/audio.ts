@@ -1,8 +1,7 @@
-import catalog from '../domain/sound-catalog.json';
-
-export type TrackId = keyof typeof catalog;
-export const TRACK_IDS = Object.keys(catalog) as TrackId[];
-export const TRACKS = catalog;
+import { TRACK_IDS, TRACKS } from '@jhaven/shared';
+export { TRACK_IDS, TRACKS };
+export type { TrackId } from '@jhaven/shared';
+import type { TrackId } from '@jhaven/shared';
 // 即使所有音轨在切换过程中短暂重叠，源峰值不超过 0.66 时仍保留输出余量。
 export const TRACK_GAIN_LIMIT = Math.min(0.3, 0.9 / (TRACK_IDS.length * 0.66));
 export type PlaybackStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'stopping' | 'error';

@@ -4,6 +4,7 @@ import type { Pool } from 'mysql2/promise';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
 import { hashPassword, verifyPassword } from './password.js';
+import { createSpaceRouter } from '../space/routes.js';
 import {
   accountFrom,
   checkAccountDatabase,
@@ -82,12 +83,17 @@ export function createAuthRouter({
     if (!parsed.success) throw new AppError(400, 'INVALID_INPUT', '账户请求格式有误，请检查输入。');
     return parsed.data;
   }
-  const requireAccount: RequestHandler = async (request, response) => {
-    parse(empty, request.query);
+  const requireSession: RequestHandler = async (request, response, next) => {
     const token = tokenOf(request);
     const account = token ? await findAccount(database(), token) : null;
     if (!account) throw new AppError(401, 'UNAUTHENTICATED', '请先登录。');
-    response.json(account);
+    response.locals.account = account;
+    next();
+  };
+  const requireAccountScope: RequestHandler = (request, response, next) => {
+    if (request.get('X-JHaven-Account') !== response.locals.account.id)
+      throw new AppError(409, 'ACCOUNT_CHANGED', '账户会话已变化，请刷新后重试。');
+    next();
   };
 
   router.get('/auth/status', async (request, response) => {
@@ -95,7 +101,10 @@ export function createAuthRouter({
     await checkAccountDatabase(pool);
     response.json({ status: 'ok' });
   });
-  router.get(['/auth/me', '/account'], requireAccount);
+  router.get(['/auth/me', '/account'], requireSession, (request, response) => {
+    parse(empty, request.query);
+    response.json(response.locals.account);
+  });
   router.post('/auth/register', requireSameOrigin, limitRequests(12), async (request, response) => {
     const { username, password } = parse(registrationSchema, request.body);
     const db = database();
@@ -120,6 +129,12 @@ export function createAuthRouter({
     response.clearCookie(cookieName, cookie);
     response.status(204).end();
   });
+  router.use(
+    '/space',
+    requireSession,
+    requireAccountScope,
+    createSpaceRouter(database, requireSameOrigin, limitRequests(120)),
+  );
   // 已知数据库接入故障使用一致响应，不把驱动、SQL 或凭据传给客户端。
   router.use(
     (error: unknown, _request: Request, _response: unknown, next: (error: unknown) => void) => {

@@ -21,6 +21,12 @@ E2E 首次需要 `npx playwright install chromium`，Linux CI 可加 `--with-dep
 - 原生 radio 方向键、设置开闭、Escape/外侧点击、首尾 Tab 循环和焦点返回。
 - 配色/夜景/减少动画的持久化、恢复默认、禁止 localStorage 时只在当前生效、系统减少动态效果优先。
 
+## Sprint 4 验收（2026-11-18，Asia/Macau）
+
+- 沿用隔离 MySQL 9.6.0（回环端口 43306，`jhaven_test_` 专用库），用 `npm run db:migrate` 应用 003–005。正式 `jhaven` 只读核对显示 001–002 校验和一致，Sprint 4 三张表尚未创建。
+- 注入隔离账号配置并设 `JHAVEN_TEST_MYSQL=1` 后，`npm run check` 通过格式、ESLint、类型、85/85 单元及 API 测试和生产构建。覆盖账户预设、日记和偏好 CRUD、双账户隔离、账户切换时拒绝旧请求、跨午夜、缺失字段与夏令时歧义。
+- 保持隔离库并设置 `PLAYWRIGHT_CHANNEL=chrome`、`PLAYWRIGHT_API_PORT=43001`，`npm run test:e2e` 在 375、768、1440px 共通过 66/66。修复首轮回归中的普通定时取消后无法重新应用问题。覆盖现有的访客播放和认证流程，以及个人空间的导入冲突、退出后的本地状态恢复、重新登录、跨午夜日记和 7/30 天趋势。Safari、Firefox、真机和目标 MySQL 8.4 部署仍待验证。
+
 ## Sprint 3 验收（2026-11-18，Asia/Macau）
 
 - MySQL Community Server 9.6.0，独立目录、回环端口 43306、随机测试账号和 `jhaven_test_` 库。`npm run db:migrate` 首次应用两条迁移，再次确认无重复。MySQL 8.4 与生产 HTTPS 未实测。
@@ -90,4 +96,4 @@ Windows / Node 24.21.0 / npm 11.19.0，未新增依赖。
 
 ## 未覆盖范围
 
-Safari、Firefox、真实 iOS/Android、手机锁屏/整夜和音轨硬件听感未验证；本轮 Chrome/Edge、触屏仿真与权限故障注入不能替代它们。生产 Nginx 配置实际加载与宿主尚未验证。MySQL、认证、日记与 AI 未实现，无相应业务测试。未来对外内测前须补齐所需业务、设备及听感验证，不据此声称临床效果或性能指标。
+Safari、Firefox、真实 iOS/Android、手机锁屏/整夜和音轨硬件听感未验证。生产 Nginx 配置实际加载与宿主尚未验证。正式库的个人空间迁移与上线验收待执行，AI 尚未开发。

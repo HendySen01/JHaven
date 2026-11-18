@@ -22,6 +22,9 @@ export const useAudioStore = defineStore('audio', () => {
   const currentName = ref('雨夜');
   const currentId = ref<string | null>('rain');
   const storageMessage = ref('混音与自定义场景仅存当前浏览器；刷新取消计时，不会自动播放。');
+  const accountMix = ref(false);
+  const accountTimerRevision = ref(0);
+  let deviceMix: { mix: AudioMix; volume: number; id: string | null; name: string } | null = null;
   const formMessage = ref('');
   let engine: AudioEngine | null = null;
   let unsubscribe: (() => void) | null = null;
@@ -76,10 +79,10 @@ export const useAudioStore = defineStore('audio', () => {
         AUDIO_STORAGE_KEY,
         JSON.stringify({
           version: 1,
-          mix: mix.value,
-          masterVolume: masterVolume.value,
+          mix: deviceMix?.mix ?? mix.value,
+          masterVolume: deviceMix?.volume ?? masterVolume.value,
           presets: presets.value,
-          currentPresetId: currentId.value,
+          currentPresetId: deviceMix ? deviceMix.id : currentId.value,
           favorites: favorites.value,
         }),
       );
@@ -91,12 +94,48 @@ export const useAudioStore = defineStore('audio', () => {
     }
   }
   function applyPreset(preset: SoundPreset) {
+    clearAccountMix();
+    setMix(preset);
+    persist();
+  }
+  function setMix(preset: SoundPreset) {
     if (auditionId.value) engine?.stop(0);
     mix.value = copyMix(preset.mix);
     currentName.value = preset.name;
     currentId.value = preset.id;
     ensureEngine().applyMix(mix.value);
-    persist();
+  }
+  function applyAccountMix(preset: SoundPreset | null, volume?: number, timerMinutes?: number) {
+    if (!deviceMix)
+      deviceMix = {
+        mix: copyMix(mix.value),
+        volume: masterVolume.value,
+        id: currentId.value,
+        name: currentName.value,
+      };
+    accountMix.value = true;
+    if (preset) setMix(preset);
+    if (volume !== undefined) setMaster(volume);
+    if (timerMinutes !== undefined) {
+      setTimer(timerMinutes * 60, 15);
+      accountTimerRevision.value++;
+    }
+  }
+  function clearAccountMix() {
+    if (!deviceMix) return;
+    const saved = deviceMix;
+    deviceMix = null;
+    accountMix.value = false;
+    ensureEngine().stop(0);
+    mix.value = saved.mix;
+    currentName.value = saved.name;
+    currentId.value = saved.id;
+    masterVolume.value = saved.volume;
+    unmutedVolume = saved.volume || defaultAudio().masterVolume;
+    ensureEngine().applyMix(saved.mix);
+    ensureEngine().setMasterVolume(saved.volume);
+    accountTimerRevision.value++;
+    formMessage.value = '';
   }
   function applyBuiltin(id: string) {
     const preset = BUILTIN_PRESETS.find((item) => item.id === id);
@@ -108,13 +147,13 @@ export const useAudioStore = defineStore('audio', () => {
     mix.value[id] = { ...mix.value[id], ...patch };
     ensureEngine().applyMix(mix.value);
     identify();
-    persist();
+    if (!accountMix.value) persist();
   }
   function setMaster(value: number) {
     ensureEngine().setMasterVolume(value);
     masterVolume.value = snapshot.value.masterVolume;
     if (masterVolume.value > 0) unmutedVolume = masterVolume.value;
-    persist();
+    if (!accountMix.value) persist();
   }
   function toggleMute() {
     if (masterVolume.value > 0) unmutedVolume = masterVolume.value;
@@ -138,6 +177,10 @@ export const useAudioStore = defineStore('audio', () => {
   function savePreset(name: string) {
     const trimmed = name.trim();
     formMessage.value = '';
+    if (accountMix.value) {
+      formMessage.value = '可在个人账户将此混音存为账户场景。';
+      return false;
+    }
     if (!trimmed || trimmed.length > 40) {
       formMessage.value = '场景名称请填写 1–40 个字符。';
       return false;
@@ -228,6 +271,10 @@ export const useAudioStore = defineStore('audio', () => {
     formMessage,
     initialize,
     applyPreset,
+    accountMix,
+    accountTimerRevision,
+    applyAccountMix,
+    clearAccountMix,
     applyBuiltin,
     updateTrack,
     setMaster,

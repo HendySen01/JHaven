@@ -65,7 +65,7 @@ const settings = usePreferencesStore();
         <div>
           <p class="eyebrow">A PAGE, JUST FOR YOU</p>
           <h2 id="journal-title">给今天，留一页空白</h2>
-          <p>不打分，不追赶。日记记录将在后续开放。</p>
+          <p>按自己的节奏记录作息和休息感。睡眠日记仅本人可见。</p>
         </div>
         <RouterLink class="quiet-link" to="/journal"
           >了解睡眠日记<ArrowUpRight :size="17" aria-hidden="true"

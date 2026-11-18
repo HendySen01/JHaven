@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 
 const base = new URL('../apps/web/public/audio/', import.meta.url);
 const catalog = JSON.parse(
-  await readFile(new URL('../apps/web/src/domain/sound-catalog.json', import.meta.url), 'utf8'),
+  await readFile(new URL('../packages/shared/src/sound-catalog.json', import.meta.url), 'utf8'),
 );
 const manifest = JSON.parse(await readFile(new URL('manifest.json', base), 'utf8'));
 const ids = Object.keys(catalog);

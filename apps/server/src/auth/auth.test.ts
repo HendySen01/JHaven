@@ -7,6 +7,7 @@ import { loadConfig } from '../config.js';
 import { createDatabasePool } from '../db/pool.js';
 import { migrate } from '../db/migrate.js';
 import { hashPassword, verifyPassword } from './password.js';
+import { TRACK_IDS } from '@jhaven/shared';
 
 const origin = 'http://127.0.0.1:5173';
 const randomName = () => `test_${randomBytes(8).toString('hex')}`;
@@ -109,6 +110,118 @@ integration('真实 MySQL 账户集成', () => {
       .set('Origin', siteOrigin)
       .send({ username, password: secret });
   }
+  it('私人空间验证归属、拒绝同名覆盖，并跨登录保存日记与默认设置', async () => {
+    const api = request(app);
+    const a = await register(api);
+    const b = await register(api);
+    const first = await login(a, password, api).expect(200);
+    const second = await login(b, password, api).expect(200);
+    const bind = (response: typeof first) => ({
+      Cookie: cookieFrom(response),
+      'X-JHaven-Account': String(response.body.id),
+      Origin: origin,
+    });
+    const owner = bind(first);
+    const stranger = bind(second);
+    const preset = {
+      name: '静夜',
+      mix: Object.fromEntries(TRACK_IDS.map((id) => [id, { enabled: id === 'rain', volume: 32 }])),
+    };
+    await api.get('/api/space').expect(401);
+    await api
+      .get('/api/space')
+      .set({ ...stranger, 'X-JHaven-Account': owner['X-JHaven-Account'] })
+      .expect(409);
+    await api
+      .post('/api/space/presets')
+      .set({ ...owner, Origin: 'https://outside.example' })
+      .send(preset)
+      .expect(403);
+    await api
+      .post('/api/space/presets')
+      .set(owner)
+      .send({ ...preset, user_id: second.body.id })
+      .expect(400);
+    const { body: created } = await api
+      .post('/api/space/presets')
+      .set(owner)
+      .send(preset)
+      .expect(201);
+    await api
+      .post('/api/space/presets')
+      .set(owner)
+      .send({ ...preset, mix: { ...preset.mix, rain: { enabled: true, volume: 99 } } })
+      .expect(409);
+    const presetUrl = '/api/space/presets/' + created.id;
+    const settings = { scene: { kind: 'preset', id: created.id }, volume: 29, timerMinutes: 30 };
+    await api.put('/api/space/preferences').set(stranger).send(settings).expect(404);
+    await api.put(presetUrl).set(stranger).send(preset).expect(404);
+    await api.delete(presetUrl).set(stranger).send({}).expect(404);
+    await api.put('/api/space/preferences').set(owner).send(settings).expect(200);
+    await api
+      .get('/api/space')
+      .set(owner)
+      .expect(200, { presets: [created], preferences: settings });
+    const changed = { ...preset, name: '轻雨' };
+    await api.put(presetUrl).set(owner).send(changed).expect(200);
+    await api.put(presetUrl).set(owner).send(changed).expect(200);
+
+    const date = '2026-11-12';
+    const query = '/api/space/diary?from=2026-11-10&to=2026-11-13';
+    const diary = {
+      date,
+      timezone: 'Asia/Macau',
+      bedtime: '2026-11-12T15:30:00Z',
+      asleep: null,
+      wake: '2026-11-12T23:00:00Z',
+      rest: 4,
+      note: '临时测试内容',
+    };
+    await api
+      .post('/api/space/diary')
+      .set(owner)
+      .send({ ...diary, timezone: 'Unknown/Place' })
+      .expect(400);
+    await api
+      .post('/api/space/diary')
+      .set(owner)
+      .send({ ...diary, wake: '2026-11-12T12:30:00Z' })
+      .expect(400);
+    const { body: entry } = await api.post('/api/space/diary').set(owner).send(diary).expect(201);
+    const diaryUrl = '/api/space/diary/' + entry.id;
+    await api.post('/api/space/diary').set(owner).send(diary).expect(409);
+    await api.get(query).set(owner).expect(200, [entry]);
+    await api.get('/api/space/diary?from=2026-11-13&to=2026-11-13').set(owner).expect(200, []);
+    await api.get(query).set(stranger).expect(200, []);
+    await api.get('/api/space').set(stranger).expect(200, { presets: [], preferences: null });
+    await api.put(diaryUrl).set(stranger).send(diary).expect(404);
+    await api.delete(diaryUrl).set(stranger).send({}).expect(404);
+    await api
+      .put(diaryUrl)
+      .set(owner)
+      .send({ ...diary, rest: null, note: '' })
+      .expect(200);
+    await api.post('/api/auth/logout').set(owner).send({}).expect(204);
+    await api.get('/api/space').set(owner).expect(401);
+    const resumed = bind(await login(a, password, api).expect(200));
+    await api
+      .get('/api/space')
+      .set(resumed)
+      .expect(200, { presets: [{ id: created.id, ...changed }], preferences: settings });
+    await api
+      .get(query)
+      .set(resumed)
+      .expect(200, [{ ...entry, rest: null, note: '' }]);
+    await api.delete(presetUrl).set(resumed).send({}).expect(204);
+    await api
+      .get('/api/space')
+      .set(resumed)
+      .expect(200, { presets: [], preferences: { ...settings, scene: null } });
+    await api.delete(diaryUrl).set(resumed).send({}).expect(204);
+    await api.get(query).set(resumed).expect(200, []);
+    await api.delete('/api/space/preferences').set(resumed).send({}).expect(204);
+    await api.get('/api/space').set(resumed).expect(200, { presets: [], preferences: null });
+  }, 15_000);
   it('注册、大小写唯一约束、服务端校验、错误凭据一致与持久化', async () => {
     const api = request(app);
     await api.get('/api/auth/status').expect(200);

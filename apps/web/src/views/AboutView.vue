@@ -13,7 +13,7 @@ const phases = [
     number: '02',
     title: '让朋友真正用起来',
     status: 'Alpha · 计划中',
-    description: '逐步加入可退出的放松引导、账户与私人睡眠日记，并补齐真机音频验证。',
+    description: '完善私人睡眠空间，后续加入可退出的放松引导并补齐真机音频验证。',
   },
   {
     number: '03',
@@ -35,8 +35,8 @@ const phases = [
     <div class="foundation-notice">
       <Check :size="19" aria-hidden="true" />
       <p>
-        <strong>当前版本：声音库 Alpha</strong
-        ><br />你可以试听和混合声音，保存本地偏好，注册并登录账户。日记与跨设备同步待开放。
+        <strong>当前版本：个人睡眠空间 Alpha</strong
+        ><br />你可以试听和混合声音，登录后管理账户场景、默认播放设置和私人睡眠日记。
       </p>
     </div>
 
@@ -73,9 +73,7 @@ const phases = [
         <article>
           <h3>让隐私留在你手中</h3>
           <p>
-            界面和声音偏好、自定义场景仅保存在当前浏览器的
-            localStorage。账户库保存用户名、密码哈希和会话摘要。登录不自动上传原有声音偏好。日记、AI
-            与分析追踪尚未开放。
+            设备偏好和本地场景留在当前浏览器。账户场景、默认设置和日记保存在个人账户，可由本人删除。导入设备收藏需要主动确认。
           </p>
         </article>
       </div>

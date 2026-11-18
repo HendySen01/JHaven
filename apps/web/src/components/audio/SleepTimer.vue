@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useAudioEngine } from '../../composables/useAudioEngine';
 const audio = useAudioEngine();
 const initialMinutes = audio.snapshot.timer.duration / 60;
@@ -12,6 +12,15 @@ const minutes = ref(
 );
 const custom = ref(initialMinutes || 10);
 const fade = ref(audio.snapshot.fadeSeconds);
+watch(
+  () => audio.accountTimerRevision,
+  () => {
+    const value = audio.snapshot.timer.duration / 60;
+    minutes.value = [0, 10, 20, 30].includes(value) ? String(value) : 'custom';
+    if (value) custom.value = value;
+    fade.value = audio.snapshot.fadeSeconds;
+  },
+);
 const error = ref('');
 const remaining = computed(() => {
   const seconds = Math.ceil(audio.snapshot.timer.remaining);

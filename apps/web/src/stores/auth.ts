@@ -62,6 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
   const registeredUsername = ref('');
   const signedIn = computed(() => user.value !== null);
   let restoring: Promise<void> | undefined;
+  let identityRevision = 0;
 
   async function restore() {
     if (initialized.value) return;
@@ -88,6 +89,7 @@ export const useAuthStore = defineStore('auth', () => {
   ) {
     if (pending.value) return false;
     pending.value = true;
+    identityRevision++;
     error.value = '';
     try {
       if (restoring) await restoring;
@@ -108,11 +110,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function refreshAccount() {
+    if (pending.value) return false;
+    const revision = ++identityRevision;
     error.value = '';
     try {
-      user.value = accountSchema.parse(await request('/api/account'));
+      const account = accountSchema.parse(await request('/api/account'));
+      if (revision !== identityRevision) return false;
+      user.value = account;
       return true;
     } catch (issue) {
+      if (revision !== identityRevision) return false;
       if (issue instanceof AccountError && issue.status === 401) user.value = null;
       else error.value = issue instanceof AccountError ? issue.message : '无法读取当前账户。';
       return false;

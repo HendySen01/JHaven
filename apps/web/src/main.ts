@@ -5,5 +5,6 @@ import { router } from './router';
 import './styles.css';
 import './styles/audio.css';
 import './styles/auth.css';
+import './styles/space.css';
 
 createApp(App).use(createPinia()).use(router).mount('#app');

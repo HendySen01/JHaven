@@ -42,7 +42,7 @@ packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 基础服务存活检查为 `GET /api/health`，不接受查询参数。成功：
 
 ```json
-{ "status": "ok", "service": "jhaven-api", "stage": "account-auth" }
+{ "status": "ok", "service": "jhaven-api", "stage": "personal-space" }
 ```
 
 错误统一为：
@@ -62,6 +62,10 @@ packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 ## 账户链路
 
 Vue 表单和 Express 共用 Zod 账户契约。Pinia 通过同源 `/api/auth/me` 恢复身份，路由守卫负责导航。受保护 `/api/account` 每次从有效 Cookie 会话查询自身资料。Express 将写请求限制为指定 Origin 的 JSON，使用有界限流和异步 scrypt，参数化查询走 mysql2 连接池。MySQL 保存用户与会话摘要。显式 SQL 迁移由命名锁保护；`/api/auth/status` 独立表示数据库和结构就绪。 [账户与会话](AUTH.md) [数据库](DATABASE.md)
+
+## 个人空间链路
+
+`/api/space` 复用会话认证、同源写请求和统一错误处理。客户端携带当前账户 ID 以检测 Cookie 所代表的账户变化，实际数据库归属始终从会话获取。Zod 共享验证账号场景、默认设置和日记，音轨清单由客户端、服务端与构建共同使用。浏览器仅在内存中保存账户偏好和日记，阈值与时序由本地播放器继续执行。趋势图用 Vue 和 SVG 绘制，带等价数值表。
 
 ## 后续模块边界
 

@@ -100,3 +100,7 @@
 ## Sprint 3 账户
 
 `mysql2@3.24.6`（MIT）是唯一新直接依赖，用于池化连接、TLS 和参数化查询。第三方声明与传递依赖清单已重新生成。MySQL Community Server 9.6.0（GPL）为本机独立测试服务，项目发布物不包含服务器二进制。密码派生使用 Node 内置 scrypt。审查参考 OWASP 账户、会话和 CSRF 文档。Trail of Bits Skills、LeiBox 与 Impeccable 只评估公开材料，未安装、导入或执行。本轮未调用外部 Skills。 [mysql2 许可](https://github.com/sidorares/node-mysql2/blob/master/License)
+
+## Sprint 4 资源评估
+
+[Moodist](https://github.com/remvze/moodist) 作为场景管理参考。[Apache ECharts](https://github.com/apache/echarts) 仅评估，本任务的少量系列使用自建 SVG 和原生数据表。[LeiBox](https://github.com/leishifu666/LeiBox) 与 [Impeccable](https://github.com/pbakaus/impeccable) 仅查看官方项目说明。实际实现复用 Vue、Pinia、Zod、现有播放器和语义化表单，没有引入上述项目的代码、远程脚本、新依赖或外部 Skills。
