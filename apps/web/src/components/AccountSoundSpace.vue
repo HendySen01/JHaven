@@ -51,6 +51,9 @@ async function load(request: () => Promise<unknown>) {
   const data = personalSpace.parse(await request());
   presets.value = data.presets;
   preferences.value = data.preferences;
+  const defaultScenes = data.preferences?.scene?.kind === 'preset' ? data.presets : BUILTIN_PRESETS;
+  audio.savedAccountScene =
+    defaultScenes.find((scene) => scene.id === data.preferences?.scene?.id) ?? null;
   selected.value = data.preferences?.scene?.id ?? '';
   volume.value = data.preferences?.volume ?? 45;
   timer.value = data.preferences?.timerMinutes ?? 0;

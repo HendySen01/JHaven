@@ -21,6 +21,12 @@ E2E 首次需要 `npx playwright install chromium`，Linux CI 可加 `--with-dep
 - 原生 radio 方向键、设置开闭、Escape/外侧点击、首尾 Tab 循环和焦点返回。
 - 配色/夜景/减少动画的持久化、恢复默认、禁止 localStorage 时只在当前生效、系统减少动态效果优先。
 
+## Sprint 5 验收（2026-11-18，Asia/Macau）
+
+- 在回环端口 43306 的独立 MySQL 9.6.0 上运行 `npm run db:migrate`，应用 006。正式库未连接，无 DDL、授权或账户数据写入。
+- 隔离库配置下注入 `JHAVEN_TEST_MYSQL=1`，`npm run check` 通过格式、ESLint、类型检查、91/91 单元与 API 用例、生产构建。早期检查发现 RouterView 的可选键类型问题，以及旧测试将所有无声景入口当成日记，已修复并全量重跑。
+- `PLAYWRIGHT_CHANNEL=chrome` 与 `PLAYWRIGHT_API_PORT=43001` 下 `npm run test:e2e` 通过 81/81，覆盖 375、768、1440px。新增场景覆盖访客、键盘、暂停和跳过、减少动态效果、真实 Web Audio 渐弱及清理、原混音保持、自愿账户记录和声线筛选。声线测试模拟浏览器接口，本机实际发声、Safari、Firefox 与移动真机尚未验证。
+
 ## Sprint 4 验收（2026-11-18，Asia/Macau）
 
 - 沿用隔离 MySQL 9.6.0（回环端口 43306，`jhaven_test_` 专用库），用 `npm run db:migrate` 应用 003–005。正式 `jhaven` 只读核对显示 001–002 校验和一致，Sprint 4 三张表尚未创建。

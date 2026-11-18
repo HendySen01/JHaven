@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { RowDataPacket } from 'mysql2/promise';
@@ -110,6 +110,55 @@ integration('真实 MySQL 账户集成', () => {
       .set('Origin', siteOrigin)
       .send({ username, password: secret });
   }
+  it('练习记录严格校验、按账户隔离、支持重试与删除', async () => {
+    const api = request(app);
+    const url = '/api/space/relaxation';
+    const firstUser = await register(api);
+    const first = await login(firstUser).expect(200);
+    const second = await login(await register(api)).expect(200);
+    const record = { id: randomUUID(), practice: 'body', seconds: 42, completed: false };
+    const headers = (session: typeof first) => ({
+      Cookie: cookieFrom(session),
+      'X-JHaven-Account': session.body.id,
+      Origin: origin,
+    });
+    await api.get(url).expect(401);
+    await api
+      .post(url)
+      .set(headers(first))
+      .set('Origin', 'https://other.example')
+      .send(record)
+      .expect(403);
+    await api
+      .post(url)
+      .set(headers(first))
+      .send({ ...record, mood: 'private' })
+      .expect(400);
+    await api.get(url).set(headers(second)).set('X-JHaven-Account', first.body.id).expect(409);
+    await api.post(url).set(headers(first)).send(record).expect(201);
+    await api.post(url).set(headers(first)).send(record).expect(200);
+    await api
+      .post(url)
+      .set(headers(first))
+      .send({ ...record, seconds: 50 })
+      .expect(409);
+    await api.get(url).set(headers(second)).expect(200, []);
+    await api
+      .delete(url + '/' + record.id)
+      .set(headers(second))
+      .send({})
+      .expect(404);
+    const restored = await login(firstUser).expect(200);
+    const result = await api.get(url).set(headers(restored)).expect(200);
+    expect(result.headers['cache-control']).toBe('no-store');
+    expect(result.body).toEqual([{ ...record, createdAt: expect.stringMatching(/Z$/) }]);
+    await api
+      .delete(url + '/' + record.id)
+      .set(headers(restored))
+      .send({})
+      .expect(204);
+    await api.get(url).set(headers(restored)).expect(200, []);
+  });
   it('私人空间验证归属、拒绝同名覆盖，并跨登录保存日记与默认设置', async () => {
     const api = request(app);
     const a = await register(api);

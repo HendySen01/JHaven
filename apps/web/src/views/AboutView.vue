@@ -13,7 +13,7 @@ const phases = [
     number: '02',
     title: '让朋友真正用起来',
     status: 'Alpha · 计划中',
-    description: '完善私人睡眠空间，后续加入可退出的放松引导并补齐真机音频验证。',
+    description: '提供个人睡眠空间和随时可退出的短练习，真机音频仍待验证。',
   },
   {
     number: '03',

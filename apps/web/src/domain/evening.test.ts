@@ -9,7 +9,7 @@ describe('今晚状态与场景规则', () => {
     const result = recommendForMood(mood.id);
     expect(result?.text).toContain(mood.label);
     if (result?.sceneId) expect(findScene(result.sceneId)).toBeDefined();
-    else expect(result?.to).toBe('/journal');
+    else expect(result?.to).toBe(mood.id === 'journal' ? '/journal' : '/relax#practice-choices');
   });
   it.each(['unknown', undefined, ['rain'], '<script>'])('无效场景 %j 不返回伪造场景', (id) => {
     expect(findScene(id)).toBeUndefined();

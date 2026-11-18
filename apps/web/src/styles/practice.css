@@ -1,0 +1,132 @@
+.practice-shell > header,
+.practice-shell > footer {
+  display: none;
+}
+
+.practice-page {
+  min-height: 100svh;
+  padding: clamp(1.5rem, 6vw, 4.5rem) 1.25rem 3rem;
+  background: #121629;
+  transition: background-color 800ms ease;
+}
+
+.practice-dim {
+  background: #090c18;
+}
+
+.practice-content {
+  max-width: 39rem;
+  margin-inline: auto;
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+}
+
+.practice-content h1 {
+  font-size: clamp(2rem, 6vw, 3.5rem);
+}
+
+.practice-content p,
+.practice-choices p {
+  color: var(--text-secondary, #bfc4d8);
+}
+
+.practice-step,
+.practice-sound,
+.practice-display {
+  width: 100%;
+}
+
+.practice-step {
+  padding-block: 1.5rem;
+  border-block: 1px solid rgb(185 181 222 / 22%);
+}
+
+.practice-progress {
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0.75rem;
+}
+
+.practice-actions,
+.practice-volume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 0.75rem;
+}
+
+.practice-content summary,
+.practice-content .quiet-link,
+.practice-choices .quiet-link {
+  min-height: 44px;
+  align-content: center;
+}
+
+.practice-content summary {
+  cursor: pointer;
+}
+
+.practice-content select,
+.practice-state select {
+  max-width: 100%;
+  color: inherit;
+  background: #171a2f;
+  border: 1px solid #8280a0;
+  border-radius: 0.5rem;
+  min-height: 44px;
+  padding-inline: 0.5rem;
+}
+
+.practice-volume input {
+  max-width: min(100%, 12rem);
+  min-height: 44px;
+  accent-color: #b3a7eb;
+}
+
+.practice-display label,
+.practice-sound label {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-height: 44px;
+  margin-inline-end: 0.5rem;
+}
+
+.practice-display input {
+  accent-color: #b3a7eb;
+}
+
+.practice-choices {
+  display: grid;
+  gap: 0.75rem;
+  margin-block: 2rem;
+  scroll-margin-top: 6rem;
+}
+
+.practice-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-options li {
+  display: grid;
+  justify-items: start;
+  padding: 0.6rem 1rem;
+  border: 1px solid rgb(185 181 222 / 22%);
+  border-radius: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .practice-page {
+    transition: none;
+  }
+}
+
+[data-reduce-motion='true'] .practice-page {
+  transition: none;
+}

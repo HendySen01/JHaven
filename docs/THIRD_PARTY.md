@@ -104,3 +104,9 @@
 ## Sprint 4 资源评估
 
 [Moodist](https://github.com/remvze/moodist) 作为场景管理参考。[Apache ECharts](https://github.com/apache/echarts) 仅评估，本任务的少量系列使用自建 SVG 和原生数据表。[LeiBox](https://github.com/leishifu666/LeiBox) 与 [Impeccable](https://github.com/pbakaus/impeccable) 仅查看官方项目说明。实际实现复用 Vue、Pinia、Zod、现有播放器和语义化表单，没有引入上述项目的代码、远程脚本、新依赖或外部 Skills。
+
+## Sprint 5 资源说明
+
+- 练习界面复用现有 Vue 组件、原生 HTML 和项目样式。按当前可访问性及临时播放器状态需要，未集成额外的引导组件、LeiBox 或第三方 Skills。
+- 语音使用浏览器 Web Speech API 的本机中文声线，无运行时依赖或外部语音集成。 [MDN 本机语音属性](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisVoice/localService)
+- 指南及论文仅用于内容审核，练习文字为项目自行撰写。 [放松证据](RELAXATION_EVIDENCE.md)

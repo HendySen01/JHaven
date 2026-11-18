@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import AccountSoundSpace from '../components/AccountSoundSpace.vue';
+import RelaxationHistory from '../components/RelaxationHistory.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -44,6 +45,7 @@ async function logout() {
         </button>
       </div>
       <AccountSoundSpace :key="auth.user.id" />
+      <RelaxationHistory :key="'relaxation-' + auth.user.id" />
     </template>
   </div>
 </template>

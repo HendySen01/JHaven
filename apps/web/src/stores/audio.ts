@@ -24,6 +24,16 @@ export const useAudioStore = defineStore('audio', () => {
   const storageMessage = ref('混音与自定义场景仅存当前浏览器；刷新取消计时，不会自动播放。');
   const accountMix = ref(false);
   const accountTimerRevision = ref(0);
+  const savedAccountScene = shallowRef<SoundPreset | null>(null);
+  const practiceAudio = ref(false);
+  let practicePrevious: {
+    preset: SoundPreset;
+    volume: number;
+    unmuted: number;
+    timer: number;
+    fade: number;
+    previousId: string | null;
+  } | null = null;
   let deviceMix: { mix: AudioMix; volume: number; id: string | null; name: string } | null = null;
   const formMessage = ref('');
   let engine: AudioEngine | null = null;
@@ -79,10 +89,14 @@ export const useAudioStore = defineStore('audio', () => {
         AUDIO_STORAGE_KEY,
         JSON.stringify({
           version: 1,
-          mix: deviceMix?.mix ?? mix.value,
-          masterVolume: deviceMix?.volume ?? masterVolume.value,
+          mix: deviceMix?.mix ?? practicePrevious?.preset.mix ?? mix.value,
+          masterVolume: deviceMix?.volume ?? practicePrevious?.volume ?? masterVolume.value,
           presets: presets.value,
-          currentPresetId: deviceMix ? deviceMix.id : currentId.value,
+          currentPresetId: deviceMix
+            ? deviceMix.id
+            : practicePrevious
+              ? practicePrevious.previousId
+              : currentId.value,
           favorites: favorites.value,
         }),
       );
@@ -137,6 +151,37 @@ export const useAudioStore = defineStore('audio', () => {
     accountTimerRevision.value++;
     formMessage.value = '';
   }
+  function beginPracticeAudio() {
+    if (practicePrevious) return true;
+    if (snapshot.value.status !== 'idle') return false;
+    practicePrevious = {
+      preset: { id: currentId.value ?? '', name: currentName.value, mix: copyMix(mix.value) },
+      previousId: currentId.value,
+      volume: masterVolume.value,
+      unmuted: unmutedVolume,
+      timer: snapshot.value.timer.duration,
+      fade: snapshot.value.fadeSeconds,
+    };
+    practiceAudio.value = true;
+    return true;
+  }
+  function setPracticeScene(preset: SoundPreset) {
+    if (beginPracticeAudio()) setMix(preset);
+  }
+  function endPracticeAudio() {
+    const previous = practicePrevious;
+    if (!previous) return;
+    const player = ensureEngine();
+    player.stop(0);
+    setMix(previous.preset);
+    currentId.value = previous.previousId;
+    masterVolume.value = previous.volume;
+    unmutedVolume = previous.unmuted;
+    player.setMasterVolume(previous.volume);
+    player.setTimer(previous.timer, previous.fade);
+    practicePrevious = null;
+    practiceAudio.value = false;
+  }
   function applyBuiltin(id: string) {
     const preset = BUILTIN_PRESETS.find((item) => item.id === id);
     if (preset) applyPreset(preset);
@@ -147,13 +192,13 @@ export const useAudioStore = defineStore('audio', () => {
     mix.value[id] = { ...mix.value[id], ...patch };
     ensureEngine().applyMix(mix.value);
     identify();
-    if (!accountMix.value) persist();
+    if (!accountMix.value && !practiceAudio.value) persist();
   }
   function setMaster(value: number) {
     ensureEngine().setMasterVolume(value);
     masterVolume.value = snapshot.value.masterVolume;
     if (masterVolume.value > 0) unmutedVolume = masterVolume.value;
-    if (!accountMix.value) persist();
+    if (!accountMix.value && !practiceAudio.value) persist();
   }
   function toggleMute() {
     if (masterVolume.value > 0) unmutedVolume = masterVolume.value;
@@ -273,6 +318,11 @@ export const useAudioStore = defineStore('audio', () => {
     applyPreset,
     accountMix,
     accountTimerRevision,
+    savedAccountScene,
+    practiceAudio,
+    beginPracticeAudio,
+    setPracticeScene,
+    endPracticeAudio,
     applyAccountMix,
     clearAccountMix,
     applyBuiltin,

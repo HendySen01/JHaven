@@ -37,12 +37,28 @@ export function findScene(id: unknown): Scene | undefined {
 export const moods = [
   { id: 'busy', label: '思绪很多', icon: 'cloud' },
   { id: 'sounds', label: '想听一些声音', icon: 'audio' },
+  { id: 'noisy', label: '环境嘈杂', icon: 'audio' },
   { id: 'quiet', label: '想安静放松', icon: 'moon' },
+  { id: 'awake', label: '暂无睡意', icon: 'moon' },
   { id: 'journal', label: '想记录今天', icon: 'book' },
 ] as const;
 export type MoodId = (typeof moods)[number]['id'];
 
 const recommendations = {
+  noisy: {
+    title: '试试更平稳的背景声',
+    text: '你选了「环境嘈杂」，可以先试一段身体觉察，再决定是否搭配背景声。',
+    sceneId: null,
+    to: '/relax#practice-choices',
+    action: '查看放松建议',
+  },
+  awake: {
+    title: '给清醒的此刻一点余地',
+    text: '你选了「暂无睡意」，可以坐一会儿，按自己的节奏休息。',
+    sceneId: null,
+    to: '/relax#practice-choices',
+    action: '查看简短放松',
+  },
   busy: {
     title: '给思绪一点留白',
     text: '你选了「思绪很多」，可以先看看雨夜场景。无需清空思绪，慢慢来就好。',

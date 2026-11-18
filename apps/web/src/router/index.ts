@@ -2,6 +2,7 @@ import { nextTick } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
 import { useAuthStore } from '../stores/auth';
+import { practiceId } from '@jhaven/shared';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -16,6 +17,17 @@ export const router = createRouter({
       path: '/relax/:sceneId',
       component: () => import('../views/SceneDetailView.vue'),
       meta: { title: '场景预览' },
+    },
+    {
+      path: '/practice/:id',
+      component: () => import('../views/PracticeView.vue'),
+      beforeEnter: (to) => practiceId.safeParse(to.params.id).success || '/relax',
+      meta: { title: '夜间放松练习', practice: true },
+    },
+    {
+      path: '/relaxation-evidence',
+      component: () => import('../views/RelaxationEvidenceView.vue'),
+      meta: { title: '放松练习的依据与边界' },
     },
     {
       path: '/journal',

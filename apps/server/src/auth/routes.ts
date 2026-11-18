@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { createSpaceRouter } from '../space/routes.js';
+import { createRelaxationRouter } from '../space/relaxation.js';
 import {
   accountFrom,
   checkAccountDatabase,
@@ -129,6 +130,12 @@ export function createAuthRouter({
     response.clearCookie(cookieName, cookie);
     response.status(204).end();
   });
+  router.use(
+    '/space/relaxation',
+    requireSession,
+    requireAccountScope,
+    createRelaxationRouter(database, requireSameOrigin, limitRequests(120)),
+  );
   router.use(
     '/space',
     requireSession,
