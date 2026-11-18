@@ -9,6 +9,7 @@ export function usePracticeSpeech() {
     voice.value = synth
       ?.getVoices()
       .find((option) => option.localService && /^zh(?:-|$)/i.test(option.lang));
+    if (!voice.value) stop();
   }
   function stop() {
     if (!current) return;

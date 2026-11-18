@@ -398,8 +398,11 @@
   margin: 23px 12px 12px 0;
   gap: 10px;
 }
+:root:has(.has-player-dock) {
+  scroll-padding-block-end: calc(110px + env(safe-area-inset-bottom));
+}
 .app-shell.has-player-dock {
-  padding-bottom: 110px;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
 }
 .dock-scene-name {
   white-space: nowrap;
@@ -408,7 +411,7 @@
 }
 .player-dock {
   position: fixed;
-  bottom: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;

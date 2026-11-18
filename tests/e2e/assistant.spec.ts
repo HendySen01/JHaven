@@ -48,6 +48,9 @@ test('有来源的 AI 回答保留推荐理由与确认步骤', async ({ page })
   await page.getByRole('button', { name: '推荐 · 雨夜' }).click();
   await expect(page).toHaveURL('/assistant');
   await expect(page.getByRole('button', { name: '确认前往' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: '确认前往' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '推荐 · 雨夜' })).toBeFocused();
 });
 
 test.beforeEach(async ({ page }, info) => {
@@ -61,7 +64,7 @@ test.beforeEach(async ({ page }, info) => {
 });
 
 test('本地知识显示来源，站内操作需确认且无自动播放', async ({ page }) => {
-  await installAudioProbe(page);
+  await installAudioProbe(page, false);
   await page.goto('/');
   await page.getByRole('link', { name: '睡前助手' }).click();
   await expect(page.getByRole('heading', { name: '睡前助手' })).toBeVisible();
@@ -97,11 +100,15 @@ test('停止、重试和重新生成，离开后清空会话', async ({ page }) 
   await page.getByRole('button', { name: '思绪停不下来' }).click();
   await expect.poll(() => calls).toBe(1);
   await expect(page.getByRole('button', { name: '停止生成' })).toBeVisible();
-  await page.getByRole('button', { name: '停止生成' }).click();
+  await page.getByRole('button', { name: '停止生成' }).focus();
+  await page.keyboard.press('Enter');
   release();
   await expect(page.getByText('已停止生成。')).toBeVisible();
+  await expect(page.getByLabel('今晚想聊什么')).toBeFocused();
+  await page.getByLabel('今晚想聊什么').fill('尚未发送的新问题');
   await page.getByRole('button', { name: '重试回复' }).click();
   await expect(page.getByRole('button', { name: '推荐 · 思绪整理' })).toBeVisible();
+  await expect(page.getByLabel('今晚想聊什么')).toHaveValue('尚未发送的新问题');
   await page.getByRole('button', { name: '重新生成' }).click();
   await expect(page.getByRole('button', { name: '推荐 · 思绪整理' })).toBeVisible();
   await page.getByRole('link', { name: '关于', exact: true }).click();

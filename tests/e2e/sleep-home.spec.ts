@@ -1,5 +1,21 @@
 import { expect, test } from '@playwright/test';
 
+test('主导航触控区域和各访客页面的横向布局适应当前视口', async ({ page }) => {
+  for (const path of ['/', '/relax', '/assistant', '/journal', '/login', '/practice/unwind']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      path,
+    ).toBe(true);
+    for (const link of await page
+      .getByRole('navigation', { name: '主导航' })
+      .getByRole('link')
+      .all())
+      expect((await link.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  }
+});
+
 test('开始放松与三个场景详情，不会自动播放', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: '开始放松' }).click();

@@ -36,6 +36,7 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   await importPreset();
   await expect(page.getByRole('alert')).toContainText('已有同名场景');
   await page.getByRole('button', { name: '编辑 设备雨夜' }).click();
+  await expect(page.getByLabel('账户场景名称')).toBeFocused();
   await page.getByLabel('账户场景名称').fill('账户雨夜');
   await page.getByRole('spinbutton', { name: '雨声账户音量', exact: true }).fill('24');
   await page.getByRole('button', { name: '保存场景修改' }).click();
@@ -52,6 +53,10 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   await expect(page.getByRole('combobox', { name: '停止时间' })).toHaveValue('10');
   await expect(page.getByRole('button', { name: '播放混音' })).toBeEnabled();
   await page.getByRole('link', { name: '睡眠日记', exact: true }).click();
+  await page.getByRole('button', { name: '新增日记' }).click();
+  await expect(page.getByRole('heading', { name: '新建日记' })).toBeFocused();
+  await page.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(page.getByRole('button', { name: '新增日记' })).toBeFocused();
   await page.getByRole('button', { name: '新增日记' }).click();
   await page.getByLabel('日记日期').fill('2026-11-12');
   await page.getByLabel('记录时区').fill('Asia/Macau');

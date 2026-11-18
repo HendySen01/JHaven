@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioEngine } from './AudioEngine';
 import { AudioTimer } from './AudioTimer';
 import { GainEnvelope } from './GainEnvelope';
-import { BUILTIN_PRESETS, copyMix, volumeToGain } from '../../domain/audio';
+import { BUILTIN_PRESETS, copyMix, defaultAudio, volumeToGain } from '../../domain/audio';
 
 // 受控 Web Audio Mock 验证控制流与节点生命周期，不能代表真实浏览器音频渲染。
 function createContext(now: () => number) {
@@ -156,6 +156,25 @@ describe('引擎状态、并发和资源', () => {
     deferredResume.resolve();
     await settle();
     expect(fake.sources).toHaveLength(0);
+  });
+  it('浏览器尚未恢复时切换混音，仍等待同一个用户手势', async () => {
+    const { engine, fake } = setup();
+    const resumed = deferred<void>();
+    fake.context.resume.mockReturnValue(resumed.promise);
+    const started = engine.play();
+    const mix = defaultAudio().mix;
+    mix.rain.enabled = false;
+    mix.ocean.enabled = true;
+    engine.applyMix(mix);
+    await settle();
+    expect(engine.snapshot().status).toBe('loading');
+    fake.context.state = 'running';
+    resumed.resolve();
+    await started;
+    await engine.play();
+    expect(fake.context.resume).toHaveBeenCalledTimes(1);
+    expect(engine.snapshot().tracks.ocean.active).toBe(true);
+    expect(engine.snapshot().tracks.rain.active).toBe(false);
   });
   it('下载长时间无响应时中断并进入可重试错误', async () => {
     const fetcher = vi
@@ -318,6 +337,20 @@ describe('引擎状态、并发和资源', () => {
     await engine.play();
     expect(engine.snapshot().status).toBe('playing');
     expect(engine.snapshot().timer.remaining).toBe(50);
+  });
+  it('后台定时已经到期时，稍后收到挂起事件仍结算为停止', async () => {
+    const { engine, fake } = setup();
+    await engine.play();
+    engine.setTimer(10, 5);
+    now = 11_000;
+    fake.context.state = 'suspended';
+    fake.context.onstatechange?.();
+    expect(engine.snapshot()).toMatchObject({
+      status: 'idle',
+      timer: { duration: 0, running: false },
+      notice: '定时已结束，声音已停止。',
+    });
+    expect(engine.snapshot().tracks.rain.active).toBe(false);
   });
   it('旧停止回调与渐弱不能中断重新播放', async () => {
     const { engine } = setup();

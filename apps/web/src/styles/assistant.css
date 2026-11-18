@@ -2,11 +2,6 @@
   max-width: 54rem;
   position: relative;
 }
-@media (max-width: 540px) {
-  .main-nav a {
-    padding-inline: 5px;
-  }
-}
 .assistant-intro {
   margin-block-end: 2rem;
 }
@@ -23,6 +18,7 @@
 }
 .assistant-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   border: 1px solid rgb(197 181 249 / 24%);
   border-radius: 1.4rem;

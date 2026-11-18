@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { test, type Page } from '@playwright/test';
 
 interface Probe {
   contexts: AudioContext[];
@@ -13,11 +13,17 @@ declare global {
 }
 
 // 测试专用：使用真实 AudioContext/解码器/节点，以静音支路采样，避免测试打扰设备使用者。
-export async function installAudioProbe(page: Page) {
+export async function installAudioProbe(page: Page, nativeRequired = true) {
+  if (nativeRequired)
+    test.skip(
+      !(await page.evaluate(() => typeof window.AudioContext === 'function')),
+      '当前浏览器构建未提供原生 Web Audio。',
+    );
   await page.addInitScript(() => {
     const probe: Probe = { contexts: [], voices: new Set(), analysers: [], decoded: 0 };
     window.__jhavenAudioProbe = probe;
     const NativeContext = window.AudioContext;
+    if (typeof NativeContext !== 'function') return;
     window.AudioContext = new Proxy(NativeContext, {
       construct(Target, args) {
         const context = Reflect.construct(Target, args) as AudioContext;

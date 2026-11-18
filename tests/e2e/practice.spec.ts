@@ -69,9 +69,10 @@ test('从播放器进入练习不会停止既有混音，退出后仍在播放',
   expect(await readAudioProbe(page)).toMatchObject({ contexts: 1 });
 });
 
-test('语音只接受本机声线，暂停时取消朗读', async ({ page }) => {
+test('本机语音暂停与继续、错误提示和声线消失后取消', async ({ page }) => {
   await page.addInitScript(() => {
-    const synth = window.speechSynthesis;
+    const synth = new EventTarget();
+    Object.defineProperty(window, 'speechSynthesis', { value: synth });
     Object.defineProperty(synth, 'getVoices', {
       value: () => [
         { lang: 'zh-CN', localService: false, name: '远程' },
@@ -81,8 +82,9 @@ test('语音只接受本机声线，暂停时取消朗读', async ({ page }) => 
       ],
     });
     Object.defineProperty(synth, 'speak', {
-      value: (utterance: { text: string }) => {
+      value: (utterance: { text: string; onerror?: () => void }) => {
         document.documentElement.dataset.spoken = utterance.text;
+        if (document.documentElement.dataset.speechFail) utterance.onerror?.();
       },
     });
     Object.defineProperty(synth, 'cancel', {
@@ -110,6 +112,22 @@ test('语音只接受本机声线，暂停时取消朗读', async ({ page }) => 
   await expect(page.locator('html')).toHaveAttribute('data-spoken', /安顿下来/);
   await page.getByRole('button', { name: '暂停练习' }).click();
   await expect(page.locator('html')).not.toHaveAttribute('data-spoken');
+  await page.getByRole('button', { name: '继续练习' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-spoken', /安顿下来/);
+  await page.evaluate(() => {
+    delete document.documentElement.dataset.speechLocal;
+    window.speechSynthesis.dispatchEvent(new Event('voiceschanged'));
+  });
+  await expect(voice).toBeDisabled();
+  await expect(voice).not.toBeChecked();
+  await expect(page.locator('html')).not.toHaveAttribute('data-spoken');
+  await page.evaluate(() => {
+    document.documentElement.dataset.speechLocal = 'true';
+    document.documentElement.dataset.speechFail = 'true';
+    window.speechSynthesis.dispatchEvent(new Event('voiceschanged'));
+  });
+  await voice.check();
+  await expect(page.getByText('本机语音未能播放，你仍可阅读引导。')).toBeVisible();
 });
 
 test('账户练习需主动保存，并可在账户页删除', async ({ page }) => {

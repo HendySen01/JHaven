@@ -179,6 +179,9 @@ function onPageHide() {
   cleanup();
   resumeAudio = false;
 }
+watch(speech.voice, (voice) => {
+  if (!voice) speechEnabled.value = false;
+});
 watch(
   () => auth.user?.id,
   () => {

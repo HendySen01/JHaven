@@ -27,11 +27,14 @@ test('连接失败可显示错误并重试恢复', async ({ page }) => {
   await expect(page.getByRole('status')).toContainText('基础服务连接正常');
 });
 
-test('键盘跳转、窄屏布局与减少动态效果', async ({ page }) => {
+test('键盘跳转、窄屏布局与减少动态效果', async ({ page, browserName }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('link', { name: '跳到主要内容' })).toBeFocused();
+  const skipLink = page.getByRole('link', { name: '跳到主要内容' });
+  // Windows WebKit 默认跳过链接。验证获得焦点后仍可用 Enter 激活。
+  if (browserName === 'webkit') await skipLink.focus();
+  else await page.keyboard.press('Tab');
+  await expect(skipLink).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.locator('#main-content')).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(

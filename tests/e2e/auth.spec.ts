@@ -41,12 +41,17 @@ test('真实注册、登录失败、登录成功、刷新恢复和退出', async
   await form.getByRole('button', { name: '登录', exact: true }).click();
   await expect(form.getByRole('alert')).toHaveText('用户名或密码不正确。');
   await form.getByLabel('密码', { exact: true }).fill(password);
+  const loginResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/api/auth/login') && response.ok(),
+  );
   await form.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/account');
   await expect(page.getByRole('heading', { name: '我的账户' })).toBeVisible();
   await expect(page.getByText(username, { exact: true })).toBeVisible();
   const cookie = (await page.context().cookies()).find((value) => value.name === 'jhaven_session');
-  expect(cookie).toMatchObject({ httpOnly: true, sameSite: 'Lax' });
+  expect(cookie).toMatchObject({ httpOnly: true });
+  const sessionHeader = await (await loginResponse).headerValue('set-cookie');
+  expect(/;\s*SameSite=Lax(?:;|$)/i.test(sessionHeader ?? '')).toBe(true);
   expect(await page.evaluate(() => document.cookie.includes('jhaven_session'))).toBe(false);
   await page.reload();
   await expect(page.getByText(username, { exact: true })).toBeVisible();

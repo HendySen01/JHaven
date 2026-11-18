@@ -1,5 +1,17 @@
 # 测试与验证
 
+## Sprint 7 产品体验与跨浏览器回归
+
+- 使用本机独立 MySQL 9.6 测试实例。所有写入回归指向回环 43306 和 `jhaven_test_` 测试库。关闭真实模型调用和生产库访问。
+- `npm run check` 最终通过格式、ESLint、TypeScript、116/116 项单元与 API 测试、10 条音轨校验及生产构建。初次检查发现 Playwright 浏览器配置字面量类型被扩大，修正类型后重跑。
+- `PLAYWRIGHT_CHANNEL=chrome` 下 `npm run test:e2e` 通过 96/96。加入音频 API 缺失回归后，完成生产构建并用 `npx playwright test` 全量重跑，通过 99/99。系统 Chrome 157.0.8103.79 覆盖 375、768、1440px，以及账户认证、个人收藏、日记和趋势、放松练习、助手确认、原生 Web Audio 混音和计时、减少动画及键盘操作。
+- Playwright Firefox 159.0 在 1440px 通过 33/33，包含真实 Web Audio 解码、混音、定时渐弱，以及隔离库登录和私人空间回归。
+- 系统 Chrome 和原生 Windows 中文语音验证了独立的 `end` 事件。练习页面在零音量探测中按顺序收到开始、暂停取消、继续开始、结束取消事件。错误提示、远程声线过滤及本机声线消失走受控语音 Mock。
+- Playwright Windows WebKit 27.2 在 1440px 通过 21 项，12 项需原生 Web Audio 的用例跳过。此构建没有标准或前缀版 AudioContext，也未暴露 SpeechSynthesis。播放不可用提示和语音 Mock 生命周期已验证。此构建默认 Tab 跳过链接，使用显式焦点验证 Enter 跳转。标准安装缓慢时从官方镜像分段下载并补齐 winldd。
+- 浏览器未验证范围包括实际 Safari、iOS/Android 真机、手机锁屏、整夜播放、硬件听感及屏幕阅读器实机。浏览器音频探针采样真实 PCM，后台挂起和节流边界使用受控测试。助手沿用 Sprint 6C 真实推荐结果，Sprint 7 用 Mock 核对确认和缩短后的文案，付费请求为 0。
+
+指定 `PLAYWRIGHT_COMPAT_BROWSER=firefox` 或 `webkit` 可运行 1440px 兼容项目。首次使用标准安装命令 `npx playwright install firefox webkit`，其余命令与 Chrome 相同。
+
 ## Sprint 6C 真实 DeepSeek 验收
 
 每个场景单独开启一轮，通过本机助手 API 提交一个固定测试句。执行批准后使用官方 HTTPS 端点的 `deepseek-flash`，并保留生产使用的结构化校验、推荐确认和手动启动流程。每次只传该句及应用已有的指令和检索摘要。
@@ -172,4 +184,4 @@ Windows / Node 24.21.0 / npm 11.19.0，未新增依赖。
 
 ## 未覆盖范围
 
-Safari、Firefox、真实 iOS/Android、手机锁屏/整夜和音轨硬件听感未验证。生产 HTTPS/Nginx、助手流式代理及生产模型配置尚未验证。正式库完成 001–006 迁移与只读验收，登录后的业务写入及账户隔离在隔离库验证。
+实际 Safari、真实 iOS/Android、手机锁屏/整夜和音轨硬件听感未验证。生产 HTTPS/Nginx、助手流式代理及生产模型配置尚未验证。正式库完成 001–006 迁移与只读验收，登录后的业务写入及账户隔离在隔离库验证。

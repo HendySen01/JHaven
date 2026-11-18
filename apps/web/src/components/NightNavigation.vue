@@ -5,7 +5,12 @@ import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 const route = useRoute();
 const auth = useAuthStore();
-defineEmits<{ settings: [] }>();
+const emit = defineEmits<{ settings: [] }>();
+function openSettings(event: MouseEvent) {
+  // 某些浏览器的指针点击不会聚焦按钮，显式保留对话框的返回焦点。
+  if (event.currentTarget instanceof HTMLButtonElement) event.currentTarget.focus();
+  emit('settings');
+}
 </script>
 <template>
   <header class="site-header">
@@ -32,7 +37,7 @@ defineEmits<{ settings: [] }>();
         type="button"
         aria-label="打开设置"
         aria-haspopup="dialog"
-        @click="$emit('settings')"
+        @click="openSettings"
       >
         <SlidersHorizontal :size="18" aria-hidden="true" /><span>设置</span>
       </button>

@@ -47,7 +47,7 @@ it('引用仅来自本次检索，审核原文保留在模型组织的回答中'
   const choose = vi.fn(async () => ({
     kind: 'answer',
     sourceId: 'caffeine',
-    answer: '你可以先留意晚间喝浓茶后的感受。{evidence}',
+    answer: '你可以先留意晚间喝浓茶后的感受。{evidence}你也可以把浓茶留到白天较早的时候。',
     intent: 'rain',
   }));
   const result = frames(
@@ -67,6 +67,7 @@ it('引用仅来自本次检索，审核原文保留在模型组织的回答中'
   expect(result[1]).toMatchObject({
     text: expect.stringContaining('你可以先留意晚间喝浓茶后的感受。咖啡因可能影响入睡'),
   });
+  expect(result[1]).not.toMatchObject({ text: expect.stringContaining('你也可以把浓茶留到') });
   expect(result.at(-1)).toMatchObject({
     actions: [],
     sources: [

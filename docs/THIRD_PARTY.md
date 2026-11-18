@@ -118,3 +118,9 @@ Sprint 6B 直接使用 DeepSeek 官方服务，复用 Node Fetch/SSE 代码，�
 - 练习界面复用现有 Vue 组件、原生 HTML 和项目样式。按当前可访问性及临时播放器状态需要，未集成额外的引导组件、LeiBox 或第三方 Skills。
 - 语音使用浏览器 Web Speech API 的本机中文声线，无运行时依赖或外部语音集成。 [MDN 本机语音属性](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisVoice/localService)
 - 指南及论文仅用于内容审核，练习文字为项目自行撰写。 [放松证据](RELAXATION_EVIDENCE.md)
+
+## Sprint 7 资源说明
+
+- 使用已安装的 LeiBox Skill 查询公开 Vue 组件目录。候选加载反馈依赖装饰性连续动效，沿用站内语义化状态提示。未下载或执行第三方组件。 [LeiBox](https://github.com/leishifu666/LeiBox)
+- 查阅 Impeccable 公开项目说明评估设计审查流程，沿用既有设计系统和 Playwright 检查。未安装其 Skill，未新增 npm 依赖。 [Impeccable](https://github.com/pbakaus/impeccable)
+- 参考浏览器原生音频中断及语音 API 文档。 [Web Audio 状态](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/state) [语音暂停](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis/pause)

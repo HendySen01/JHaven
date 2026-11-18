@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const apiPort = process.env.PLAYWRIGHT_API_PORT ?? '3001';
+const compat = process.env.PLAYWRIGHT_COMPAT_BROWSER;
+if (compat && compat !== 'firefox' && compat !== 'webkit')
+  throw new Error('PLAYWRIGHT_COMPAT_BROWSER 只接受 firefox 或 webkit。');
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -12,19 +15,38 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:4173',
     trace: 'retain-on-failure',
-    ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}),
+    ...(!compat && process.env.PLAYWRIGHT_CHANNEL
+      ? { channel: process.env.PLAYWRIGHT_CHANNEL }
+      : {}),
   },
-  projects: [
-    {
-      name: 'desktop-1440',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 } },
-    },
-    {
-      name: 'tablet-768',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 }, hasTouch: true },
-    },
-    { name: 'mobile-375', use: { ...devices['Pixel 7'], viewport: { width: 375, height: 812 } } },
-  ],
+  projects: compat
+    ? [
+        {
+          name: compat,
+          use: {
+            browserName: compat === 'firefox' ? 'firefox' : 'webkit',
+            viewport: { width: 1440, height: 1000 },
+          },
+        },
+      ]
+    : [
+        {
+          name: 'desktop-1440',
+          use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 } },
+        },
+        {
+          name: 'tablet-768',
+          use: {
+            ...devices['Desktop Chrome'],
+            viewport: { width: 768, height: 1024 },
+            hasTouch: true,
+          },
+        },
+        {
+          name: 'mobile-375',
+          use: { ...devices['Pixel 7'], viewport: { width: 375, height: 812 } },
+        },
+      ],
   webServer: [
     {
       command: 'npm run start -w @jhaven/server',

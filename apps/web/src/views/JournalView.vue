@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { ArrowLeft, BookOpen, ShieldCheck } from '@lucide/vue';
 import {
   journalEntries,
@@ -36,6 +36,8 @@ const form = ref(blank());
 const fold = ref({ bedtime: 0, asleep: 0, wake: 0 });
 const editId = ref<string | null>(null);
 const editing = ref(false);
+const editorHeading = ref<HTMLHeadingElement>();
+let editorTrigger: HTMLButtonElement | undefined;
 const ready = ref(false);
 const message = ref('');
 const boundaries = () => ({ from: shiftDate(today, -29), to: today });
@@ -101,10 +103,18 @@ function clearEditor() {
   editId.value = null;
   form.value = blank();
   fold.value = { bedtime: 0, asleep: 0, wake: 0 };
+  editorTrigger = undefined;
 }
-function edit(entry?: JournalEntry) {
+function cancelEditor() {
+  const trigger = editorTrigger;
   clearEditor();
+  trigger?.focus();
+}
+function edit(entry: JournalEntry | undefined, event: MouseEvent) {
+  clearEditor();
+  if (event.currentTarget instanceof HTMLButtonElement) editorTrigger = event.currentTarget;
   editing.value = true;
+  void nextTick(() => editorHeading.value?.focus());
   if (!entry) return;
   editId.value = entry.id;
   form.value = {
@@ -221,7 +231,12 @@ const showTime = (value: string | null, timezone: string) =>
         <section class="space-section" aria-labelledby="diary-title">
           <div class="space-actions">
             <h2 id="diary-title">记录</h2>
-            <button type="button" class="button button-primary" :disabled="busy" @click="edit()">
+            <button
+              type="button"
+              class="button button-primary"
+              :disabled="busy"
+              @click="edit(undefined, $event)"
+            >
               新增日记
             </button>
           </div>
@@ -244,7 +259,7 @@ const showTime = (value: string | null, timezone: string) =>
             aria-label="日记表单"
             @submit.prevent="save"
           >
-            <h3>{{ editId ? '编辑日记' : '新建日记' }}</h3>
+            <h3 ref="editorHeading" tabindex="-1">{{ editId ? '编辑日记' : '新建日记' }}</h3>
             <div class="space-fields">
               <label>日记日期 <input v-model="form.date" type="date" required /></label>
               <label
@@ -283,7 +298,7 @@ const showTime = (value: string | null, timezone: string) =>
                 type="button"
                 class="button button-secondary"
                 :disabled="busy"
-                @click="clearEditor"
+                @click="cancelEditor"
               >
                 取消
               </button>
@@ -307,7 +322,12 @@ const showTime = (value: string | null, timezone: string) =>
                 <p v-if="entry.note" class="diary-note">{{ entry.note }}</p>
               </div>
               <div class="space-actions">
-                <button class="quiet-link" type="button" :disabled="busy" @click="edit(entry)">
+                <button
+                  class="quiet-link"
+                  type="button"
+                  :disabled="busy"
+                  @click="edit(entry, $event)"
+                >
                   编辑<span class="sr-only"> {{ entry.date }}</span></button
                 ><button type="button" class="quiet-link" :disabled="busy" @click="remove(entry)">
                   删除<span class="sr-only"> {{ entry.date }}</span>

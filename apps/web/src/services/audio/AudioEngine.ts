@@ -35,6 +35,7 @@ export class AudioEngine {
   private transition: ReturnType<typeof setTimeout> | null = null;
   private ticker: ReturnType<typeof setInterval> | null = null;
   private playTask: Promise<void> | null = null;
+  private resumeTask: Promise<void> | undefined;
   private listeners = new Set<(snapshot: AudioSnapshot) => void>();
   readonly timer: AudioTimer;
   constructor(private readonly options: EngineOptions = {}) {
@@ -95,6 +96,11 @@ export class AudioEngine {
     context.onstatechange = () => {
       if (this.disposed || this.context !== context || this.intent !== 'playing') return;
       if (context.state !== 'running' && this.status === 'playing') {
+        const timer = this.timer.snapshot();
+        if (timer.running && timer.remaining <= 0) {
+          this.tick();
+          return;
+        }
         this.revision++;
         this.intent = 'paused';
         this.timer.pause();
@@ -131,9 +137,9 @@ export class AudioEngine {
     try {
       const context = this.initialize();
       // 必须在按钮的用户手势栈内调用 resume，不能先等网络请求。
-      const resume = context.resume();
+      this.resumeTask = context.resume();
       this.emit();
-      this.playTask = this.reconcile(revision, resume);
+      this.playTask = this.reconcile(revision, this.resumeTask);
     } catch {
       this.fail('当前浏览器无法创建音频，请使用支持 Web Audio 的浏览器重试。');
       this.playTask = Promise.resolve();
@@ -190,7 +196,7 @@ export class AudioEngine {
       const revision = ++this.revision;
       this.status = 'loading';
       this.emit();
-      this.playTask = this.reconcile(revision);
+      this.playTask = this.reconcile(revision, this.resumeTask);
     } else {
       if (this.status === 'error') this.status = 'idle';
       this.emit();

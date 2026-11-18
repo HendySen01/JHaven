@@ -32,10 +32,13 @@ const consent = ref(false);
 const configured = ref(false);
 const providerName = ref('OpenAI');
 const checking = ref(true);
+const statusUnavailable = ref(false);
 const privacy = ref(false);
 const pending = ref<AssistantAction | null>(null);
 const textarea = ref<HTMLTextAreaElement>();
 const confirmation = ref<HTMLButtonElement>();
+const stopButton = ref<HTMLButtonElement>();
+let recommendationTrigger: HTMLButtonElement | undefined;
 const last = computed(() => turns.value.at(-1));
 let request: AbortController | undefined;
 const statusController = new AbortController();
@@ -47,23 +50,26 @@ onMounted(async () => {
       credentials: 'omit',
       signal: AbortSignal.any([statusController.signal, AbortSignal.timeout(4000)]),
     });
-    if (res.ok) {
-      const provider = assistantStatus.parse(await res.json()).provider;
-      configured.value = provider !== null;
-      providerName.value = provider === 'deepseek' ? 'DeepSeek' : 'OpenAI';
-    }
+    if (!res.ok) throw new Error('无法检查助手服务。');
+    const provider = assistantStatus.parse(await res.json()).provider;
+    configured.value = provider !== null;
+    providerName.value = provider === 'deepseek' ? 'DeepSeek' : 'OpenAI';
   } catch {
-    configured.value = false;
+    statusUnavailable.value = true;
   } finally {
     checking.value = false;
   }
 });
 function stop(note = '已停止生成。') {
   if (!request) return;
+  restoreComposerFocus();
   request.abort();
   request = undefined;
   active.value = false;
   if (last.value) last.value.note = note;
+}
+function restoreComposerFocus() {
+  if (document.activeElement === stopButton.value) textarea.value?.focus({ preventScroll: true });
 }
 function reset() {
   stop();
@@ -80,8 +86,11 @@ onBeforeUnmount(() => {
 watch(consent, (value) => {
   if (!value && active.value) stop('已停止本次请求，后续将使用本地知识。');
 });
-async function send(question: string, replace = false, localOnly = false) {
+async function send(question: string, replace = false, localOnly = false, event?: Event) {
   if (active.value || !question.trim()) return;
+  const control =
+    event instanceof SubmitEvent && event.submitter ? event.submitter : event?.currentTarget;
+  const moveFocus = control === document.activeElement;
   pending.value = null;
   const current: Turn = { question: question.trim(), text: '' };
   turns.value = [...(replace ? turns.value.slice(0, -1) : turns.value).slice(-3), current];
@@ -89,7 +98,8 @@ async function send(question: string, replace = false, localOnly = false) {
   const controller = new AbortController();
   request = controller;
   active.value = true;
-  draft.value = '';
+  if (!replace && draft.value.trim() === current.question) draft.value = '';
+  if (moveFocus) void nextTick(() => stopButton.value?.focus({ preventScroll: true }));
   try {
     await readAssistant(
       messages,
@@ -105,11 +115,16 @@ async function send(question: string, replace = false, localOnly = false) {
   } catch (error) {
     if (request === controller && last.value)
       last.value.note =
-        error instanceof Error && error.name !== 'ZodError' && !(error instanceof SyntaxError)
-          ? error.message
-          : '回复格式异常，可以重试。';
+        error instanceof DOMException && error.name === 'TimeoutError'
+          ? '这次回复超过等待时间，可以重试或使用本地知识。'
+          : error instanceof TypeError
+            ? '网络连接中断，可以重试。'
+            : error instanceof Error && error.name !== 'ZodError' && !(error instanceof SyntaxError)
+              ? error.message
+              : '回复格式异常，可以重试。';
   } finally {
     if (request === controller) {
+      restoreComposerFocus();
       request = undefined;
       active.value = false;
     }
@@ -120,9 +135,14 @@ function label(action: AssistantAction) {
     ? practices[action.id].title
     : (findScene(action.id)?.name ?? '声音场景');
 }
-function propose(action: AssistantAction) {
+function propose(action: AssistantAction, event: MouseEvent) {
+  if (event.currentTarget instanceof HTMLButtonElement) recommendationTrigger = event.currentTarget;
   pending.value = action;
   void nextTick(() => confirmation.value?.focus());
+}
+function cancelConfirmation() {
+  pending.value = null;
+  recommendationTrigger?.focus();
 }
 function confirm() {
   const parsed = assistantAction.safeParse(pending.value);
@@ -150,7 +170,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
     <section class="assistant-panel" aria-labelledby="chat-title">
       <h2 id="chat-title" class="assistant-sr">聊天</h2>
       <div class="assistant-mode">
-        <strong>{{
+        <strong role="status">{{
           configured && consent ? 'AI 模式' : checking ? '正在检查助手服务…' : '本地知识模式'
         }}</strong>
         <button
@@ -183,7 +203,11 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
         <RouterLink class="quiet-link" to="/relaxation-evidence">放松依据与边界</RouterLink>
       </div>
       <p v-if="!configured && !checking" class="assistant-muted">
-        当前可用审核知识和站内推荐，模型服务未启用。
+        {{
+          statusUnavailable
+            ? '暂时无法确认 AI 服务状态。可以尝试查询本地审核知识。'
+            : '当前可用审核知识和站内推荐，模型服务未启用。'
+        }}
       </p>
       <label v-if="configured" class="assistant-consent">
         <input v-model="consent" type="checkbox" /> 可将本次输入发送给 {{ providerName }}，启用 AI
@@ -191,7 +215,11 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
       </label>
       <ul v-if="!turns.length" class="assistant-quick">
         <li v-for="question in quick" :key="question">
-          <button class="button button-secondary" type="button" @click="send(question)">
+          <button
+            class="button button-secondary"
+            type="button"
+            @click="send(question, false, false, $event)"
+          >
             {{ question }}
           </button>
         </li>
@@ -233,7 +261,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
                 :key="action.kind + action.id"
                 class="button button-secondary"
                 type="button"
-                @click="propose(action)"
+                @click="propose(action, $event)"
               >
                 推荐 · {{ label(action) }}
               </button>
@@ -241,17 +269,17 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
           </div>
         </li>
       </ol>
-      <div v-if="pending" class="assistant-confirm">
+      <div v-if="pending" class="assistant-confirm" @keydown.esc.stop="cancelConfirmation">
         <p>前往「{{ label(pending) }}」？声音和练习仍由你开始。</p>
         <button ref="confirmation" class="button button-primary" type="button" @click="confirm">
           确认前往
         </button>
-        <button class="quiet-link" type="button" @click="pending = null">取消</button>
+        <button class="quiet-link" type="button" @click="cancelConfirmation">取消</button>
       </div>
       <p class="assistant-sr" aria-live="polite">
-        {{ active ? '正在生成回复' : last?.result ? '回复完成' : '' }}
+        {{ active ? '正在生成回复' : last?.result ? last.text : '' }}
       </p>
-      <form class="assistant-compose" @submit.prevent="send(draft)">
+      <form class="assistant-compose" @submit.prevent="send(draft, false, false, $event)">
         <label for="assistant-message">今晚想聊什么</label>
         <textarea
           id="assistant-message"
@@ -262,7 +290,13 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
           placeholder="例如，我想安静地待一会儿。"
         />
         <div class="assistant-actions">
-          <button v-if="active" class="button button-secondary" type="button" @click="stop()">
+          <button
+            v-if="active"
+            ref="stopButton"
+            class="button button-secondary"
+            type="button"
+            @click="stop()"
+          >
             停止生成
           </button>
           <button v-else class="button button-primary" type="submit" :disabled="!draft.trim()">
@@ -272,7 +306,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
             v-if="last && !active"
             class="quiet-link"
             type="button"
-            @click="send(last.question, true)"
+            @click="send(last.question, true, false, $event)"
           >
             {{ last.note ? '重试回复' : '重新生成' }}
           </button>
@@ -280,7 +314,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
             v-if="last?.note && consent && !active"
             class="quiet-link"
             type="button"
-            @click="send(last.question, true, true)"
+            @click="send(last.question, true, true, $event)"
           >
             改用本地知识
           </button>

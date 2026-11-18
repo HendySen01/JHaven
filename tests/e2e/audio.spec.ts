@@ -1,6 +1,17 @@
 import { expect, test } from '@playwright/test';
 import { installAudioProbe, readAudioProbe } from './audio-probe.js';
 
+test('没有 Web Audio 时解释播放失败，仍可访问声音库', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'AudioContext', { value: undefined });
+  });
+  await page.goto('/relax');
+  const player = page.locator('#ambient-player');
+  await player.getByRole('button', { name: '播放混音', exact: true }).click();
+  await expect(player.getByRole('alert')).toContainText('当前浏览器无法创建音频');
+  await expect(player.getByRole('button', { name: '重试', exact: false })).toBeVisible();
+});
+
 test.beforeEach(async ({ page }) => {
   await installAudioProbe(page);
 });
@@ -72,11 +83,11 @@ test('返回详情保留自定义混音，损坏或受限存储可恢复', async
   await expect(player.getByRole('slider', { name: '雨声音量', exact: true })).toHaveValue('65');
   await expect(player.getByText('本地声音偏好无法读取', { exact: false })).toBeVisible();
   await page.addInitScript(() => {
-    Object.defineProperty(window, 'localStorage', {
-      get() {
-        throw new DOMException('Blocked', 'SecurityError');
-      },
-    });
+    const set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'jhaven.audio.v1') throw new DOMException('Blocked', 'SecurityError');
+      return set.call(this, key, value);
+    };
   });
   await page.reload();
   await player.getByRole('textbox', { name: '自定义场景名称' }).fill('临时夜晚');

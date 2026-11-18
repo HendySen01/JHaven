@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import {
   personalSpace,
   presetInput,
@@ -19,6 +19,7 @@ const presets = ref<AccountPreset[]>([]);
 const preferences = ref<SpacePreferences | null>(null);
 const editId = ref<string | null>(null);
 const name = ref('');
+const nameField = ref<HTMLInputElement>();
 const mix = ref(copyMix(audio.mix));
 const source = ref('');
 const selected = ref('');
@@ -71,6 +72,7 @@ function edit(preset?: AccountPreset) {
   name.value = preset?.name ?? '';
   mix.value = copyMix(preset?.mix ?? audio.mix);
   source.value = '';
+  if (preset) void nextTick(() => nameField.value?.focus());
 }
 function loadDevice() {
   const preset = devices.value.find((p) => p.id === source.value);
@@ -197,7 +199,9 @@ function resetPreferences() {
           </button>
         </div>
         <form class="space-form" @submit.prevent="save">
-          <label>账户场景名称 <input v-model="name" required maxlength="40" /></label>
+          <label
+            >账户场景名称 <input ref="nameField" v-model="name" required maxlength="40"
+          /></label>
           <button
             class="quiet-link"
             type="button"
