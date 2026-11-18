@@ -3,7 +3,7 @@
 ## 1. 项目基本信息
 
 - JHaven，Your Quiet Haven, Every Night.
-- 当前版本 0.1.0-alpha.6。Sprint 5 放松引导已实现。放松记录需管理员应用 006；正式库上次核对时 003–005 仍待执行。
+- 当前版本 0.1.0-alpha.7。管理员已完成正式库 001–006 的迁移。
 - 最近更新时间 2026-11-18（Asia/Macau）。当前分支 main 跟踪 origin/main。
 
 ## 2. 已完成功能
@@ -19,7 +19,7 @@
 ## 3. 未完成功能
 
 - 三个音乐候选等待具体素材许可、动态和听感审核。专业听审、真机锁屏、整夜与 Safari/Firefox 待测。
-- 账号删除、密码找回及 AI 仍待开发。独立临床审核、儿童和青少年专版及实际设备的本机语音兼容性验证尚未完成。
+- 账号删除和密码找回仍待开发。独立临床审核、儿童和青少年专版及实际设备的本机语音兼容性验证尚未完成。
 - 生产 MySQL 8.4、HTTPS 与 Nginx 尚未实测。上线多实例前补网关统一限流、备份恢复和日志策略。
 
 ## 4. 重要技术决策
@@ -45,11 +45,32 @@
 | 无密码找回或账号删除页面   | 用户无法自助重置或删除       | 私人记录开放前处理                               |
 | 本机 3001 被占用           | 并行开发和测试端口冲突       | 自动化改走专用端口，实际部署可配置               |
 | 本机 `jhaven` 首次迁移     | 账户就绪检测已恢复 200       | 管理员已执行，三张表和两条迁移记录均通过只读核对 |
-| 正式库 Sprint 4 待迁移     | 账户个人空间暂不可用         | 已准备 Navicat 审核 SQL，等待管理员操作          |
-| 正式库 006 待迁移          | 练习可用，账户记录需具备新表 | 仅隔离 MySQL 应用过 006，已生成正式库审核 SQL    |
+| 正式库 003–006 已就绪      | 应用账号可连接私人业务四表   | 已核对结构、历史与账号读取权限；业务写入走隔离库 |
 | 本机语音依赖操作系统声线   | 缺少本机中文声线时只显示文字 | 真机发声与浏览器兼容性待验                       |
 
 ## 6. 最近一次测试结果
+
+### 正式库 003–006 迁移后验收（2026-11-18）
+
+- 只读事务确认正式库为 MySQL 9.6.0、端口 3306、`jhaven`、指纹 `357a9eeb7b4b`、应用账号 `jhaven_app` 和 UTC 会话。001–006 恰好六条，均有登记时间，按仓库迁移器的 LF 规则计算的 SHA-256 全部一致。
+- `sound_presets`、`sleep_diaries`、`user_preferences`、`relaxation_sessions` 的 `SHOW CREATE TABLE` 与同版本、校验和一致的隔离参考库相符。另核对了 `users`、`auth_sessions` 和 `schema_migrations`。正式库的业务读取探针使用应用账号和 `LIMIT 0`，验证四类查询及读取权限，未读取用户记录。
+- 使用正式库只读连接运行本地应用，`GET /api/health` 和 `GET /api/auth/status` 返回 200 `ok`，匿名查询当前用户、账户、私人空间、日记和练习记录返回 401 `UNAUTHENTICATED`。数据库未重跑迁移，未创建正式测试账号或写入正式业务记录。
+- 隔离 MySQL 下 `npm run check` 通过格式、ESLint、类型检查、91/91 单元及 API 测试和生产构建。集成测试覆盖注册登录、声音预设、睡眠日记、练习记录及双账户权限。
+- 系统 Chrome 的 `npm run test:e2e` 通过 81/81，覆盖 375、768、1440px。公共 HTTPS/Nginx 路径、Safari、Firefox、移动真机、锁屏音频及本机语音实际发声仍未验证。 [测试记录](TESTING.md)
+
+### 正式迁移 003–006 补齐演练（2026-11-18）
+
+- 应用账号只读确认正式库为 MySQL 9.6.0、3306、`jhaven`，指纹 `357a9eeb7b4b`。版本、端口、库名和两条迁移历史与 Navicat 报告一致，Navicat 连接的指纹待管理员在界面核对。001–002 的 SHA-256 一致；四张业务表均缺失，未见部分执行。
+- 从仅有 001–002 的隔离 MySQL 库演练合并 SQL，顺序创建 003–006 并登记。核对 6 条校验和、4 张表、005 对 003 的外键及锁释放，示例用户、会话和 001–002 行逐项一致。错误实例、已有部分表、整段重跑和 004 建表失败均阻止后续写入。
+- 正式库仅做只读核对。合并 SQL 位于 `artifacts/jhaven-003-006-navicat.review.sql`，备份、预检、执行及验收步骤见 [数据库说明](DATABASE.md)。
+- `npm run check` 通过格式、ESLint、类型检查、91/91 单元及 API 测试和生产构建。本轮只改迁移工具和文档，沿用上次记录的浏览器验收结论。
+
+### Sprint 5 正式环境迁移前验收（2026-11-18）
+
+- 使用应用现有连接配置连接本机 MySQL 9.6.0 的 `jhaven`，运行账号匹配 `jhaven_app`，连接时区 UTC。在只读事务中核对，`schema_migrations` 仅有 001、002，两条 SHA-256 和应用时间通过核对。003–006 无登记，`sound_presets`、`sleep_diaries`、`user_preferences`、`relaxation_sessions` 均返回 `ER_NO_SUCH_TABLE`，因此无法在该库核对 006 的结构或验收已登录的个人数据功能。
+- 本地启动的应用通过正式库只读连接运行 HTTP 检查。健康及认证就绪接口返回 200，匿名查询认证、账户、个人空间、日记、练习记录，以及匿名提交和删除练习记录，均返回 401 `UNAUTHENTICATED`。认证就绪只检查认证表。
+- 隔离库的 001–006 校验和均一致，006 表的列、复合主键、排序索引、级联外键及三项 CHECK 约束与迁移一致。`npm run check` 通过格式、ESLint、类型、生产构建及 91/91 单元与 API 用例，覆盖练习记录创建、读取、删除和双账户隔离。`npm run test:e2e` 使用 Chrome 在 375、768、1440px 共通过 81/81，覆盖认证、声音预设、日记和练习的浏览器流程。Safari、Firefox、真机和本机语音实发声待验证。 [测试记录](TESTING.md)
+- 正式库未执行 DDL、授权或业务数据读写。无论 Navicat 中是否已经完成操作，都应先比对管理员连接与应用目标的实例指纹和库名。 [数据库交接](DATABASE.md)
 
 ### Sprint 5 放松引导（2026-11-18）
 
@@ -89,10 +110,13 @@
 
 ## 7. 下一阶段任务
 
-正式库先复核并应用缺失的 003–005，再由管理员预检并执行 006。之后验证正式库的表结构和接口就绪，补 MySQL 8.4、HTTPS、真机声音及本机语音复核。继续推进账号删除、密码找回、数据导出及备份恢复。
+继续验证正式 HTTPS、目标 MySQL 8.4 和真机体验。推进账号删除、密码找回、数据导出及备份恢复。
 
 ## 8. 最近一次开发记录
 
+- 复核管理员应用的 003–006，记录正式库只读验收及隔离回归结果。建议提交 `docs: record production migration acceptance for 003-006`。 [数据库说明](DATABASE.md)
+- 新增 `--catch-up` 审核 SQL 生成模式，支持实例指纹、迁移锁和基线预检；完成从 001–002 到 006 的隔离演练。建议提交 `chore: prepare Navicat catch-up for migrations 003-006`。
+- Sprint 5 正式环境收尾核验发现应用连接的正式库缺少 003–006；本轮更新验收记录及实例核对步骤。建议提交 `docs: record Sprint 5 production database verification`。
 - Sprint 5 新增规则推荐、四项放松流程、临时音频配置、低干扰夜间界面、可选本机语音、私人记录 API 与 006 迁移。建议提交 `feat: add guided relaxation and personalized recommendations`。 [放松内容审核](RELAXATION_EVIDENCE.md)
 
 - Sprint 4 新增个人空间接口、三条增量迁移、账户预设与偏好 UI、日记与趋势、隔离测试和管理员交接。建议提交 `feat: add personal sleep space and persistence`。 [交接文档](PERSONAL_SPACE.md)
@@ -105,4 +129,4 @@
 
 ## 9. Git 版本信息
 
-Sprint 5 开始时工作区干净，`main` 与 `origin/main` 同步，已包含 Sprint 4。Sprint 5 改动待提交，具体历史通过 `git log` 查看。 [GitHub 仓库](https://github.com/HendySen01/JHaven)
+具体历史通过 `git log` 查看。 [GitHub 仓库](https://github.com/HendySen01/JHaven)

@@ -48,3 +48,40 @@ Sprint 4 新表均用 InnoDB 和用户外键，删除账户时由数据库级联
 `006_relaxation_sessions.sql` 新增 `relaxation_sessions`。使用账户和随机记录 ID 作为复合主键，按账户及 UTC 保存时间索引，用户删除时级联。仅保存练习枚举、实际秒数、完成状态和服务端保存时间。旧迁移保持原样。
 
 生成管理员审核 SQL 使用 `node scripts/prepare-space-migration.mjs --sprint5`。在 Navicat 先执行预检，核对目标 `jhaven`、前五条迁移校验和、历史总数均为五且新表数为零。003–005 尚未登记时先处理 Sprint 4。启用遇错停止，按块执行 006 并核对迁移登记。生成过程不连接数据库，应用运行账号沿用现有授权。
+
+### 迁移前的正式库核对
+
+2026-11-18 按应用配置连接的 `jhaven` 仅有 001–002 两条迁移，校验和一致。003–006 的登记和四张新表均未找到。若 Navicat 显示已完成，先在管理员连接运行以下只读查询，比对实例指纹、端口和库名。库名应在查询前由管理员选定。
+
+```sql
+SELECT DATABASE() AS schema_name, @@port AS server_port,
+       LEFT(SHA2(@@server_uuid, 256), 12) AS instance_fingerprint;
+
+SELECT name, checksum, applied_at
+FROM schema_migrations
+ORDER BY name;
+```
+
+### 从 001–002 补齐 003–006
+
+应用连接的实例指纹为 `357a9eeb7b4b`。Navicat 已确认 MySQL 版本、端口、库名和两条迁移记录与应用目标一致；执行前以上述查询比较 Navicat 的实际指纹。
+
+| 迁移 | 新表                  | 外键依赖                                 |
+| ---- | --------------------- | ---------------------------------------- |
+| 003  | `sound_presets`       | 001 的 `users`                           |
+| 004  | `sleep_diaries`       | 001 的 `users`                           |
+| 005  | `user_preferences`    | 001 的 `users` 和 003 的 `sound_presets` |
+| 006  | `relaxation_sessions` | 001 的 `users`                           |
+
+在仓库根目录执行 `node scripts/prepare-space-migration.mjs --catch-up 357a9eeb7b4b`，生成 `artifacts/jhaven-003-006-navicat.review.sql`。生成器读取原迁移并以 LF 规范化后计算完整 SHA-256，与应用迁移器一致。审核 SQL 只创建四张表，逐张成功后向 `jhaven.schema_migrations` 插入对应登记。所有目标表和引用表都以 `jhaven` 限定，001–002 不重新登记。
+
+1. 用具有建表、外键引用和迁移登记权限的独立管理员连接选中 `jhaven`，保持自动提交和外键检查开启。先单独运行文件开头的只读预检，核对 `jhaven`、`9.6.0`、`3306`、实例指纹、`expected_history=2`、`total_history=2`、`new_tables=0`。
+2. 在执行前备份整个 `jhaven` 的表结构和数据，包括迁移记录。将备份放在仓库之外的受控位置，并在独立库验证可恢复。执行期间暂停其他迁移任务。
+3. 在 Navicat 启用遇错停止，以同一连接运行文件。脚本使用与应用迁移器相同的命名锁，并在取锁后重新检查迁移历史、已有表和实例。如果某步失败，关闭连接以释放锁，先核对表结构与登记再制定恢复步骤。MySQL DDL 会隐式提交，成功建表与登记之间仍可能因中断留下部分状态。
+4. 文件结尾含可单独运行的验收 SQL。确认 `matched_history=6`、`total_history=6`、`expected_tables=4`，逐条核对迁移的文件名、校验和、登记时间及四个 `SHOW CREATE TABLE` 结果。随后用应用账号做只读探针；个人数据写入与跨账户验收继续使用隔离库。
+
+### 003–006 迁移后验收
+
+2026-11-18，管理员通过 Navicat 完成 003–006 后，应用账号在 `jhaven` 的只读事务内确认实例指纹为 `357a9eeb7b4b`，六条登记均有应用时间且 SHA-256 与源码一致。四张业务表的完整 `SHOW CREATE TABLE` 与同版本、已验证迁移哈希的隔离参考库一致，包含列、索引、检查约束及外键删除策略。
+
+正式库应用账号的四类业务读取探针均通过，使用带 `LIMIT 0` 的参数化查询。连接该库的本地应用健康及认证就绪为 200，匿名私人接口为 401。登录态业务写入及账户隔离在隔离库验收。 [测试记录](TESTING.md)

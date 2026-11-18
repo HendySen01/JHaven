@@ -21,6 +21,19 @@ E2E 首次需要 `npx playwright install chromium`，Linux CI 可加 `--with-dep
 - 原生 radio 方向键、设置开闭、Escape/外侧点击、首尾 Tab 循环和焦点返回。
 - 配色/夜景/减少动画的持久化、恢复默认、禁止 localStorage 时只在当前生效、系统减少动态效果优先。
 
+## 正式库 003–006 迁移后验收（2026-11-18，Asia/Macau）
+
+- 应用账号在 MySQL 9.6.0 的 `jhaven` 只读确认实例指纹、001–006 的 SHA-256 及应用时间、四张新表和三张基础表的结构。与同版本且迁移哈希一致的隔离库逐张比对 `SHOW CREATE TABLE`，仅忽略数据导致的自增计数差异。结构一致后再开始接口测试。
+- 使用 `LIMIT 0` 验证声音预设、偏好、睡眠日记、练习记录四类应用读取语句。正式库连接到本地应用的健康、认证就绪为 200，匿名账户与私人接口为 401。没有正式业务数据读写、迁移重跑或权限变更。
+- 端口 43306、`jhaven_test_` 专用库下注入 `JHAVEN_TEST_MYSQL=1`，`npm run check` 通过 91/91 项单元与 API 测试、ESLint、TypeScript 和生产构建。通过注册登录、声音收藏和账户预设、日记、练习记录及双账户访问控制回归。
+- 在同一隔离库通过 `PLAYWRIGHT_CHANNEL=chrome`、`PLAYWRIGHT_API_PORT=43001` 执行 `npm run test:e2e`，Chrome 三个视口（375、768、1440px）通过 81/81。检查含注册登录、收藏、日记及练习流程。正式 HTTPS/Nginx、Safari、Firefox、移动真机、锁屏音频及本机语音实际发声本轮未验证。
+
+## Sprint 5 正式环境迁移前验收（2026-11-18，Asia/Macau）
+
+- 正式配置所指的 MySQL 9.6.0 只读核对发现 `jhaven` 只有 001–002，校验和一致。003–006 的迁移记录和表均缺失。以正式库只读连接运行应用，健康和认证就绪为 200，匿名认证、账户及私人数据接口为 401。无真实业务数据读写。
+- 标准隔离库通过 001–006 校验和和 006 表结构检查。再次运行 `npm run check` 通过格式、ESLint、类型检查、生产构建、91/91 单元及 API 测试。双账户测试覆盖未登录拒绝、练习创建、重试、跨登录查询、他人无法读取或删除、本人删除，以及原有认证、账户声音场景和日记权限。
+- 隔离库下 `PLAYWRIGHT_CHANNEL=chrome` 和 `PLAYWRIGHT_API_PORT=43001` 执行 `npm run test:e2e`，通过 81/81，覆盖 375、768、1440px。Safari、Firefox、实际 iOS/Android、锁屏后音频和本机语音发声本轮未验。正式运行的 HTTPS/Nginx 路径和已登录业务未验。
+
 ## Sprint 5 验收（2026-11-18，Asia/Macau）
 
 - 在回环端口 43306 的独立 MySQL 9.6.0 上运行 `npm run db:migrate`，应用 006。正式库未连接，无 DDL、授权或账户数据写入。
@@ -102,4 +115,4 @@ Windows / Node 24.21.0 / npm 11.19.0，未新增依赖。
 
 ## 未覆盖范围
 
-Safari、Firefox、真实 iOS/Android、手机锁屏/整夜和音轨硬件听感未验证。生产 Nginx 配置实际加载与宿主尚未验证。正式库的个人空间迁移与上线验收待执行，AI 尚未开发。
+Safari、Firefox、真实 iOS/Android、手机锁屏/整夜和音轨硬件听感未验证。生产 HTTPS/Nginx尚未验证。正式库完成 001–006 迁移与只读验收，登录后的业务写入及账户隔离在隔离库验证。
