@@ -37,6 +37,22 @@
 .assistant-mode {
   justify-content: space-between;
 }
+.assistant-provider {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.88rem;
+}
+.assistant-provider select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #716783;
+  border-radius: 0.6rem;
+  background: #111225;
+  color: inherit;
+}
 .assistant-panel .quiet-link,
 .assistant-reply summary {
   min-height: 44px;
@@ -127,6 +143,17 @@
 }
 .assistant-compose .assistant-actions {
   gap: 0.5rem 0.8rem;
+}
+.assistant-keyboard-hint {
+  display: none;
+  margin: 0;
+  color: #aba5bb;
+  font-size: 0.8rem;
+}
+@media (hover: hover) and (pointer: fine) {
+  .assistant-keyboard-hint {
+    display: block;
+  }
 }
 .assistant-compose .assistant-actions > .button {
   min-width: 5.5rem;

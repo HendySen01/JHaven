@@ -1,6 +1,30 @@
 import { expect, test } from '@playwright/test';
 import { installAudioProbe, readAudioProbe } from './audio-probe.js';
 
+test('以原音轨名称找回卡片并保留收藏与音量，试听使用原风扇文件', async ({ page }) => {
+  await installAudioProbe(page);
+  await page.goto('/relax/rain');
+  const search = page.getByRole('searchbox', { name: '搜索声音' });
+  await search.fill('轻柔咀嚼拟音');
+  const volume = page.getByRole('slider', { name: '柔和颗粒声（合成）音量' });
+  await volume.fill('55');
+  await page.getByRole('button', { name: '收藏柔和颗粒声（合成）' }).click();
+  await page.reload();
+  await search.fill('咀嚼声');
+  await page.getByLabel('声音分类').selectOption('favorites');
+  await expect(volume).toHaveValue('55');
+  await expect(page.getByText('原名「轻柔咀嚼拟音」。', { exact: false })).toBeVisible();
+  await page.getByLabel('声音分类').selectOption('all');
+  await search.fill('Crispy Squishy');
+  await expect(page.getByText('轻脆碎响（合成）', { exact: true })).toBeVisible();
+  await search.fill('风扇');
+  const request = page.waitForRequest('**/audio/fan.wav');
+  await page.getByRole('button', { name: '试听柔和风扇声（合成）' }).click();
+  await request;
+  await expect(page.getByRole('button', { name: '停止试听柔和风扇声（合成）' })).toBeVisible();
+  await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0);
+});
+
 test('场景按钮播放手调混音，暂停图标与音量跨页保持一致', async ({ page }) => {
   await installAudioProbe(page);
   await page.goto('/relax/rain');

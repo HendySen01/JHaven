@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { AudioLines, Trash2 } from '@lucide/vue';
 import { TRACK_IDS, TRACKS } from '../../types/audio';
-import { BUILTIN_PRESETS } from '../../domain/audio';
+import { BUILTIN_PRESETS, trackNotes } from '../../domain/audio';
 import { useAudioEngine } from '../../composables/useAudioEngine';
 import AudioTrackControl from './AudioTrackControl.vue';
 import PlayerControls from './PlayerControls.vue';
@@ -20,7 +20,8 @@ const visibleTracks = computed(() => {
       category.value === 'all' ||
       category.value === track.category ||
       (category.value === 'favorites' && audio.favorites.includes(id));
-    return matchesCategory && `${track.name} ${track.english}`.toLowerCase().includes(search);
+    const names = [track.name, track.english, ...(trackNotes[id]?.aliases ?? [])];
+    return matchesCategory && names.some((name) => name.toLowerCase().includes(search));
   });
 });
 function save() {

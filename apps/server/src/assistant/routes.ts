@@ -1,33 +1,27 @@
 import { Router } from 'express';
-import { assistantRequest, type AssistantEvent } from '@jhaven/shared';
+import { assistantRequest, type AssistantEvent, type AssistantProviderId } from '@jhaven/shared';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
 import { assistantPlan, privateAssistantText } from './rules.js';
 import { knowledgeVersion } from './knowledge.js';
-import { modelChoice, ProviderError, type AssistantProvider } from './provider.js';
+import { ProviderError, type AssistantProvider } from './provider.js';
 import { groundedPrompt, groundedResult } from './grounded.js';
 
 const ipWindow = 10 * 60_000;
-const opening = {
-  gentle: '可以慢一点，先给自己留一点空间。',
-  brief: '今晚可以只选一件轻松的事。',
-  space: '你可以按现在觉得舒服的方式开始。',
-};
-const ending = {
-  simple: '选一个合适的步骤就够了。',
-  'take-time': '可以按自己的节奏来。',
-  'stop-here': '愿意的话，今晚就停在这里。',
-};
+type Usage = { calls: number; cost: number; inflight: number };
+type Limits = { dailyLimit: number; dailyBudget: number };
 export function createAssistantRouter({
   origin,
-  provider,
+  providers,
+  providerLimits,
   dailyLimit,
   dailyBudget = 0.1,
-  timeoutMs = 12_000,
+  timeoutMs,
   now = Date.now,
 }: {
   origin: string;
-  provider?: AssistantProvider | undefined;
+  providers: readonly AssistantProvider[];
+  providerLimits: Record<AssistantProviderId, Limits>;
   dailyLimit: number;
   dailyBudget?: number;
   timeoutMs?: number;
@@ -36,16 +30,20 @@ export function createAssistantRouter({
   const router = Router();
   const empty = z.strictObject({});
   const clients = new Map<string, { until: number; count: number }>();
+  const registry = new Map(providers.map((provider) => [provider.name, provider]));
+  const usage = new Map<AssistantProviderId, Usage>();
+  const total: Usage = { calls: 0, cost: 0, inflight: 0 };
   let nextCleanup = 0,
-    day = -1,
-    modelCalls = 0,
-    reservedCost = 0,
-    inflight = 0;
+    day = -1;
 
   router.get('/status', (request, response) => {
     if (!empty.safeParse(request.query).success)
       throw new AppError(400, 'INVALID_QUERY', '状态接口不接受查询参数。');
-    response.json({ provider: provider?.name ?? null, knowledgeVersion });
+    response.json({
+      provider: providers[0]?.name ?? null,
+      providers: providers.flatMap(({ name, model }) => (model ? [{ id: name, model }] : [])),
+      knowledgeVersion,
+    });
   });
   router.post('/chat', async (request, response) => {
     if (request.get('Origin') !== origin || request.get('Sec-Fetch-Site') === 'cross-site')
@@ -61,42 +59,69 @@ export function createAssistantRouter({
       nextCleanup = timestamp + 60_000;
     }
     const ip = request.ip ?? 'unknown';
-    const previous = clients.get(ip);
+    const previousBucket = clients.get(ip);
     const bucket =
-      previous && previous.until > timestamp ? previous : { until: timestamp + ipWindow, count: 0 };
-    if (bucket.count >= 8 || (!previous && clients.size >= 4096)) {
+      previousBucket && previousBucket.until > timestamp
+        ? previousBucket
+        : { until: timestamp + ipWindow, count: 0 };
+    if (bucket.count >= 8 || (!previousBucket && clients.size >= 4096)) {
       response.setHeader('Retry-After', Math.ceil((bucket.until - timestamp) / 1000));
       throw new AppError(429, 'ASSISTANT_LIMIT', 'JHaven 请求过于频繁，请稍后再试。');
     }
     bucket.count++;
     clients.set(ip, bucket);
 
-    const plan = assistantPlan(input.data.messages);
-    const chosen = input.data.mode === 'ai' ? provider : undefined;
-    const grounded =
-      chosen?.name === 'deepseek' && (plan.model || ('grounded' in plan && plan.grounded));
-    const selected = plan.model || grounded ? chosen : undefined;
+    const { mode, provider, model, messages, previousReply, earlierReply } = input.data;
+    const plan = assistantPlan(messages);
+    const chosen = mode === 'ai' && provider ? registry.get(provider) : undefined;
+    const authorized = chosen && chosen.model === model ? chosen : undefined;
+    const selected = plan.model || ('grounded' in plan && plan.grounded) ? authorized : undefined;
     const currentDay = Math.floor(timestamp / 86_400_000);
     if (day !== currentDay) {
       day = currentDay;
-      modelCalls = 0;
-      reservedCost = 0;
+      for (const entry of [total, ...usage.values()]) {
+        entry.calls = 0;
+        entry.cost = 0;
+      }
     }
-    // 每次预留 0.01 美元，覆盖有界提示、用户输入和输出。
-    // 不退款可覆盖断线时未收到 usage 的请求；价格变化后需重新审阅。
-    if (
-      selected &&
-      (modelCalls >= dailyLimit || reservedCost + 0.01 > dailyBudget + 1e-9 || inflight >= 3)
-    ) {
-      response.setHeader(
-        'Retry-After',
-        inflight >= 3 ? 15 : Math.ceil(((day + 1) * 86_400_000 - timestamp) / 1000),
-      );
-      throw new AppError(
-        429,
-        inflight >= 3 ? 'MODEL_CONCURRENCY' : 'MODEL_LIMIT',
-        inflight >= 3 ? 'JHaven 的 AI 请求正在排队。' : 'JHaven 的 AI 用量到达今日上限。',
-      );
+    const latest = messages.at(-1)!;
+    const previous = messages.at(-2);
+    const earlier = messages.at(-3);
+    const prior =
+      previous && previousReply && !privateAssistantText(previousReply)
+        ? { user: previous, reply: previousReply }
+        : undefined;
+    const older =
+      prior && earlier && earlierReply && !privateAssistantText(earlierReply)
+        ? { user: earlier, reply: earlierReply }
+        : undefined;
+    const detailed =
+      latest.length >= 90 || (!!prior && latest.length >= 40) || plan.sources.length > 1;
+    // 失败与取消仍占当日预留，供应商账单需独立设置额度。
+    const reservation = detailed ? 0.02 : 0.01;
+    let ledger: Usage | undefined;
+    if (selected) {
+      ledger = usage.get(selected.name) ?? { calls: 0, cost: 0, inflight: 0 };
+      usage.set(selected.name, ledger);
+      const limit = providerLimits[selected.name];
+      const busy = total.inflight >= 3 || ledger.inflight >= 2;
+      if (
+        busy ||
+        total.calls >= dailyLimit ||
+        ledger.calls >= limit.dailyLimit ||
+        total.cost + reservation > dailyBudget + 1e-9 ||
+        ledger.cost + reservation > limit.dailyBudget + 1e-9
+      ) {
+        response.setHeader(
+          'Retry-After',
+          busy ? 15 : Math.ceil(((day + 1) * 86_400_000 - timestamp) / 1000),
+        );
+        throw new AppError(
+          429,
+          busy ? 'MODEL_CONCURRENCY' : 'MODEL_LIMIT',
+          busy ? 'JHaven 的 AI 请求正在排队。' : 'JHaven 的 AI 用量到达今日上限。',
+        );
+      }
     }
     const controller = new AbortController();
     response.on('close', () => controller.abort());
@@ -119,19 +144,17 @@ export function createAssistantRouter({
         actions: override ? [] : plan.actions,
       });
     };
-    if (!selected) {
-      sendLocal(input.data.mode === 'ai' && !chosen);
+    if (!selected || !ledger) {
+      sendLocal(mode === 'ai' && !authorized);
       response.end();
       return;
     }
-    modelCalls++;
-    reservedCost += 0.01;
-    inflight++;
-    if (!grounded) {
-      send({ type: 'start', mode: 'model', source: 'local' });
-      send({ type: 'text', text: plan.text + '\n\n' });
+    for (const entry of [total, ledger]) {
+      entry.calls++;
+      entry.cost += reservation;
+      entry.inflight++;
     }
-    const timeout = AbortSignal.timeout(timeoutMs);
+    const timeout = AbortSignal.timeout(timeoutMs ?? (detailed ? 25_000 : 12_000));
     const signal = AbortSignal.any([controller.signal, timeout]);
     let cancel: (() => void) | undefined;
     try {
@@ -141,56 +164,45 @@ export function createAssistantRouter({
         signal.throwIfAborted();
         signal.addEventListener('abort', abort, { once: true });
       });
-      const latest = input.data.messages.at(-1)!;
-      const previous = input.data.messages.at(-2);
-      const previousReply = input.data.previousReply;
-      const modelInput =
-        previous && previousReply && !privateAssistantText(previousReply)
-          ? JSON.stringify({ previous: { user: previous, reply: previousReply }, latest })
-          : latest;
+      const modelInput = prior
+        ? JSON.stringify({ ...(older ? { earlier: older } : {}), previous: prior, latest })
+        : latest;
       const raw = await Promise.race([
-        grounded
-          ? selected.choose(
-              modelInput,
-              signal,
-              groundedPrompt(plan.sources, modelInput !== latest, latest),
-            )
-          : selected.choose(latest, signal),
+        selected.choose(
+          modelInput,
+          signal,
+          groundedPrompt(plan.sources, !!prior, latest),
+          detailed,
+        ),
         aborted,
       ]);
-      if (grounded) {
-        const reply = groundedResult(
-          raw,
-          plan.sources,
-          latest,
-          'intent' in plan ? plan.intent : undefined,
-        );
-        if (!reply) {
-          sendLocal(true);
-          return;
-        }
-        if ('fallback' in reply) {
-          sendLocal(true, reply.text);
-          return;
-        }
-        send({ type: 'start', mode: 'model' });
-        send({ type: 'text', text: reply.text });
-        send({
-          type: 'done',
-          sources: [...reply.sources],
-          actions: reply.actions,
-          reason: reply.reason,
-        });
+      const reply = groundedResult(
+        raw,
+        plan.sources,
+        latest,
+        'intent' in plan ? plan.intent : undefined,
+      );
+      if (!reply) {
+        sendLocal(true);
         return;
       }
-      const choice = modelChoice.safeParse(raw);
-      if (!choice.success) throw new ProviderError('invalid_output');
-      send({ type: 'text', text: opening[choice.data.opening] + '\n\n' });
-      send({ type: 'text', text: ending[choice.data.ending] });
-      send({ type: 'done', source: 'ai', sources: plan.sources, actions: plan.actions });
+      if ('fallback' in reply) {
+        sendLocal(true, reply.text);
+        return;
+      }
+      send({ type: 'start', mode: 'model' });
+      const characters = Array.from(reply.text);
+      for (let i = 0; i < characters.length; i += 180)
+        send({ type: 'text', text: characters.slice(i, i + 180).join('') });
+      send({
+        type: 'done',
+        sources: [...reply.sources],
+        actions: reply.actions,
+        reason: reply.reason,
+      });
     } catch (error) {
       if (!controller.signal.aborted) {
-        if (grounded && error instanceof ProviderError && error.code === 'invalid_output') {
+        if (error instanceof ProviderError && error.code === 'invalid_output') {
           sendLocal(true);
           return;
         }
@@ -199,36 +211,27 @@ export function createAssistantRouter({
           : error instanceof ProviderError
             ? error.code
             : 'upstream';
-        if (grounded) {
-          const statuses: Partial<Record<ProviderError['code'], number>> = {
-            upstream_rate: 429,
-            balance: 402,
-            timeout: 504,
-          };
-          response.status(statuses[code] ?? 502);
-          if (error instanceof ProviderError && error.retryAfter !== undefined)
-            response.setHeader('Retry-After', error.retryAfter);
-          response.type('json').json({
-            error: {
-              code,
-              message: 'AI 供应商未完成本次回复。',
-              requestId: String(response.locals.requestId),
-            },
-          });
-          return;
-        }
-        send({
-          type: 'error',
-          code,
-          ...(error instanceof ProviderError && error.retryAfter !== undefined
-            ? { retryAfter: error.retryAfter }
-            : {}),
+        const statuses: Partial<Record<ProviderError['code'], number>> = {
+          upstream_rate: 429,
+          balance: 402,
+          timeout: 504,
+        };
+        response.status(statuses[code] ?? 502);
+        if (error instanceof ProviderError && error.retryAfter !== undefined)
+          response.setHeader('Retry-After', error.retryAfter);
+        response.type('json').json({
+          error: {
+            code,
+            message: 'AI 供应商未完成本次回复。',
+            requestId: String(response.locals.requestId),
+          },
         });
       }
     } finally {
       cancel?.();
-      inflight--;
-      if (!response.destroyed) response.end();
+      total.inflight--;
+      ledger.inflight--;
+      if (!response.destroyed && !response.writableEnded) response.end();
     }
   });
   return router;

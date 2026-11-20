@@ -30,17 +30,23 @@ const sound = computed(
     <div v-if="evening.recommendation" class="recommendation-banner">
       <strong>{{ evening.recommendation.title }}</strong>
       <p>{{ evening.recommendation.text }}</p>
-      <RouterLink class="quiet-link" :to="evening.recommendation.to">{{ evening.recommendation.action }}<span
-          aria-hidden="true">↗</span></RouterLink>
+      <RouterLink class="quiet-link" :to="evening.recommendation.to"
+        >{{ evening.recommendation.action }}<span aria-hidden="true">↗</span></RouterLink
+      >
     </div>
     <section id="practice-choices" class="practice-choices" aria-labelledby="practice-title">
       <h2 id="practice-title">今晚的放松练习</h2>
-      <label class="practice-state">此刻的状态
+      <label class="practice-state"
+        >此刻的状态
         <select v-model="evening.selectedMood" @change="skipped = false">
           <option :value="null">暂不选择</option>
-          <option v-for="mood in moods.filter(
-            (item) => item.id !== 'journal' || evening.selectedMood === 'journal',
-          )" :key="mood.id" :value="mood.id">
+          <option
+            v-for="mood in moods.filter(
+              (item) => item.id !== 'journal' || evening.selectedMood === 'journal',
+            )"
+            :key="mood.id"
+            :value="mood.id"
+          >
             {{ mood.label }}
           </option>
         </select>
@@ -53,7 +59,9 @@ const sound = computed(
           {{ sound }}。进入后可更换，声音由你开启。
         </p>
         <div class="practice-recommendation-actions">
-          <RouterLink class="button button-secondary" :to="`/practice/${guidance.practice}`">打开推荐练习</RouterLink>
+          <RouterLink class="button button-secondary" :to="`/practice/${guidance.practice}`"
+            >打开推荐练习</RouterLink
+          >
           <button class="quiet-link" type="button" @click="skipped = true">跳过推荐</button>
         </div>
       </div>
@@ -66,8 +74,12 @@ const sound = computed(
     </section>
     <a class="quiet-link" href="#ambient-player">打开混音台<span aria-hidden="true">↓</span></a>
     <div class="scene-grid">
-      <AmbientSceneCard v-for="scene in scenes" :key="scene.id" :scene="scene"
-        :selected="audio.currentId === scene.id" />
+      <AmbientSceneCard
+        v-for="scene in scenes"
+        :key="scene.id"
+        :scene="scene"
+        :selected="audio.currentId === scene.id"
+      />
     </div>
     <p class="gentle-note">场景选择只代表你的偏好，不是睡眠诊断或治疗建议。</p>
   </div>

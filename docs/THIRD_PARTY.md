@@ -1,5 +1,9 @@
 # 第三方来源与许可登记
 
+Sprint 9 使用既有 Node Fetch、Zod 和 Playwright 实现供应商接口与素材制备。参考 DeepSeek 与 OpenAI 官方接口，无新增模型 SDK。LeiBox Skill 查询模型选择组件时远程索引不可达，使用原生 select 和现有样式。两条 Freesound CC0 原始 WAV 待获取，尚未集成；脆皮捏捏的跨平台结果均为审核记录。 [音轨来源](AUDIO_AUDIT.md)
+
+Sprint 8 检查本机 LeiBox Skill 脚本并尝试查询 Vue 聊天输入。远程索引在本次环境无法访问，继续使用原生 textarea、Vue 和项目现有样式。Freesound 的两条 CC0 电风扇录音只进入候选列表。未新增外部素材、npm 依赖或 Skill。 [候选试听](AUDIO_AUDIT.md)
+
 2026-11-20 使用 LeiBox Skill 查询 Vue 播放和聊天交互，检索到带工具与附件流程的聊天输入组件及强调动效的筛选组件。当前界面继续复用已有 Vue 控件、Lucide 和设计 token。未安装组件、依赖或额外 Skills。Freesound 原页面用于逐轨授权复核和候选试听。本轮无外部素材集成。 [音轨审计](AUDIO_AUDIT.md)
 
 本轮用 LeiBox Skill 评估日期选择交互，目录匹配项面向日程卡片拖动。也评估了 `vue-scroll-picker` 的公开 Vue 3 接口和手势支持。为复用现有对话框并控制键盘、焦点和减少动态效果，采用项目内 Vue 与 CSS Scroll Snap 实现，未引入依赖或组件代码。 [vue-scroll-picker](https://github.com/wan2land/vue-scroll-picker)

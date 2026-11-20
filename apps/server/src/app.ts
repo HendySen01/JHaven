@@ -14,11 +14,13 @@ export function createApp({
   config = loadConfig({}),
   database,
   assistantProvider,
+  assistantProviders,
   assistantTimeoutMs,
 }: {
   config?: Config;
   database?: Pool | undefined;
   assistantProvider?: AssistantProvider;
+  assistantProviders?: readonly AssistantProvider[];
   assistantTimeoutMs?: number;
 } = {}) {
   const app = express();
@@ -46,18 +48,48 @@ export function createApp({
     response.json(body);
   });
 
-  const assistant =
-    assistantProvider ??
-    (config.DEEPSEEK_API_KEY && config.AI_DAILY_REQUEST_LIMIT > 0
-      ? deepSeekProvider(config.DEEPSEEK_API_KEY, config.DEEPSEEK_MODEL, config.DEEPSEEK_BASE_URL)
-      : config.AI_OPENAI_API_KEY && config.AI_DAILY_REQUEST_LIMIT > 0
-        ? openAiProvider(config.AI_OPENAI_API_KEY, config.AI_OPENAI_MODEL)
-        : undefined);
+  const providerLimits = {
+    deepseek: {
+      dailyLimit: config.AI_DEEPSEEK_DAILY_REQUEST_LIMIT,
+      dailyBudget: config.AI_DEEPSEEK_DAILY_BUDGET_USD,
+    },
+    openai: {
+      dailyLimit: config.AI_OPENAI_DAILY_REQUEST_LIMIT,
+      dailyBudget: config.AI_OPENAI_DAILY_BUDGET_USD,
+    },
+  };
+  const configured: AssistantProvider[] = [];
+  if (config.AI_DAILY_REQUEST_LIMIT > 0 && config.AI_DAILY_BUDGET_USD >= 0.01) {
+    if (
+      config.DEEPSEEK_API_KEY &&
+      config.AI_VERIFIED_DEEPSEEK_MODEL === config.DEEPSEEK_MODEL &&
+      providerLimits.deepseek.dailyLimit > 0 &&
+      providerLimits.deepseek.dailyBudget >= 0.01
+    )
+      configured.push(
+        deepSeekProvider(config.DEEPSEEK_API_KEY, config.DEEPSEEK_MODEL, config.DEEPSEEK_BASE_URL),
+      );
+    if (
+      config.AI_OPENAI_API_KEY &&
+      config.AI_VERIFIED_OPENAI_MODEL === config.AI_OPENAI_MODEL &&
+      providerLimits.openai.dailyLimit > 0 &&
+      providerLimits.openai.dailyBudget >= 0.01
+    )
+      configured.push(
+        openAiProvider(
+          config.AI_OPENAI_API_KEY,
+          config.AI_OPENAI_MODEL,
+          fetch,
+          config.AI_OPENAI_BASE_URL,
+        ),
+      );
+  }
   app.use(
     '/api/assistant',
     createAssistantRouter({
       origin: config.APP_ORIGIN,
-      provider: assistant,
+      providers: assistantProviders ?? (assistantProvider ? [assistantProvider] : configured),
+      providerLimits,
       dailyLimit: config.AI_DAILY_REQUEST_LIMIT,
       dailyBudget: config.AI_DAILY_BUDGET_USD,
       ...(assistantTimeoutMs === undefined ? {} : { timeoutMs: assistantTimeoutMs }),

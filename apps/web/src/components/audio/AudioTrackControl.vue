@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { AudioLines, CloudRain, Heart, Play, Square, Waves, Wind } from '@lucide/vue';
 import { TRACKS, type AudioMix, type TrackId, type TrackSnapshot } from '../../types/audio';
+import { trackNotes } from '../../domain/audio';
 import VolumeSlider from './VolumeSlider.vue';
 defineProps<{
   id: TrackId;
@@ -33,6 +34,7 @@ const loadLabels = { idle: '待播放', loading: '正在加载…', ready: '已�
           @change="$emit('toggle')"
       /></label>
     </div>
+    <p v-if="trackNotes[id]" class="audio-hint">{{ trackNotes[id]?.description }}</p>
     <VolumeSlider
       :label="`${TRACKS[id].name}音量`"
       :value="mix.volume"

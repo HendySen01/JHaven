@@ -1,32 +1,34 @@
 # 音频素材清单
 
+Sprint 9 已复核用户选定的两条 CC0 实录。Freesound 原件仍待登录获取，当前 12 条正式资源与 SHA-256 延续 Sprint 8。导入流程、试听链接和授权状态见 [音轨审计](AUDIO_AUDIT.md)。
+
 审核日期 2026-11-19。目录共 12 条，文件均位于 `apps/web/public/audio/<ID>.wav`，格式为单声道 32 kHz、16 位 PCM WAV。物理设备听感另行复核。
 
-2026-11-20 逐条复核见 [音轨审计与候选试听](AUDIO_AUDIT.md)。两个合成音的卡片改为「柔和颗粒声（合成）」与「轻脆碎响（合成）」，保留文件与历史 ID。下表引用历史素材名称。
+2026-11-20 逐条复核与风扇、咀嚼及脆皮捏捏的候选见 [音轨审计与候选试听](AUDIO_AUDIT.md)。界面显示「柔和风扇声（合成）」「柔和颗粒声（合成）」和「轻脆碎响（合成）」。所有 WAV 和 ID 保留，两条实验音可用历史名称搜索。
 
 ## 轻柔拟音
 
-| ID             | 名称         | 来源与许可                                  | 时长  | 使用方式               |
-| -------------- | ------------ | ------------------------------------------- | ----- | ---------------------- |
-| soft-chew      | 轻柔咀嚼拟音 | JHaven 原创合成，LicenseRef-JHaven-Original | 12 秒 | 用户主动试听或加入混音 |
-| gentle-crinkle | 轻脆捏捏声   | JHaven 原创合成，LicenseRef-JHaven-Original | 12 秒 | 用户主动试听或加入混音 |
+| ID             | 当前名称           | 来源与许可                                  | 时长  | 使用方式               |
+| -------------- | ------------------ | ------------------------------------------- | ----- | ---------------------- |
+| soft-chew      | 柔和颗粒声（合成） | JHaven 原创合成，LicenseRef-JHaven-Original | 12 秒 | 用户主动试听或加入混音 |
+| gentle-crinkle | 轻脆碎响（合成）   | JHaven 原创合成，LicenseRef-JHaven-Original | 12 秒 | 用户主动试听或加入混音 |
 
 两条轨道由 `node scripts/prepare-textures.mjs` 生成，使用渐入渐出短包络，无第三方录音。拟音偏好因人而异，未加入默认场景和睡眠建议。
 
 ## 原有音轨
 
-| ID          | 名称       | 作者及原始来源                                                                                              | 许可     | 时长  | 状态                     |
-| ----------- | ---------- | ----------------------------------------------------------------------------------------------------------- | -------- | ----- | ------------------------ |
-| rain        | 雨声       | barkenov，[Soft rain.WAV](https://freesound.org/people/barkenov/sounds/640655/)                             | CC0-1.0  | 21 秒 | 原音重整后通过           |
-| ocean       | 海浪       | SamsterBirdies，[Calm ocean waves](https://freesound.org/people/SamsterBirdies/sounds/578524/)              | CC0-1.0  | 21 秒 | 通过                     |
-| wind        | 微风       | Nox_Sound，[林间风](https://freesound.org/people/Nox_Sound/sounds/530908/)                                  | CC0-1.0  | 21 秒 | 通过，录音可能有自然杂声 |
-| window-rain | 窗边雨声   | SignatureSoundsOrg，[Rain_Hitting_Window_9](https://freesound.org/people/SignatureSoundsOrg/sounds/869851/) | CC0-1.0  | 21 秒 | 通过                     |
-| stream      | 轻柔溪流   | SamsterBirdies，[Small brook](https://freesound.org/people/SamsterBirdies/sounds/584269/)                   | CC0-1.0  | 21 秒 | 通过                     |
-| tide        | 远处潮汐   | apintofmild，[Distant waves breaking on the shore](https://freesound.org/people/apintofmild/sounds/866070/) | CC0-1.0  | 21 秒 | 通过                     |
-| leaves      | 树叶沙沙声 | Borgory，[Soft Wind in the Trees](https://freesound.org/people/Borgory/sounds/751473/)                      | CC0-1.0  | 21 秒 | 通过                     |
-| pink        | 粉红噪音   | JHaven，[合成脚本](../scripts/prepare-audio.mjs)                                                            | 项目自制 | 12 秒 | 通过                     |
-| white       | 白噪音     | JHaven，[合成脚本](../scripts/prepare-audio.mjs)                                                            | 项目自制 | 12 秒 | 通过                     |
-| fan         | 柔和风扇声 | JHaven，[合成脚本](../scripts/prepare-audio.mjs)                                                            | 项目自制 | 12 秒 | 通过                     |
+| ID          | 名称               | 作者及原始来源                                                                                              | 许可     | 时长  | 状态                     |
+| ----------- | ------------------ | ----------------------------------------------------------------------------------------------------------- | -------- | ----- | ------------------------ |
+| rain        | 雨声               | barkenov，[Soft rain.WAV](https://freesound.org/people/barkenov/sounds/640655/)                             | CC0-1.0  | 21 秒 | 原音重整后通过           |
+| ocean       | 海浪               | SamsterBirdies，[Calm ocean waves](https://freesound.org/people/SamsterBirdies/sounds/578524/)              | CC0-1.0  | 21 秒 | 通过                     |
+| wind        | 微风               | Nox_Sound，[林间风](https://freesound.org/people/Nox_Sound/sounds/530908/)                                  | CC0-1.0  | 21 秒 | 通过，录音可能有自然杂声 |
+| window-rain | 窗边雨声           | SignatureSoundsOrg，[Rain_Hitting_Window_9](https://freesound.org/people/SignatureSoundsOrg/sounds/869851/) | CC0-1.0  | 21 秒 | 通过                     |
+| stream      | 轻柔溪流           | SamsterBirdies，[Small brook](https://freesound.org/people/SamsterBirdies/sounds/584269/)                   | CC0-1.0  | 21 秒 | 通过                     |
+| tide        | 远处潮汐           | apintofmild，[Distant waves breaking on the shore](https://freesound.org/people/apintofmild/sounds/866070/) | CC0-1.0  | 21 秒 | 通过                     |
+| leaves      | 树叶沙沙声         | Borgory，[Soft Wind in the Trees](https://freesound.org/people/Borgory/sounds/751473/)                      | CC0-1.0  | 21 秒 | 通过                     |
+| pink        | 粉红噪音           | JHaven，[合成脚本](../scripts/prepare-audio.mjs)                                                            | 项目自制 | 12 秒 | 通过                     |
+| white       | 白噪音             | JHaven，[合成脚本](../scripts/prepare-audio.mjs)                                                            | 项目自制 | 12 秒 | 通过                     |
+| fan         | 柔和风扇声（合成） | JHaven，[合成脚本](../scripts/prepare-audio.mjs)                                                            | 项目自制 | 12 秒 | 数字检查通过，实录待试听 |
 
 七条实录已逐项核对 [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/)，允许修改、再分发、商业使用，署名并非强制。项目保留作者与源链接。五条合成音仅使用项目算法，无第三方采样或署名义务，可随 JHaven 产品商用分发，未另外授予外部复用许可。精确来源、处理、下载及文件 SHA-256 在静态 manifest 和 ATTRIBUTION.txt。约 13.25 MB 随项目自托管，浏览器只加载选中的音轨。
 

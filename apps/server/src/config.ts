@@ -16,6 +16,11 @@ const environmentSchema = z.object({
   DB_TLS: z.enum(['0', '1']).default('0'),
   TRUST_LOOPBACK_PROXY: z.enum(['0', '1']).default('0'),
   AI_OPENAI_API_KEY: z.string().trim().max(512).optional(),
+  AI_OPENAI_BASE_URL: z.literal('https://api.openai.com/v1').default('https://api.openai.com/v1'),
+  AI_VERIFIED_OPENAI_MODEL: z
+    .string()
+    .regex(/^[\w.-]{0,80}$/)
+    .optional(),
   AI_OPENAI_MODEL: z
     .string()
     .regex(/^[\w.-]{1,80}$/)
@@ -26,6 +31,13 @@ const environmentSchema = z.object({
     .enum(['https://api.deepseek.com', 'https://api.deepseek.com/v1'])
     .default('https://api.deepseek.com'),
   DEEPSEEK_MODEL: z.enum(['deepseek-flash', 'deepseek-v4-pro']).default('deepseek-flash'),
+  AI_VERIFIED_DEEPSEEK_MODEL: z
+    .enum(['', 'deepseek-flash', 'deepseek-v4-pro'])
+    .default('deepseek-flash'),
+  AI_OPENAI_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(0).max(500).default(120),
+  AI_DEEPSEEK_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(0).max(500).default(120),
+  AI_OPENAI_DAILY_BUDGET_USD: z.coerce.number().min(0).max(10).default(0.1),
+  AI_DEEPSEEK_DAILY_BUDGET_USD: z.coerce.number().min(0).max(10).default(0.1),
   AI_DAILY_BUDGET_USD: z.coerce.number().min(0).max(10).default(0.1),
 });
 

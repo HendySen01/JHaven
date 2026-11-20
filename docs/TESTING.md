@@ -1,5 +1,21 @@
 # 测试与验证
 
+## Sprint 9 统一模型与音轨接入（2026-11-20）
+
+- `npm run check` 在隔离 MySQL 9.6 下通过格式、ESLint、TypeScript、126/126 项单元/API、音轨校验及生产构建。修正开发过程中出现的导入脚本 lint 和路由变量重名后完成回归。
+- `npm run test:e2e -- --workers=2` 使用系统 Chrome 在 375、768、1440px 通过 117/117。Playwright Firefox 1440px 通过 39/39，Windows Playwright WebKit 通过 25 项并因原生 Web Audio 缺失跳过 14 项。供应商同意隔离、键盘交互、原音轨收藏/音量、混音、账户与日记均有回归覆盖。实际 Safari、移动真机、系统中文输入法、锁屏后台及听感未验证。
+- 补充长期失眠走本地就医规则的断言后，`npm run check` 再次通过，Chrome 三档助手专项另通过 24/24。
+- 用模拟的 DeepSeek、OpenAI 跑同一组语境、引用、强行推荐拒绝、敏感输入与错误回退验证。检视供应商模型校验、白名单、取消、超时和独立额度。真实模型请求为 0，实际自然度及推理模式时延未验证。
+- `npm run audio:verify` 校验现有 12 条音轨。`node --check scripts/prepare-approved-audio.mjs` 通过，演练原件缺失时按预期拒绝。已审核两条 Freesound 的元数据及 CC0，原始 WAV 获取前不验证真实替代音的响度、接缝及听感。 [音轨审计](AUDIO_AUDIT.md)
+
+## Sprint 8 陪聊、键盘与音轨映射（2026-11-20）
+
+- `npm run check` 在隔离 MySQL 9.6 下通过格式、ESLint、TypeScript、123/123 项单元与 API 测试、12 条音轨校验和生产构建。首次运行两处已有 Vue 文件格式不符合 Prettier，已仅调整格式。API 初次受本地回环权限阻止，允许隔离 MySQL 和测试进程访问回环后通过。
+- 系统 Chrome 覆盖 375、768、1440px，最终全量 114/114 通过。Firefox 桌面通过 38/38，Windows Playwright WebKit 通过 24 项，构建未提供原生 Web Audio，跳过 14 项音频用例。Firefox 首轮派发合成组合事件时页面崩溃，改用页面原生事件构造后通过。Chrome 触屏断言先前假定光标位于行尾，显式设置测试光标后，键盘专项 3/3 和全量均通过。
+- API 使用 Mock 验证开放式问题的已授权上下文、知识问答、无关请求拒绝产品推荐、来源及回退。真实付费 DeepSeek 请求为 0。
+- 浏览器用例验证组合事件、Enter、Shift + Enter、触屏换行和失败重试草稿。实际系统中文输入法选字、Safari、iOS／Android 真机和屏幕阅读器未验证。
+- 独立 `npm run audio:verify` 通过 12 条 WAV 数字质量及清单检查。七条实录再次逐条核对 Freesound 的 CC0，新增试音候选尚未集成。原生 Web Audio 探针验证风扇试听加载 `fan.wav` 并有实际采样信号。音质、接缝听感、真机锁屏与后台播放未验。 [逐轨记录](AUDIO_AUDIT.md)
+
 ## 陪聊与播放器回归（2026-11-20）
 
 - 隔离 MySQL 下 `npm run check` 通过 120/120 项单元与 API 测试、格式、ESLint、类型检查和生产构建。

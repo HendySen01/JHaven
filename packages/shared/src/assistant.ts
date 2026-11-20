@@ -10,16 +10,25 @@ export const assistantAction = z.discriminatedUnion('kind', [
 const messages = z.array(z.string().trim().min(1).max(400)).min(1).max(3);
 export const assistantMode = z.enum(['ai', 'local']);
 export type AssistantMode = z.infer<typeof assistantMode>;
+export const assistantProviderId = z.enum(['openai', 'deepseek']);
+export type AssistantProviderId = z.infer<typeof assistantProviderId>;
+const modelName = z.string().regex(/^[\w.-]{1,80}$/);
 export const assistantRequest = z.union([
   z.strictObject({
     messages,
     mode: assistantMode,
+    provider: assistantProviderId.optional(),
+    model: modelName.optional(),
     previousReply: z.string().trim().min(1).max(400).optional(),
+    earlierReply: z.string().trim().min(1).max(400).optional(),
   }),
   z.strictObject({ messages, useModel: z.boolean() }).transform(({ messages, useModel }) => ({
     messages,
     mode: useModel ? ('ai' as const) : ('local' as const),
+    provider: undefined,
+    model: undefined,
     previousReply: undefined,
+    earlierReply: undefined,
   })),
 ]);
 export const assistantSource = z.strictObject({
@@ -33,7 +42,11 @@ export const assistantSource = z.strictObject({
   summary: z.string().min(1).max(240),
 });
 export const assistantStatus = z.strictObject({
-  provider: z.enum(['openai', 'deepseek']).nullable(),
+  provider: assistantProviderId.nullable(),
+  providers: z
+    .array(z.strictObject({ id: assistantProviderId, model: modelName }))
+    .max(2)
+    .optional(),
   knowledgeVersion: z.string(),
 });
 export const assistantEvent = z.discriminatedUnion('type', [

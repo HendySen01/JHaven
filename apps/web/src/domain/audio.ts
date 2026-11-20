@@ -1,5 +1,17 @@
 import { TRACK_IDS, type AudioMix, type SoundPreset, type TrackId } from '../types/audio';
 
+export const trackNotes: Partial<Record<TrackId, { aliases: string[]; description: string }>> = {
+  fan: { aliases: [], description: '滤波噪声混合谐波，真实风扇录音待试听。' },
+  'soft-chew': {
+    aliases: ['轻柔咀嚼拟音', '咀嚼声', 'chewing'],
+    description: '原名「轻柔咀嚼拟音」。当前为合成颗粒声，真实录音待试听。',
+  },
+  'gentle-crinkle': {
+    aliases: ['轻脆捏捏声', '脆皮捏捏', 'crispy squishy', 'wax cracking'],
+    description: '原名「轻脆捏捏声」。当前为合成碎响，脆皮捏捏实录待寻找。',
+  },
+};
+
 export function clampVolume(value: number) {
   return Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0;
 }

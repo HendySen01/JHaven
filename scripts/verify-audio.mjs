@@ -7,6 +7,10 @@ const catalog = JSON.parse(
 );
 const manifest = JSON.parse(await readFile(new URL('manifest.json', base), 'utf8'));
 const ids = Object.keys(catalog);
+const approvedOriginals = new Map([
+  ['soft-chew', 'https://freesound.org/people/89o_dev/sounds/680180/'],
+  ['fan', 'https://freesound.org/people/TimBahrij/sounds/191580/'],
+]);
 const wavFiles = (await readdir(base)).filter((file) => file.endsWith('.wav')).sort();
 if (
   !Array.isArray(manifest) ||
@@ -19,7 +23,8 @@ const dB = (value) => 20 * Math.log10(Math.max(1e-12, value));
 const metrics = [];
 for (const id of ids) {
   const asset = manifest.find((item) => item.id === id);
-  const recorded = catalog[id].category === 'nature';
+  const approved = approvedOriginals.get(id);
+  const recorded = catalog[id].category === 'nature' || (approved && asset?.license === 'CC0-1.0');
   if (
     !asset ||
     asset.file !== `${id}.wav` ||
@@ -31,6 +36,7 @@ for (const id of ids) {
       ? asset.license !== 'CC0-1.0' ||
         asset.licenseUrl !== 'https://creativecommons.org/publicdomain/zero/1.0/' ||
         !asset.source.startsWith('https://freesound.org/people/') ||
+        (approved && approved !== asset.source) ||
         !/^[a-f0-9]{64}$/.test(asset.sourceSha256)
       : asset.license !== 'LicenseRef-JHaven-Original' ||
         asset.source !==

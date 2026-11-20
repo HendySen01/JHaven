@@ -72,9 +72,11 @@ export function assistantPlan(messages: string[]) {
       '这里的练习面向成年人。儿童、青少年或孕期的睡眠问题，可以向适合该人群的医疗专业人员咨询。',
     );
   if (
-    /诊断|治疗|安眠药|褪黑素|停药|用药|药物|剂量|失眠症|就医|医生|打鼾|憋醒|喘醒|呼吸暂停|长期|连续.{0,5}(周|个月)|白天.{0,6}(累|影响)|保证入睡|diagnos|treat|melatonin|dosage|insomnia|sleep apnea/i.test(
+    /诊断|治疗|安眠药|褪黑素|停药|用药|药物|剂量|失眠症|就医|医生|打鼾|憋醒|喘醒|呼吸暂停|保证入睡|diagnos|treat|melatonin|dosage|insomnia|sleep apnea/i.test(
       relevant,
-    )
+    ) ||
+    (/睡|失眠|醒来|sleep/i.test(relevant) &&
+      /长期|连续.{0,5}(周|个月)|白天.{0,6}(累|影响)/.test(relevant))
   ) {
     const sources = findKnowledge('就医');
     return fixed(

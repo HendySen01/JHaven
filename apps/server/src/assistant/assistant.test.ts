@@ -9,17 +9,105 @@ import { once } from 'node:events';
 import type { Server } from 'node:http';
 
 const origin = 'http://127.0.0.1:5173';
-const responseChoice = { opening: 'gentle', ending: 'stop-here' };
+const responseChoice = { kind: 'suggest', intent: 'thoughts' };
 const testProvider = (
   choose: AssistantProvider['choose'] = vi.fn(async () => responseChoice),
-): AssistantProvider => ({ name: 'openai', choose });
+): AssistantProvider => ({ name: 'deepseek', choose });
 const post = (api: ReturnType<typeof request>, messages: string[], useModel = false) =>
-  api.post('/api/assistant/chat').set('Origin', origin).send({ messages, useModel });
+  api
+    .post('/api/assistant/chat')
+    .set('Origin', origin)
+    .send({
+      messages,
+      mode: useModel ? 'ai' : 'local',
+      ...(useModel ? { provider: 'deepseek' } : {}),
+    });
 const frames = (text: string) =>
   text
     .trim()
     .split('\n')
     .map((line) => JSON.parse(line) as AssistantEvent);
+
+it.each(['deepseek', 'openai'] as const)('%s 使用相同的上下文、引用和动作校验', async (name) => {
+  const choose = vi
+    .fn<AssistantProvider['choose']>()
+    .mockResolvedValueOnce({
+      kind: 'chat',
+      text: '窗纸挡住了风，却没挡住整间空屋的寒气。难怪明明回到家，肩膀还是缩着。',
+    })
+    .mockResolvedValueOnce({
+      kind: 'answer',
+      sourceId: 'caffeine',
+      answer: '得先看那杯茶喝在几点。{evidence}',
+      intent: null,
+    })
+    .mockResolvedValueOnce({ kind: 'suggest', intent: 'rain' });
+  const api = request(createApp({ assistantProviders: [{ name, model: 'fixture', choose }] }));
+  const send = (contents: Record<string, unknown>) =>
+    api
+      .post('/api/assistant/chat')
+      .set('Origin', origin)
+      .send({
+        mode: 'ai',
+        provider: name,
+        model: 'fixture',
+        ...contents,
+      })
+      .expect(200);
+  const messages = [
+    '窗外有风',
+    '租的屋子空荡荡的',
+    '我有好几个月都是下班就回这里，明明到了自己的地方，怎么反倒比在路上更想一直缩着肩膀呢？',
+  ];
+  const previousReply = '灯开了吗？';
+  const earlierReply = '夜风来得有点早。';
+  const chat = await send({ messages, previousReply, earlierReply });
+  expect(choose.mock.calls[0]?.[0]).toBe(
+    JSON.stringify({
+      earlier: { user: messages[0], reply: earlierReply },
+      previous: { user: messages[1], reply: previousReply },
+      latest: messages[2],
+    }),
+  );
+  expect(choose.mock.calls[0]?.[3]).toBe(true);
+  expect(choose.mock.calls[0]?.[2]).toContain('infer conversational intent provisionally');
+  expect(frames(chat.text).at(-1)).toMatchObject({ sources: [], actions: [] });
+  const cited = await send({ messages: ['浓茶会影响睡眠吗'] });
+  expect(frames(cited.text).at(-1)).toMatchObject({ sources: [{ id: 'caffeine' }], actions: [] });
+  const forced = await send({ messages: ['我只想吐槽一下今天的路况'] });
+  expect(frames(forced.text)[0]).toMatchObject({ source: 'fallback' });
+  await send({ messages: ['我的日记写了两页'] });
+  await send({ messages: ['你好'], model: 'other' });
+  await send({ messages: ['你好'], provider: undefined });
+  expect(choose).toHaveBeenCalledTimes(3);
+});
+
+it('供应商用量分别限制，并保持全局额度', async () => {
+  const choose = vi.fn(async () => ({ kind: 'chat', text: '晚上好。' }));
+  const api = request(
+    createApp({
+      config: loadConfig({ AI_DEEPSEEK_DAILY_REQUEST_LIMIT: '1', AI_DAILY_REQUEST_LIMIT: '2' }),
+      assistantProviders: [
+        { name: 'deepseek', choose },
+        { name: 'openai', choose },
+      ],
+    }),
+  );
+  const send = (provider: string) =>
+    api
+      .post('/api/assistant/chat')
+      .set('Origin', origin)
+      .send({ mode: 'ai', provider, messages: ['你好'] });
+  await send('deepseek').expect(200);
+  await send('deepseek').expect(429);
+  await send('openai').expect(200);
+  await send('openai').expect(429);
+  expect(choose).toHaveBeenCalledTimes(2);
+  expect(() => loadConfig({ AI_OPENAI_BASE_URL: 'https://127.0.0.1/v1' })).toThrow();
+  expect(() =>
+    openAiProvider('fixture', 'fixture', fetch, 'https://api.openai.com@127.0.0.1/v1'),
+  ).toThrow();
+});
 
 it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且不附证据或推荐', async () => {
   const reply = '我刚才给建议给得太快了。你是来聊天的，我先听你说。';
@@ -27,6 +115,7 @@ it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且�
   const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
   const sent = {
     mode: 'ai',
+    provider: 'deepseek',
     messages: ['今天挨了批评', '我是在吐槽，不想听道理'],
     previousReply: '要不要先休息一会儿？',
   };
@@ -39,6 +128,7 @@ it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且�
     }),
     expect.any(AbortSignal),
     expect.stringContaining('own the specific miss'),
+    false,
   );
   expect(frames(result.text)).toEqual([
     { type: 'start', mode: 'model' },
@@ -55,6 +145,7 @@ it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且�
     sent.messages[1],
     expect.any(AbortSignal),
     expect.any(String),
+    false,
   );
 });
 
@@ -85,6 +176,56 @@ it('DeepSeek 理解无关键词的需求，动作仍由服务端清单决定', a
   expect(clarification.at(-1)).toMatchObject({ actions: [], sources: [] });
 });
 
+it('开放式陪聊问题保留上一轮语境，不混入证据或产品推荐', async () => {
+  const reply = '人在乎的事越多，脑子里就越容易同时冒出几个解释。被误会时，这些解释也特别吵。';
+  const choose = vi.fn<AssistantProvider['choose']>(async () => ({ kind: 'chat', text: reply }));
+  const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
+  const latest = '她觉得我不在意她，可我明明很在意。人为什么会有这么多想法？';
+  const previous = { user: '我和女朋友吵架了', reply: '你还记得是从哪句话吵起来的吗？' };
+  const result = await api
+    .post('/api/assistant/chat')
+    .set('Origin', origin)
+    .send({
+      mode: 'ai',
+      provider: 'deepseek',
+      messages: [previous.user, latest],
+      previousReply: previous.reply,
+    })
+    .expect(200);
+  expect(choose).toHaveBeenCalledExactlyOnceWith(
+    JSON.stringify({ previous, latest }),
+    expect.any(AbortSignal),
+    expect.stringContaining('Answer the actual open question'),
+    expect.any(Boolean),
+  );
+  const prompt = choose.mock.calls[0]?.[2];
+  expect(prompt).toContain('Do not infer a third party’s motives');
+  expect(prompt).not.toMatch(/Reviewed evidence|kind":"suggest/);
+  expect(frames(result.text)).toEqual([
+    { type: 'start', mode: 'model' },
+    { type: 'text', text: reply },
+    { type: 'done', sources: [], actions: [] },
+  ]);
+});
+
+it.each(['我想听个笑话', '朋友误会我了，你有什么建议？'])(
+  '普通话题不接受模型强行推荐应用功能（%s）',
+  async (question) => {
+    const choose = vi.fn<AssistantProvider['choose']>(async () => ({
+      kind: 'suggest',
+      intent: 'rain',
+    }));
+    const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
+    const result = frames((await post(api, [question], true).expect(200)).text);
+    expect(choose).toHaveBeenCalledOnce();
+    const prompt = choose.mock.calls[0]?.[2];
+    expect(prompt).toContain('Reply naturally');
+    expect(prompt).not.toContain('"kind":"suggest"');
+    expect(result[0]).toMatchObject({ source: 'fallback' });
+    expect(result.at(-1)).toMatchObject({ actions: [], sources: [] });
+  },
+);
+
 it('引用仅来自本次检索，审核原文保留在模型组织的回答中', async () => {
   const choose = vi.fn(async () => ({
     kind: 'answer',
@@ -105,6 +246,7 @@ it('引用仅来自本次检索，审核原文保留在模型组织的回答中'
     '浓茶会影响睡眠吗',
     expect.any(AbortSignal),
     expect.stringContaining('"id":"caffeine"'),
+    false,
   );
   expect(result[1]).toMatchObject({
     text: expect.stringContaining('你可以先留意晚间喝浓茶后的感受。咖啡因可能影响入睡'),
@@ -165,7 +307,12 @@ it.each([
     upstream,
   );
   const api = request(createApp({ assistantProvider: provider }));
-  const result = await post(api, ['想听雨声'], true).expect(status).expect('Retry-After', '18');
+  const result = await api
+    .post('/api/assistant/chat')
+    .set('Origin', origin)
+    .send({ messages: ['想听雨声'], mode: 'ai', provider: 'deepseek', model: 'deepseek-flash' })
+    .expect(status)
+    .expect('Retry-After', '18');
   expect(result.body).toMatchObject({ error: { code, requestId: expect.any(String) } });
   expect(result.text).not.toContain('private upstream content');
   expect(upstream).toHaveBeenCalledTimes(1);
@@ -203,6 +350,7 @@ it.each([
     question,
     expect.any(AbortSignal),
     expect.stringContaining('Reviewed evidence: []'),
+    false,
   );
   expect(result[0]).toEqual({ type: 'start', mode, source: 'fallback' });
   expect(result[1]).toMatchObject({ text: expect.stringContaining('没有可核验') });
@@ -235,11 +383,24 @@ it('没有密钥与未同意时使用本地模式，拒绝超长和越权参数'
   const enabled = request(createApp({ assistantProvider: provider }));
   const dark = request(createApp());
   const byConfig = request(
-    createApp({ config: loadConfig({ AI_OPENAI_API_KEY: 'fixture-server-only' }) }),
+    createApp({
+      config: loadConfig({
+        AI_OPENAI_API_KEY: 'fixture-server-only',
+        AI_VERIFIED_OPENAI_MODEL: 'gpt-4.1-mini',
+      }),
+    }),
   );
   const status = await byConfig.get('/api/assistant/status').expect(200);
   expect(status.body).toMatchObject({ provider: 'openai' });
+  expect(status.body.providers).toEqual([{ id: 'openai', model: 'gpt-4.1-mini' }]);
   expect(status.text).not.toContain('fixture-server-only');
+  const unverified = request(
+    createApp({ config: loadConfig({ AI_OPENAI_API_KEY: 'fixture-server-only' }) }),
+  );
+  await unverified
+    .get('/api/assistant/status')
+    .expect(200)
+    .expect(({ body }) => expect(body.providers).toEqual([]));
   await dark
     .get('/api/assistant/status')
     .expect(200)
@@ -275,12 +436,13 @@ it('注入、敏感信息、未成年人和医疗问题不发给模型，禁止�
     '我邮箱 test@example.net，想听雨声',
     '12 岁儿童可以做呼吸吗',
     '给我开安眠药',
+    '长期失眠怎么办',
     '我不想活了',
   ]) {
     const events = frames((await post(api, [text], true).expect(200)).text);
     expect(events[0]).toEqual({ type: 'start', mode: 'local' });
     expect(events.at(-1)).toMatchObject({ type: 'done', actions: [] });
-    if (text === '给我开安眠药')
+    if (text === '给我开安眠药' || text === '长期失眠怎么办')
       expect(events.at(-1)).toMatchObject({ sources: [{ id: 'seek-care' }] });
   }
   expect(provider.choose).not.toHaveBeenCalled();
@@ -306,7 +468,8 @@ it('注入、敏感信息、未成年人和医疗问题不发给模型，禁止�
       ).expect(200)
     ).text,
   );
-  expect(bad.at(-1)).toEqual({ type: 'error', code: 'invalid_output' });
+  expect(bad[0]).toEqual({ type: 'start', mode: 'local', source: 'fallback' });
+  expect(bad.at(-1)).toMatchObject({ type: 'done' });
 });
 it('允许显式模型请求，验证响应并产生服务端准许的动作和来源', async () => {
   const provider = testProvider();
@@ -315,8 +478,8 @@ it('允许显式模型请求，验证响应并产生服务端准许的动作和�
   expect(result.headers['content-type']).toContain('application/x-ndjson');
   expect(result.headers['cache-control']).toBe('no-store');
   const output = frames(result.text);
-  expect(output[0]).toEqual({ type: 'start', mode: 'model', source: 'local' });
-  expect(output.filter((event) => event.type === 'text')).toHaveLength(3);
+  expect(output[0]).toEqual({ type: 'start', mode: 'model' });
+  expect(output.filter((event) => event.type === 'text')).toHaveLength(1);
   expect(output.at(-1)).toMatchObject({
     type: 'done',
     actions: [{ kind: 'practice', id: 'thoughts', mood: 'busy' }],
@@ -325,6 +488,8 @@ it('允许显式模型请求，验证响应并产生服务端准许的动作和�
   expect(provider.choose).toHaveBeenCalledWith(
     '想做思绪整理练习，怎么开始',
     expect.any(AbortSignal),
+    expect.any(String),
+    false,
   );
 });
 it('超时取消上游，错误后可切本地模式', async () => {
@@ -337,8 +502,8 @@ it('超时取消上游，错误后可切本地模式', async () => {
   const api = request(
     createApp({ assistantProvider: testProvider(choose), assistantTimeoutMs: 20 }),
   );
-  const timeout = await post(api, ['想放松'], true).expect(200);
-  expect(frames(timeout.text).at(-1)).toEqual({ type: 'error', code: 'timeout' });
+  const timeout = await post(api, ['想放松'], true).expect(504);
+  expect(timeout.body).toMatchObject({ error: { code: 'timeout' } });
   expect(choose.mock.calls[0]![1].aborted).toBe(true);
   expect(frames((await post(api, ['想放松']).expect(200)).text).at(-1)).toMatchObject({
     type: 'done',
@@ -350,9 +515,9 @@ it('超时取消上游，错误后可切本地模式', async () => {
       }),
     }),
   );
-  const failed = await post(fails, ['想听雨声'], true).expect(200);
+  const failed = await post(fails, ['想听雨声'], true).expect(502);
   expect(failed.text).not.toContain('secret');
-  expect(frames(failed.text).at(-1)).toEqual({ type: 'error', code: 'upstream' });
+  expect(failed.body).toMatchObject({ error: { code: 'upstream' } });
 });
 it('访客与模型预算分别限流且不会额外调用供应商', async () => {
   const provider = testProvider();
@@ -377,14 +542,19 @@ afterEach(async () => {
     server = undefined;
   }
 });
-it('模型未完成时已流出知识摘要，客户端断线会取消上游', async () => {
+it('客户端在结构化回复完成前断线会取消上游', async () => {
   let notify!: () => void;
+  let started!: () => void;
+  const upstreamStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
   const aborted = new Promise<void>((resolve) => {
     notify = resolve;
   });
   const provider = testProvider(
     (_messages, signal) =>
       new Promise((_resolve, reject) => {
+        started();
         signal.addEventListener(
           'abort',
           () => {
@@ -403,30 +573,22 @@ it('模型未完成时已流出知识摘要，客户端断线会取消上游', a
   const address = server.address();
   if (!address || typeof address === 'string') throw Error('测试监听失败');
   const controller = new AbortController();
-  const response = await fetch('http://127.0.0.1:' + address.port + '/api/assistant/chat', {
+  const response = fetch('http://127.0.0.1:' + address.port + '/api/assistant/chat', {
     signal: controller.signal,
     method: 'POST',
     headers: { Origin: origin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: ['睡前习惯是什么？'], useModel: true }),
-  });
-  const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
-  let initial = '';
-  while (!initial.includes('安静')) {
-    const part = await reader.read();
-    if (part.done) break;
-    initial += part.value;
-  }
-  expect(initial).toContain('安静');
-  expect(initial).not.toContain('"type":"done"');
+    body: JSON.stringify({ messages: ['睡前习惯是什么？'], mode: 'ai', provider: 'deepseek' }),
+  }).catch((error: unknown) => error);
+  await upstreamStarted;
   controller.abort();
   await aborted;
-  await reader.cancel().catch(() => undefined);
+  expect(await response).toMatchObject({ name: 'AbortError' });
 });
 it('OpenAI SSE 只转发限定上下文，解析分片并隔离密钥', async () => {
   const payload =
     [
-      { choices: [{ delta: { content: '{"opening":"brief",' }, finish_reason: null }] },
-      { choices: [{ delta: { content: '"ending":"simple"}' }, finish_reason: null }] },
+      { choices: [{ delta: { content: '{"kind":"chat",' }, finish_reason: null }] },
+      { choices: [{ delta: { content: '"text":"晚风有点凉。"}' }, finish_reason: null }] },
       { choices: [{ delta: {}, finish_reason: 'stop' }] },
     ]
       .map((chunk) => 'data: ' + JSON.stringify(chunk) + '\n\n')
@@ -446,9 +608,11 @@ it('OpenAI SSE 只转发限定上下文，解析分片并隔离密钥', async ()
       ),
   );
   const adapter = openAiProvider('fixture-key', 'gpt-4.1-mini', fake);
-  await expect(adapter.choose('想听雨声', new AbortController().signal)).resolves.toEqual({
-    opening: 'brief',
-    ending: 'simple',
+  await expect(
+    adapter.choose('想听雨声', new AbortController().signal, '统一规则'),
+  ).resolves.toEqual({
+    kind: 'chat',
+    text: '晚风有点凉。',
   });
   const [url, init] = fake.mock.calls[0]!;
   expect(url).toBe('https://api.openai.com/v1/chat/completions');
@@ -456,8 +620,11 @@ it('OpenAI SSE 只转发限定上下文，解析分片并隔离密钥', async ()
   expect(JSON.parse(String(init?.body))).toMatchObject({
     stream: true,
     store: false,
-    max_completion_tokens: 96,
-    messages: [{ role: 'system' }, { role: 'user', content: '想听雨声' }],
+    max_completion_tokens: 192,
+    messages: [
+      { role: 'system', content: '统一规则' },
+      { role: 'user', content: '想听雨声' },
+    ],
   });
   expect(init?.body).not.toContain('fixture-key');
 });
@@ -473,7 +640,9 @@ it.each([
     async () => new Response('sensitive upstream body', { status: Number(status) }),
   );
   const adapter = deepSeekProvider('fixture', 'deepseek-flash', 'https://api.deepseek.com', fake);
-  await expect(adapter.choose('想放松', new AbortController().signal)).rejects.toMatchObject({
+  await expect(
+    adapter.choose('想放松', new AbortController().signal, '统一规则'),
+  ).rejects.toMatchObject({
     code,
   });
 });
@@ -495,13 +664,14 @@ it('DeepSeek SSE、当前模型及禁用思考参数正确', async () => {
     deepSeekProvider('fixture', 'deepseek-flash', 'https://api.deepseek.com', fake).choose(
       '放松',
       new AbortController().signal,
+      '统一规则',
     ),
   ).resolves.toEqual(responseChoice);
   expect(fake.mock.calls[0]?.[0]).toBe('https://api.deepseek.com/chat/completions');
   expect(JSON.parse(String(fake.mock.calls[0]?.[1]?.body))).toMatchObject({
     model: 'deepseek-flash',
     thinking: { type: 'disabled' },
-    max_tokens: 96,
+    max_tokens: 192,
   });
   expect(() => loadConfig({ DEEPSEEK_MODEL: 'deepseek-chat' })).toThrow();
   expect(() => loadConfig({ DEEPSEEK_BASE_URL: 'http://localhost' })).toThrow();

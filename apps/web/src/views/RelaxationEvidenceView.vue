@@ -14,7 +14,9 @@
       </li>
       <li>
         温和呼吸与简短放松参考 NCCIH 的放松资料。按平常的方式呼吸，感到不适可以停下。
-        <a href="https://www.nccih.nih.gov/health/relaxation-techniques-what-you-need-to-know">NIH/NCCIH</a>
+        <a href="https://www.nccih.nih.gov/health/relaxation-techniques-what-you-need-to-know"
+          >NIH/NCCIH</a
+        >
       </li>
       <li>
         AASM
@@ -22,8 +24,6 @@
         <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC7853203/">AASM 临床指南，2021</a>
       </li>
     </ul>
-    <p>
-      若注意身体或呼吸会引起焦虑或不适，可以看向周围，或直接结束。
-    </p>
+    <p>若注意身体或呼吸会引起焦虑或不适，可以看向周围，或直接结束。</p>
   </article>
 </template>

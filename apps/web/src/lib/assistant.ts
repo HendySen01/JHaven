@@ -1,4 +1,9 @@
-import { assistantEvent, type AssistantEvent, type AssistantMode } from '@jhaven/shared';
+import {
+  assistantEvent,
+  type AssistantEvent,
+  type AssistantMode,
+  type AssistantProviderId,
+} from '@jhaven/shared';
 
 export const assistantErrors: Record<string, string> = {
   authentication: '模型认证失败，请联系站点维护者。可改用本地知识。',
@@ -29,7 +34,12 @@ export async function readAssistant(
   mode: AssistantMode,
   signal: AbortSignal,
   accept: (event: AssistantEvent) => void,
-  previousReply?: string,
+  context: {
+    provider?: AssistantProviderId;
+    model?: string;
+    previousReply?: string;
+    earlierReply?: string;
+  } = {},
 ) {
   const response = await fetch('/api/assistant/chat', {
     method: 'POST',
@@ -37,7 +47,7 @@ export async function readAssistant(
     cache: 'no-store',
     signal,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, mode, previousReply }),
+    body: JSON.stringify({ messages, mode, ...context }),
   });
   if (!response.ok) {
     const value = await response.json().catch(() => null);

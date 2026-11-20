@@ -63,6 +63,63 @@ test.beforeEach(async ({ page }, info) => {
   });
 });
 
+test('切到新供应商须重新授权，历史回复不会跟过去', async ({ page }) => {
+  await page.route('**/api/assistant/status', (route) =>
+    route.fulfill({
+      json: {
+        provider: 'deepseek',
+        providers: [
+          { id: 'deepseek', model: 'deepseek-flash' },
+          { id: 'openai', model: 'gpt-4.1-mini' },
+        ],
+        knowledgeVersion: 'fixture',
+      },
+    }),
+  );
+  const sent: Record<string, unknown>[] = [];
+  await page.route('**/api/assistant/chat', (route) => {
+    const body = route.request().postDataJSON();
+    sent.push(body);
+    if (body.mode === 'local') return route.continue();
+    return route.fulfill({
+      contentType: 'application/x-ndjson',
+      body:
+        [
+          { type: 'start', mode: 'model' },
+          { type: 'text', text: '今晚的风带了点凉意。' },
+          { type: 'done', sources: [], actions: [] },
+        ]
+          .map((frame) => JSON.stringify(frame))
+          .join('\n') + '\n',
+    });
+  });
+  await page.goto('/assistant');
+  const submit = async (text: string) => {
+    const field = page.getByLabel('今晚想聊什么');
+    await field.fill(text);
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await expect(field).toHaveValue('');
+  };
+  await page.getByRole('checkbox', { name: /DeepSeek/ }).check();
+  await submit('今晚风有点大');
+  await expect(page.getByText(/AI 辅助回答.*DeepSeek/)).toBeVisible();
+  await page.getByRole('combobox', { name: 'AI 供应商' }).selectOption('openai');
+  const consent = page.getByRole('checkbox', { name: /OpenAI/ });
+  await expect(consent).not.toBeChecked();
+  await submit('你好');
+  expect(sent[1]).not.toHaveProperty('provider');
+  await consent.check();
+  await submit('换个话题');
+  expect(sent[2]).toMatchObject({
+    mode: 'ai',
+    provider: 'openai',
+    model: 'gpt-4.1-mini',
+    messages: ['换个话题'],
+  });
+  expect(sent[2]).not.toHaveProperty('previousReply');
+  expect(sent[2]).not.toHaveProperty('earlierReply');
+});
+
 test('本地知识显示来源，站内操作需确认且无自动播放', async ({ page }) => {
   await installAudioProbe(page, false);
   await page.goto('/');
@@ -119,6 +176,59 @@ test('停止、重试和重新生成，离开后清空会话', async ({ page }) 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => innerWidth),
   );
+});
+
+test('桌面 Enter、触屏换行、中文组合键与请求失败时的草稿', async ({ page }) => {
+  const messages: string[] = [];
+  await page.route('**/api/assistant/chat', async (route) => {
+    messages.push(route.request().postDataJSON().messages.at(-1));
+    if (messages.length === 1) await route.abort('failed');
+    else await route.continue();
+  });
+  await page.goto('/assistant');
+  const composer = page.getByLabel('今晚想聊什么');
+  const send = page.getByRole('button', { name: '发送', exact: true });
+  await composer.fill('   ');
+  await expect(send).toBeDisabled();
+  await composer.fill('今天想聊聊');
+  await composer.evaluate((element) => (element as HTMLTextAreaElement).setSelectionRange(2, 2));
+  await composer.press('Shift+Enter');
+  await expect(composer).toHaveValue('今天\n想聊聊');
+  await composer.evaluate((element) => {
+    element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    element.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }),
+    );
+    element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+    element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  });
+  expect(messages).toEqual([]);
+  const desktop = await page.evaluate(
+    () => matchMedia('(hover: hover) and (pointer: fine)').matches,
+  );
+  // 真实按键在候选确认后单独触发。
+  await composer.evaluate(() => new Promise((resolve) => setTimeout(resolve, 60)));
+  await expect(send).toBeEnabled();
+  if (!desktop) {
+    await composer.evaluate((element) => {
+      const input = element as HTMLTextAreaElement;
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+    await composer.press('Enter');
+    await expect(composer).toHaveValue('今天\n想聊聊\n');
+    expect(messages).toEqual([]);
+    await send.click();
+  } else {
+    await composer.press('Enter');
+  }
+  await expect(page.getByText('网络连接中断，可以重试。')).toBeVisible();
+  await expect(composer).toHaveValue(desktop ? '今天\n想聊聊' : '今天\n想聊聊\n');
+  if (desktop) await expect(composer).toBeFocused();
+  if (desktop) await composer.press('Enter');
+  else await send.click();
+  await expect(page.getByText('本地知识', { exact: true })).toBeVisible();
+  await expect(composer).toHaveValue('');
+  expect(messages).toEqual(['今天\n想聊聊', '今天\n想聊聊']);
 });
 
 test('模型需逐页同意，限流后可以改用本地知识', async ({ page }) => {
