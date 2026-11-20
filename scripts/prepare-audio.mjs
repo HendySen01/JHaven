@@ -213,6 +213,7 @@ if (selected !== assets) {
     ['white', '白噪音', 907],
     ['fan', '柔和风扇声', 591],
   ]) {
+    if (manifest.some((entry) => entry.id === id && entry.license === 'CC0-1.0')) continue;
     let state = seed;
     let low = 0;
     const octaves = new Float64Array(13);

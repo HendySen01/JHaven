@@ -1,5 +1,24 @@
 # 音频素材清单
 
+## 本轮接入的六条录音（2026-11-20）
+
+原始文件保留在忽略提交的 `artifacts/user-audio/`。导出均为 32 kHz 16 位单声道 PCM WAV。两条 CC0 替换轨使用原来的 ID 和公开 URL，旧合成文件另存于 `artifacts/user-audio-rendered/`。四条 MP3 已导出并接入本机试听与混音；作者及公开分发许可待核，四条 WAV 保留在忽略目录，不进入生产构建。
+
+| ID             | 原始文件与格式                                                            | 原长 / 导出       | 分发范围            |
+| -------------- | ------------------------------------------------------------------------- | ----------------- | ------------------- |
+| `soft-chew`    | eating.wav，44.1 kHz、16 bit PCM 单声道                                   | 61.579 / 51 秒    | CC0 公开，89o_dev   |
+| `fan`          | electric-desk-fan-start-up-run-and-stop.wav，96 kHz、24 bit PCM 单声道    | 24.216 / 10 秒    | CC0 公开，TimBahrij |
+| `crunchy-chew` | crunchy-bite-and-chewing-sound-effect-eating-snack.mp3，48 kHz 立体声 MP3 | 32.496 / 28.25 秒 | 仅本机，授权待核    |
+| `mouth-asmr`   | wet-mouth-sounds-asmr.mp3，48 kHz 立体声 MP3                              | 53.808 / 39 秒    | 仅本机，授权待核    |
+| `lego-rustle`  | looking-through-lego-box-sound.mp3，48 kHz 立体声 MP3                     | 21.024 / 17.1 秒  | 仅本机，授权待核    |
+| `leaf-steps`   | Feet in leaves.mp3，44.1 kHz 单声道 MP3                                   | 63.660 / 49.1 秒  | 仅本机，授权待核    |
+
+两条已知来源分别为 [eating.wav](https://freesound.org/people/89o_dev/sounds/680180/) 和 [风扇实录](https://freesound.org/people/TimBahrij/sounds/191580/)。未从网络重新下载音频。Crispy Squishy 仍待真正外壳碎裂录音，`gentle-crinkle` 继续标为合成。
+
+已生成的四条本机录音在 `npm run dev` 自动显示，用「本机录音」筛选。需要重做时执行 `node scripts/prepare-user-audio.mjs`，可用 `PLAYWRIGHT_CHANNEL=chrome` 选择系统 Chrome。预览时可用 `JHAVEN_LOCAL_AUDIO=1`，只为回环直连开放，公共构建不含这四个文件。在没有本机录音的环境打开旧预设时，会保留这些轨道的设置，但只播放可用的音轨。
+
+## 历史记录
+
 Sprint 9 已复核用户选定的两条 CC0 实录。Freesound 原件仍待登录获取，当前 12 条正式资源与 SHA-256 延续 Sprint 8。导入流程、试听链接和授权状态见 [音轨审计](AUDIO_AUDIT.md)。
 
 审核日期 2026-11-19。目录共 12 条，文件均位于 `apps/web/public/audio/<ID>.wav`，格式为单声道 32 kHz、16 位 PCM WAV。物理设备听感另行复核。

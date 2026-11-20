@@ -1,27 +1,27 @@
 import { expect, test } from '@playwright/test';
 import { installAudioProbe, readAudioProbe } from './audio-probe.js';
 
-test('以原音轨名称找回卡片并保留收藏与音量，试听使用原风扇文件', async ({ page }) => {
+test('实录替换保留旧名搜索、收藏与音量', async ({ page }) => {
   await installAudioProbe(page);
   await page.goto('/relax/rain');
   const search = page.getByRole('searchbox', { name: '搜索声音' });
-  await search.fill('轻柔咀嚼拟音');
-  const volume = page.getByRole('slider', { name: '柔和颗粒声（合成）音量' });
+  await search.fill('柔和颗粒声');
+  const volume = page.getByRole('slider', { name: '轻柔咀嚼拟音音量' });
   await volume.fill('55');
-  await page.getByRole('button', { name: '收藏柔和颗粒声（合成）' }).click();
+  await page.getByRole('button', { name: '收藏轻柔咀嚼拟音' }).click();
   await page.reload();
   await search.fill('咀嚼声');
   await page.getByLabel('声音分类').selectOption('favorites');
   await expect(volume).toHaveValue('55');
-  await expect(page.getByText('原名「轻柔咀嚼拟音」。', { exact: false })).toBeVisible();
+  await expect(page.getByText('轻柔咀嚼拟音', { exact: true })).toBeVisible();
   await page.getByLabel('声音分类').selectOption('all');
   await search.fill('Crispy Squishy');
   await expect(page.getByText('轻脆碎响（合成）', { exact: true })).toBeVisible();
   await search.fill('风扇');
   const request = page.waitForRequest('**/audio/fan.wav');
-  await page.getByRole('button', { name: '试听柔和风扇声（合成）' }).click();
+  await page.getByRole('button', { name: '试听柔和风扇声' }).click();
   await request;
-  await expect(page.getByRole('button', { name: '停止试听柔和风扇声（合成）' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '停止试听柔和风扇声' })).toBeVisible();
   await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0);
 });
 
@@ -34,11 +34,11 @@ test('场景按钮播放手调混音，暂停图标与音量跨页保持一致',
     /lucide-pause/,
   );
   await page.locator('.player-buttons').getByRole('button', { name: '停止' }).click();
-  const chew = page.getByRole('slider', { name: '柔和颗粒声（合成）音量' });
+  const chew = page.getByRole('slider', { name: '轻柔咀嚼拟音音量' });
   const crinkle = page.getByRole('slider', { name: '轻脆碎响（合成）音量' });
   await chew.fill('55');
   await crinkle.fill('40');
-  await page.getByRole('switch', { name: '开启柔和颗粒声（合成）' }).check();
+  await page.getByRole('switch', { name: '开启轻柔咀嚼拟音' }).check();
   await page.getByRole('switch', { name: '开启轻脆碎响（合成）' }).check();
   await section.getByRole('button', { name: '播放当前混音' }).click();
   const pause = section.getByRole('button', { name: '暂停当前混音' });
@@ -53,12 +53,12 @@ test('场景按钮播放手调混音，暂停图标与音量跨页保持一致',
   await page.getByRole('button', { name: '停止声音' }).click();
   await page.goto('/relax/rain');
   await expect(chew).toHaveValue('55');
-  await page.getByRole('switch', { name: '开启柔和颗粒声（合成）' }).uncheck();
-  await page.getByRole('button', { name: '试听柔和颗粒声（合成）', exact: true }).click();
-  await expect(page.getByRole('switch', { name: '开启柔和颗粒声（合成）' })).not.toBeChecked();
+  await page.getByRole('switch', { name: '开启轻柔咀嚼拟音' }).uncheck();
+  await page.getByRole('button', { name: '试听轻柔咀嚼拟音', exact: true }).click();
+  await expect(page.getByRole('switch', { name: '开启轻柔咀嚼拟音' })).not.toBeChecked();
   await expect(chew).toHaveValue('55');
   await expect(
-    page.getByRole('button', { name: '停止试听柔和颗粒声（合成）' }).locator('svg'),
+    page.getByRole('button', { name: '停止试听轻柔咀嚼拟音' }).locator('svg'),
   ).toHaveClass(/lucide-square/);
 });
 
@@ -101,20 +101,22 @@ test('声音库筛选、收藏、单独试听、默认收声选项及静音', as
     'aria-pressed',
     'true',
   );
-  await player.getByRole('link', { name: '用途与研究依据' }).click();
+  await player.getByRole('link', { name: '关于这些声音' }).click();
   await expect(page.getByRole('heading', { name: '声音用途与研究依据' })).toBeVisible();
 });
 
-test('完整目录的十二条 WAV 在同一原生音频图解码和混合', async ({ page }) => {
+test('当前目录的所有 WAV 在同一原生音频图解码和混合', async ({ page }) => {
   await page.goto('/relax');
   const player = page.locator('#ambient-player');
-  const switches = await player.getByRole('switch').all();
-  expect(switches).toHaveLength(12);
+  const count = process.env.JHAVEN_LOCAL_AUDIO === '1' ? 16 : 12;
+  const tracks = player.getByRole('switch');
+  await expect(tracks).toHaveCount(count);
+  const switches = await tracks.all();
   for (const track of switches) await track.check();
   await player.getByRole('button', { name: '播放混音', exact: true }).click();
   await expect(player.locator('.player-status')).toContainText('正在播放');
   await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0.00001);
-  expect(await readAudioProbe(page)).toMatchObject({ contexts: 1, active: 12, decoded: 12 });
+  expect(await readAudioProbe(page)).toMatchObject({ contexts: 1, active: count, decoded: count });
   expect(
     await page.evaluate(() =>
       [...window.__jhavenAudioProbe.voices].every(
@@ -125,6 +127,34 @@ test('完整目录的十二条 WAV 在同一原生音频图解码和混合', asy
   ).toBe(true);
   await player.getByRole('button', { name: '停止', exact: true }).click();
   await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
+});
+
+test('四条本机录音可搜可试听，并拦截转发请求', async ({ page, request }) => {
+  test.skip(process.env.JHAVEN_LOCAL_AUDIO !== '1', '本机试听模式未开启');
+  await page.goto('/relax');
+  const search = page.getByRole('searchbox', { name: '搜索声音' });
+  const tracks = [
+    ['酥脆咀嚼声', 'crunchy-chew'],
+    ['轻柔口腔 ASMR', 'mouth-asmr'],
+    ['清脆积木翻动', 'lego-rustle'],
+    ['落叶脚步声', 'leaf-steps'],
+  ];
+  for (const [name, id] of tracks) {
+    await search.fill(name!);
+    const loaded = page.waitForResponse(`**/audio/${id}.wav`);
+    await page.getByRole('button', { name: '试听' + name, exact: true }).click();
+    expect((await loaded).ok()).toBe(true);
+    await expect.poll(async () => (await readAudioProbe(page)).active).toBe(1);
+    await page.getByRole('button', { name: '停止试听' + name }).click();
+    await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
+  }
+  expect(
+    (
+      await request.get('/audio/lego-rustle.wav', {
+        headers: { 'X-Forwarded-For': '203.0.113.2' },
+      })
+    ).status(),
+  ).toBe(404);
 });
 
 test('返回详情保留自定义混音，损坏或受限存储可恢复', async ({ page }) => {

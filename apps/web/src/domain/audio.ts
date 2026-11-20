@@ -1,10 +1,17 @@
 import { TRACK_IDS, type AudioMix, type SoundPreset, type TrackId } from '../types/audio';
 
 export const trackNotes: Partial<Record<TrackId, { aliases: string[]; description: string }>> = {
-  fan: { aliases: [], description: '滤波噪声混合谐波，真实风扇录音待试听。' },
+  fan: { aliases: ['电扇'], description: '桌面风扇平稳转动时的风声。' },
   'soft-chew': {
-    aliases: ['轻柔咀嚼拟音', '咀嚼声', 'chewing'],
-    description: '原名「轻柔咀嚼拟音」。当前为合成颗粒声，真实录音待试听。',
+    aliases: ['柔和颗粒声', '咀嚼声', 'chewing'],
+    description: '近距离录下的咀嚼声，保留了轻重变化。',
+  },
+  'crunchy-chew': { aliases: ['咬脆片'], description: '清楚的咬合声和轻碎响。仅本机试听。' },
+  'mouth-asmr': { aliases: ['口腔声'], description: '近距离的口腔细响。仅本机试听。' },
+  'lego-rustle': { aliases: ['LEGO', '乐高'], description: '积木翻动时的碰撞和摩擦。仅本机试听。' },
+  'leaf-steps': {
+    aliases: ['枯叶', '脚步'],
+    description: '脚步踩过落叶时的起伏碎响。仅本机试听。',
   },
   'gentle-crinkle': {
     aliases: ['轻脆捏捏声', '脆皮捏捏', 'crispy squishy', 'wax cracking'],

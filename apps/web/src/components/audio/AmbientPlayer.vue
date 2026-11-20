@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { AudioLines, Trash2 } from '@lucide/vue';
-import { TRACK_IDS, TRACKS } from '../../types/audio';
+import { availableTrackIds, localTrackIds, TRACKS } from '../../types/audio';
 import { BUILTIN_PRESETS, trackNotes } from '../../domain/audio';
 import { useAudioEngine } from '../../composables/useAudioEngine';
 import AudioTrackControl from './AudioTrackControl.vue';
@@ -12,13 +12,15 @@ const audio = useAudioEngine();
 const name = ref('');
 const query = ref('');
 const category = ref('all');
+const hasLocalRecordings = availableTrackIds.some((id) => localTrackIds.includes(id));
 const visibleTracks = computed(() => {
   const search = query.value.trim().toLowerCase();
-  return TRACK_IDS.filter((id) => {
+  return availableTrackIds.filter((id) => {
     const track = TRACKS[id];
     const matchesCategory =
       category.value === 'all' ||
       category.value === track.category ||
+      (category.value === 'local' && localTrackIds.includes(id)) ||
       (category.value === 'favorites' && audio.favorites.includes(id));
     const names = [track.name, track.english, ...(trackNotes[id]?.aliases ?? [])];
     return matchesCategory && names.some((name) => name.toLowerCase().includes(search));
@@ -32,12 +34,11 @@ function save() {
   <section id="ambient-player" class="ambient-player" aria-labelledby="player-title">
     <div class="player-heading">
       <div>
-        <p class="eyebrow">YOUR NIGHT, YOUR MIX</p>
         <h2 id="player-title">
           <AudioLines :size="24" aria-hidden="true" />{{ audio.currentName }}
         </h2>
       </div>
-      <RouterLink class="quiet-link" to="/sound-evidence">用途与研究依据</RouterLink>
+      <RouterLink class="quiet-link" to="/sound-evidence">关于这些声音</RouterLink>
     </div>
     <div class="preset-pills" aria-label="内置声音预设">
       <button
@@ -68,7 +69,7 @@ function save() {
     <div class="sound-filters">
       <label
         >搜索声音
-        <input v-model="query" type="search" maxlength="60" placeholder="例如雨声或 ocean"
+        <input v-model="query" type="search" maxlength="60" placeholder="试试雨声、风扇或积木"
       /></label>
       <label
         >声音分类
@@ -76,12 +77,13 @@ function save() {
           <option value="all">全部声音</option>
           <option value="nature">自然实录</option>
           <option value="steady">稳定背景音</option>
-          <option value="texture">轻柔拟音</option>
+          <option value="texture">近距离细响</option>
+          <option v-if="hasLocalRecordings" value="local">本机录音</option>
           <option value="favorites">我的收藏</option>
         </select></label
       >
     </div>
-    <p class="audio-hint">试听仅播放所选声音，12 秒后收声，原混音保留。先停止混音即可单独试听。</p>
+    <p class="audio-hint">想单独听听？先停下混音。试听 12 秒后会自动收声。</p>
     <p v-if="audio.auditionId" class="audio-hint">单轨试听 · {{ TRACKS[audio.auditionId].name }}</p>
     <p v-if="!visibleTracks.length" class="audio-hint" role="status">没有匹配的声音。</p>
     <div class="audio-track-grid sound-grid">

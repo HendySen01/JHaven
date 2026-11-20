@@ -1,5 +1,9 @@
 # 第三方来源与许可登记
 
+本轮使用已有 Playwright 和浏览器 Web Audio 解码本地音频，用现有 Vue 与 Vite 接入，无新增依赖。LeiBox Skill 索引查询未成功，沿用既有卡片和原生引用详情。两条 Freesound CC0 实录已集成，另外四条用户提供文件仅供本机使用。 [素材清单](AUDIO_ASSETS.md)
+
+Sprint 9 收尾使用既有 Pinia、Vue 与原生 details。LeiBox Skill 目录本轮无法访问，未新增依赖或第三方组件。睡梦知识复核了原始研究及 NINDS 公开科普资料。 [知识说明](ASSISTANT.md)
+
 Sprint 9 使用既有 Node Fetch、Zod 和 Playwright 实现供应商接口与素材制备。参考 DeepSeek 与 OpenAI 官方接口，无新增模型 SDK。LeiBox Skill 查询模型选择组件时远程索引不可达，使用原生 select 和现有样式。两条 Freesound CC0 原始 WAV 待获取，尚未集成；脆皮捏捏的跨平台结果均为审核记录。 [音轨来源](AUDIO_AUDIT.md)
 
 Sprint 8 检查本机 LeiBox Skill 脚本并尝试查询 Vue 聊天输入。远程索引在本次环境无法访问，继续使用原生 textarea、Vue 和项目现有样式。Freesound 的两条 CC0 电风扇录音只进入候选列表。未新增外部素材、npm 依赖或 Skill。 [候选试听](AUDIO_AUDIT.md)

@@ -8,15 +8,39 @@
   "leaves": { "name": "树叶沙沙声", "english": "Forest Leaves", "category": "nature" },
   "pink": { "name": "粉红噪音", "english": "Pink Noise", "category": "steady" },
   "white": { "name": "白噪音", "english": "White Noise", "category": "steady" },
-  "fan": { "name": "柔和风扇声（合成）", "english": "Soft Fan", "category": "steady" },
+  "fan": { "name": "柔和风扇声", "english": "Soft Fan", "category": "steady" },
   "soft-chew": {
-    "name": "柔和颗粒声（合成）",
-    "english": "Soft Granular Texture",
+    "name": "轻柔咀嚼拟音",
+    "english": "Soft Chewing",
     "category": "texture"
   },
   "gentle-crinkle": {
     "name": "轻脆碎响（合成）",
     "english": "Synthetic Crackle",
     "category": "texture"
+  },
+  "crunchy-chew": {
+    "name": "酥脆咀嚼声",
+    "english": "Crunchy Chewing",
+    "category": "texture",
+    "localOnly": true
+  },
+  "mouth-asmr": {
+    "name": "轻柔口腔 ASMR",
+    "english": "Soft Mouth ASMR",
+    "category": "texture",
+    "localOnly": true
+  },
+  "lego-rustle": {
+    "name": "清脆积木翻动",
+    "english": "LEGO Box Rustle",
+    "category": "texture",
+    "localOnly": true
+  },
+  "leaf-steps": {
+    "name": "落叶脚步声",
+    "english": "Feet in Leaves",
+    "category": "texture",
+    "localOnly": true
   }
 }

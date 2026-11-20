@@ -59,10 +59,14 @@ async function submit() {
     <RouterLink class="quiet-link back-link" to="/relax">返回声音场景</RouterLink>
     <h1 tabindex="-1">{{ registration ? '创建账户' : '登录 JHaven' }}</h1>
     <p v-if="!registration && auth.registeredUsername" class="foundation-notice" role="status">
-      账户已创建，请使用刚设置的密码登录。
+      账户准备好了。用刚设置的密码登录吧。
     </p>
     <p v-else class="page-lead">
-      {{ registration ? '只需用户名和密码。声音库也可直接使用。' : '登录后可查看你的账户。' }}
+      {{
+        registration
+          ? '给自己取个用户名，设好密码就行。想先听声音，也可以直接去声音库。'
+          : '回来看看你的日记和收藏。'
+      }}
     </p>
     <form class="auth-form" novalidate @submit.prevent="submit">
       <label for="auth-username">用户名</label>
@@ -121,7 +125,9 @@ async function submit() {
       </template>
       <p v-if="auth.error" class="field-error" role="alert">{{ auth.error }}</p>
       <button class="button button-primary" type="submit" :disabled="auth.pending">
-        {{ auth.pending ? '正在提交…' : registration ? '注册' : '登录' }}
+        {{
+          auth.pending ? (registration ? '正在创建…' : '正在登录…') : registration ? '注册' : '登录'
+        }}
       </button>
       <RouterLink
         v-if="!auth.pending"

@@ -6,6 +6,11 @@ export type TrackId = keyof typeof catalog;
 export const TRACK_IDS = Object.keys(catalog) as TrackId[];
 const volume = z.number().min(0).max(100);
 const mixSchema = z.record(z.enum(TRACK_IDS), z.strictObject({ enabled: z.boolean(), volume }));
+const optionalTracks = Object.fromEntries(
+  TRACK_IDS.filter(
+    (id) => id === 'soft-chew' || id === 'gentle-crinkle' || 'localOnly' in TRACKS[id],
+  ).map((id) => [id, { enabled: false, volume: 40 }]),
+);
 export const presetInput = z.strictObject({
   name: z.string().trim().min(1).max(40),
   mix: z
@@ -13,8 +18,7 @@ export const presetInput = z.strictObject({
       (value) =>
         value && typeof value === 'object' && !Array.isArray(value)
           ? {
-              'soft-chew': { enabled: false, volume: 40 },
-              'gentle-crinkle': { enabled: false, volume: 40 },
+              ...optionalTracks,
               ...value,
             }
           : value,

@@ -65,7 +65,7 @@ function playScene() {
       <div class="scene-detail">
         <div class="detail-art">
           <SceneArtwork :scene="scene.id" /><span class="detail-preview-badge"
-            >CC0 实录 · 可混合播放</span
+            >自然实录 · 可混合播放</span
           >
         </div>
         <section class="detail-copy" aria-labelledby="scene-title">
@@ -74,9 +74,7 @@ function playScene() {
           <p class="detail-mood">{{ scene.mood }}</p>
           <p class="page-lead">{{ scene.description }}</p>
           <p class="scene-texture">{{ scene.texture }}</p>
-          <p class="audio-hint">
-            手动调过的混音会继续保留。可在下方选择预设、调节音量、另存或设置定时。
-          </p>
+          <p class="audio-hint">你调过的混音会保留。往下可调音量，或给声音设个收尾时间。</p>
           <button
             class="button button-primary detail-play"
             type="button"

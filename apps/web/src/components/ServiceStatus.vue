@@ -23,9 +23,7 @@ onMounted(() => void service.check());
         <CircleHelp v-else :size="18" aria-hidden="true" />
         {{ label }}
       </p>
-      <p class="text-muted text-sm mt-2">
-        此检查仅确认服务响应。环境音可在浏览器播放，私人记录需要账户与数据库。
-      </p>
+      <p class="text-muted text-sm mt-2">这里检查连接。此刻即使连不上账户，也可以先去听声音。</p>
     </div>
     <button
       class="button button-secondary"

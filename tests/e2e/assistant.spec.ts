@@ -38,9 +38,9 @@ test('有来源的 AI 回答保留推荐理由与确认步骤', async ({ page })
   await page.goto('/assistant');
   await page.getByRole('checkbox', { name: /DeepSeek/ }).check();
   await page.getByRole('button', { name: '白噪声有助睡眠吗？' }).click();
-  await expect(page.getByText('AI 辅助回答')).toBeVisible();
+  await expect(page.getByText('回复来源', { exact: true })).toHaveCount(0);
   await expect(page.getByText('先低音量试听')).toBeVisible();
-  await page.getByText('查看来源与证据').click();
+  await page.getByText('参考资料').click();
   await expect(page.getByRole('link', { name: '审核来源' })).toHaveAttribute(
     'href',
     'https://pmc.ncbi.nlm.nih.gov/articles/PMC9163611/',
@@ -102,7 +102,9 @@ test('切到新供应商须重新授权，历史回复不会跟过去', async ({
   };
   await page.getByRole('checkbox', { name: /DeepSeek/ }).check();
   await submit('今晚风有点大');
-  await expect(page.getByText(/AI 辅助回答.*DeepSeek/)).toBeVisible();
+  await expect(page.getByText('DeepSeek', { exact: true })).toBeVisible();
+  await expect(page.getByText('参考资料', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('回复来源', { exact: true })).toHaveCount(0);
   await page.getByRole('combobox', { name: 'AI 供应商' }).selectOption('openai');
   const consent = page.getByRole('checkbox', { name: /OpenAI/ });
   await expect(consent).not.toBeChecked();
@@ -129,7 +131,7 @@ test('本地知识显示来源，站内操作需确认且无自动播放', async
   await page.getByLabel('今晚想聊什么').fill('白噪声有助睡眠吗？');
   await page.getByRole('button', { name: '发送' }).focus();
   await page.keyboard.press('Enter');
-  await page.getByText('查看来源与证据').click();
+  await page.getByText('参考资料').click();
   await expect(page.getByRole('link', { name: /Capezuti/ })).toHaveAttribute(
     'href',
     'https://pmc.ncbi.nlm.nih.gov/articles/PMC9163611/',
@@ -144,7 +146,7 @@ test('本地知识显示来源，站内操作需确认且无自动播放', async
   await expect(page).toHaveURL('/relax/rain');
   expect(await readAudioProbe(page)).toMatchObject({ contexts: 0 });
 });
-test('停止、重试和重新生成，离开后清空会话', async ({ page }) => {
+test('停止、重试、重新生成及站内返回保留会话与草稿，刷新后清除', async ({ page }) => {
   let calls = 0;
   let release: () => void = () => {};
   await page.route('**/api/assistant/chat', async (route) => {
@@ -172,10 +174,99 @@ test('停止、重试和重新生成，离开后清空会话', async ({ page }) 
   await expect(page.getByRole('button', { name: '推荐 · 思绪整理' })).toBeVisible();
   await page.getByRole('link', { name: '关于', exact: true }).click();
   await page.getByRole('link', { name: '睡前助手' }).click();
+  await expect(page.getByText('思绪停不下来', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('今晚想聊什么')).toHaveValue('尚未发送的新问题');
+  await page.reload();
   await expect(page.getByRole('button', { name: '思绪停不下来' })).toBeVisible();
+  await expect(page.getByLabel('今晚想聊什么')).toHaveValue('');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => innerWidth),
   );
+});
+
+test('21 轮完整可读，流式片段尊重阅读位置，模型上下文仍受限', async ({ page }) => {
+  const sent: { messages: string[]; earlierReply?: string }[] = [];
+  await page.exposeFunction('captureChat', (body: (typeof sent)[number]) => sent.push(body));
+  await page.route('**/api/assistant/status', (route) =>
+    route.fulfill({
+      json: {
+        provider: 'deepseek',
+        providers: [{ id: 'deepseek', model: 'deepseek-flash' }],
+        knowledgeVersion: 'fixture',
+      },
+    }),
+  );
+  await page.addInitScript(() => {
+    const capture = (window as Window & { captureChat?: (body: unknown) => Promise<number> })
+      .captureChat;
+    if (!capture) throw new Error('缺少聊天测试记录器');
+    const original = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      if (input !== '/api/assistant/chat') return original(input, init);
+      const body = JSON.parse(String(init?.body)) as { messages: string[] };
+      await capture(body);
+      const current = body.messages.at(-1)!;
+      const encoder = new TextEncoder();
+      return new Response(
+        new ReadableStream({
+          start(stream) {
+            const emit = (event: object) =>
+              stream.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+            const finish = () => {
+              emit({ type: 'text', text: '回声 ' + current + '。'.repeat(95) });
+              emit({ type: 'done', sources: [], actions: [] });
+              stream.close();
+            };
+            emit({ type: 'start', mode: 'model' });
+            if (current === '慢一点再答') {
+              emit({ type: 'text', text: '正在等下一段' });
+              window.addEventListener('continue-chat-test', finish, { once: true });
+            } else finish();
+          },
+        }),
+        { headers: { 'Content-Type': 'application/x-ndjson' } },
+      );
+    };
+  });
+  await page.goto('/assistant');
+  const consent = page.getByRole('checkbox', { name: '使用 DeepSeek 聊天' });
+  await expect(consent).not.toBeChecked();
+  await expect(page.getByText(/本次消息和最多两轮.*日记不会自动发送/)).toBeVisible();
+  await consent.check();
+  const draft = page.getByLabel('今晚想聊什么');
+  const submit = async (question: string) => {
+    await draft.fill(question);
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+  };
+  for (let n = 1; n <= 21; n++) {
+    await submit(`话题 ${n}`);
+    await expect(draft).toHaveValue('');
+  }
+  const region = page.getByRole('region', { name: '完整对话' });
+  const gap = () =>
+    region.evaluate((pane) => pane.scrollHeight - pane.clientHeight - pane.scrollTop);
+  await expect(region.locator('.assistant-turn')).toHaveCount(21);
+  await expect.poll(gap).toBeLessThan(3);
+  expect(sent[0]?.messages).toEqual(['话题 1']);
+  expect(sent[20]?.messages).toEqual(['话题 19', '话题 20', '话题 21']);
+  expect(sent[20]?.earlierReply).toContain('话题 19');
+  await submit('慢一点再答');
+  await expect(page.getByText('正在等下一段')).toBeVisible();
+  await region.evaluate((pane) => {
+    pane.scrollTop = 0;
+  });
+  const latest = page.getByRole('button', { name: '回到底部' });
+  await expect(latest).toBeVisible();
+  await draft.fill('下一条草稿');
+  await page.evaluate(() => window.dispatchEvent(new Event('continue-chat-test')));
+  await expect(page.getByRole('button', { name: '重新生成' })).toBeVisible();
+  expect(await region.evaluate((pane) => pane.scrollTop)).toBe(0);
+  await region.scrollIntoViewIfNeeded();
+  await expect(region.getByText('话题 1', { exact: true })).toBeInViewport();
+  await expect(draft).toHaveValue('下一条草稿');
+  await latest.click();
+  await expect.poll(gap).toBeLessThan(3);
+  await expect(region.locator('.assistant-turn')).toHaveCount(22);
 });
 
 test('桌面 Enter、触屏换行、中文组合键与请求失败时的草稿', async ({ page }) => {
@@ -361,7 +452,7 @@ test('明确同意后只带紧邻的已完成 AI 对话，知识问答可显示�
     });
   });
   await page.goto('/assistant');
-  await page.getByRole('checkbox', { name: /同意.*DeepSeek/ }).check();
+  await page.getByRole('checkbox', { name: '使用 DeepSeek 聊天' }).check();
   for (const [index, question] of questions.entries()) {
     await page.getByLabel('今晚想聊什么').fill(question);
     await page.getByRole('button', { name: '发送', exact: true }).click();
@@ -374,6 +465,6 @@ test('明确同意后只带紧邻的已完成 AI 对话，知识问答可显示�
   }
   expect(incoming).toHaveLength(5);
   await expect(page.getByRole('button', { name: /^推荐 ·/ })).toHaveCount(0);
-  await page.getByText('查看来源与证据', { exact: true }).click();
+  await page.getByText('参考资料', { exact: true }).click();
   await expect(page.getByRole('link', { name: 'NHLBI 睡眠习惯' })).toBeVisible();
 });

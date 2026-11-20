@@ -26,7 +26,7 @@ const sound = computed(
     </RouterLink>
     <p class="eyebrow">CHOOSE YOUR EVENING</p>
     <h1 tabindex="-1">今晚，想在哪里停留？</h1>
-    <p class="page-lead">选一处场景，或混合自己的夜晚。只有你点击播放，声音才会开始。</p>
+    <p class="page-lead">听现成的场景，或调一份自己的混音。声音由你开启。</p>
     <div v-if="evening.recommendation" class="recommendation-banner">
       <strong>{{ evening.recommendation.title }}</strong>
       <p>{{ evening.recommendation.text }}</p>
@@ -81,6 +81,6 @@ const sound = computed(
         :selected="audio.currentId === scene.id"
       />
     </div>
-    <p class="gentle-note">场景选择只代表你的偏好，不是睡眠诊断或治疗建议。</p>
+    <p class="gentle-note">喜欢哪种声音，听过才知道。</p>
   </div>
 </template>

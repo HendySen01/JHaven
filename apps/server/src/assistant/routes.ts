@@ -171,7 +171,7 @@ export function createAssistantRouter({
         selected.choose(
           modelInput,
           signal,
-          groundedPrompt(plan.sources, !!prior, latest),
+          groundedPrompt(plan.sources, !!prior, latest, plan.factual),
           detailed,
         ),
         aborted,
@@ -181,6 +181,7 @@ export function createAssistantRouter({
         plan.sources,
         latest,
         'intent' in plan ? plan.intent : undefined,
+        plan.factual,
       );
       if (!reply) {
         sendLocal(true);

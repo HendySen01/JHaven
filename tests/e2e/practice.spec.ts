@@ -23,7 +23,7 @@ test('访客练习支持键盘、暂停、跳过、静音和重新开始', async
   await expect(page.getByRole('heading', { name: '轻轻留意' })).toBeFocused();
   await page.getByRole('button', { name: '结束练习' }).click();
   await expect(page.getByRole('heading', { name: '练习已结束' })).toBeFocused();
-  await expect(page.getByText('访客练习无需注册，本次不会保存。')).toBeVisible();
+  await expect(page.getByText('这次练习不会保存。下次想做，随时回来。')).toBeVisible();
   await page.getByRole('button', { name: '再练一次' }).click();
   await page.getByRole('button', { name: '开始练习' }).click();
   await expect(page.getByRole('heading', { name: '选择舒服的姿势' })).toBeVisible();
@@ -62,7 +62,7 @@ test('从播放器进入练习不会停止既有混音，退出后仍在播放',
   await expect.poll(async () => (await readAudioProbe(page)).active).toBeGreaterThan(0);
   await page.getByRole('link', { name: '思绪整理', exact: true }).click();
   await page.getByRole('button', { name: '开始练习' }).click();
-  await expect(page.getByText(/当前播放器的声音与计时会继续/)).toBeVisible();
+  await expect(page.getByText(/现在的声音和计时会继续/)).toBeVisible();
   await page.getByRole('button', { name: '结束练习' }).click();
   await page.getByRole('link', { name: '返回练习选择' }).click();
   await expect(page.locator('#ambient-player .player-status')).toContainText('正在播放');

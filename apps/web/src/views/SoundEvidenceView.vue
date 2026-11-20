@@ -3,7 +3,7 @@
     <RouterLink class="quiet-link back-link" to="/relax#ambient-player">返回声音库</RouterLink>
     <h1 tabindex="-1">声音用途与研究依据</h1>
     <p class="page-lead">
-      声音用于营造自己喜欢的背景，可能让部分轻微杂音没那么显眼。请选择舒适的低音量，保留对警报和其他重要声音的感知。
+      声音可以给房间多一点背景。先从舒服的低音量听起，留意警报和周围重要的声音。
     </p>
     <section>
       <h2>自然实录</h2>

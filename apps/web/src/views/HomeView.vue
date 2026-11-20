@@ -21,14 +21,12 @@ const settings = usePreferencesStore();
           今晚，<br />让世界慢一点<span class="title-stop">。</span>
         </h1>
         <p class="hero-tagline">{{ APP_INFO.tagline }}</p>
-        <p class="hero-description">把喧嚣留在远处，<br />为自己留一个安静的角落。</p>
+        <p class="hero-description">听一点喜欢的声音，<br />或把今天写下来。</p>
         <div class="hero-actions">
           <PrimaryButton to="/relax">开始放松</PrimaryButton
           ><a class="quiet-link" href="#scenes">探索夜晚的声音<span aria-hidden="true">↓</span></a>
         </div>
-        <p class="hero-note">
-          <MoonStar :size="14" aria-hidden="true" />自然实录与稳定背景音 · 由你开启
-        </p>
+        <p class="hero-note"><MoonStar :size="14" aria-hidden="true" />想听时，再按播放</p>
       </div>
       <div v-if="settings.preferences.showLandscape" class="scene-caption" aria-hidden="true">
         <span>STAY A LITTLE. DO A LITTLE LESS.</span><span>今夜，不必着急。</span>
@@ -40,7 +38,7 @@ const settings = usePreferencesStore();
         <div class="section-heading">
           <div>
             <p class="eyebrow">FIND YOUR QUIET</p>
-            <h2 id="scenes-title">选一处，喜欢的夜晚</h2>
+            <h2 id="scenes-title">今晚想听什么？</h2>
           </div>
           <RouterLink class="quiet-link" to="/relax"
             >全部场景<ArrowUpRight :size="16" aria-hidden="true"
@@ -65,7 +63,7 @@ const settings = usePreferencesStore();
         <div>
           <p class="eyebrow">A PAGE, JUST FOR YOU</p>
           <h2 id="journal-title">给今天，留一页空白</h2>
-          <p>按自己的节奏记录作息和休息感。睡眠日记仅本人可见。</p>
+          <p>睡了多久、醒来感觉如何，挑想写的记下就好。日记只有你能看。</p>
         </div>
         <RouterLink class="quiet-link" to="/journal"
           >了解睡眠日记<ArrowUpRight :size="17" aria-hidden="true"

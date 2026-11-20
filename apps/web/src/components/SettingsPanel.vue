@@ -6,7 +6,7 @@ defineEmits<{ close: [] }>();
 </script>
 <template>
   <ModalPanel title="让这里，更像你的夜晚" @close="$emit('close')">
-    <p class="settings-intro">一些轻轻的调整，让休息更自在。</p>
+    <p class="settings-intro">夜景、配色和动效，都可以按你的习惯来。</p>
     <fieldset class="palette-options">
       <legend>夜晚配色</legend>
       <label
@@ -28,8 +28,7 @@ defineEmits<{ close: [] }>();
     </fieldset>
     <label class="setting-row">
       <span
-        ><strong>减少动画</strong
-        ><small>关闭界面过渡；系统的减少动态效果偏好始终优先。</small></span
+        ><strong>减少动画</strong><small>减少界面过渡。也会尊重设备的减少动效设置。</small></span
       >
       <input
         type="checkbox"
@@ -51,7 +50,7 @@ defineEmits<{ close: [] }>();
     </label>
     <div class="settings-storage" :class="{ 'storage-warning': settings.storageFailed }">
       <p role="status">{{ settings.storageMessage }}</p>
-      <p>不会保存日记、今晚状态或账户信息。此设置仅作用于当前浏览器配置。</p>
+      <p>这些偏好只留在当前浏览器，和账户里的日记分开。</p>
     </div>
     <div class="settings-actions">
       <button type="button" class="quiet-link reset-button" @click="settings.reset">恢复默认</button

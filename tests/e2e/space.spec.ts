@@ -129,7 +129,7 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   await hours.press('ArrowDown');
   await hours.press('ArrowDown');
   await picker.getByRole('button', { name: '应用日期和时间' }).click();
-  await page.getByRole('combobox', { name: '主观休息感' }).selectOption({ label: '较好' });
+  await page.getByRole('combobox', { name: '醒来感觉' }).selectOption({ label: '较好' });
   await page.getByLabel('备注（可选）').fill('隔离库的跨午夜记录');
   await page.getByRole('button', { name: '保存日记' }).click();
   await expect(page.getByText('日记已保存。')).toBeVisible();

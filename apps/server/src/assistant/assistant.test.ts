@@ -28,6 +28,76 @@ const frames = (text: string) =>
     .split('\n')
     .map((line) => JSON.parse(line) as AssistantEvent);
 
+it.each(['deepseek', 'openai'] as const)('%s 普通陪聊保留接话，去掉多余建议', async (provider) => {
+  const choose = vi.fn(async () => ({
+    kind: 'chat',
+    text: '看来客厅已经换了主人。你可以先把窗关上。',
+  }));
+  const api = request(createApp({ assistantProvider: { name: provider, choose } }));
+  const send = (question: string) =>
+    api
+      .post('/api/assistant/chat')
+      .set('Origin', origin)
+      .send({ messages: [question], mode: 'ai', provider })
+      .expect(200);
+  for (const question of [
+    '今天闷得像在蒸笼里',
+    '有蚊子',
+    '它要把我家占领了，我准备抱着电脑跑路了',
+    '我又不想睡了，想起来玩',
+    '连墙都在散热，我抱着电脑坐在门口发呆',
+  ]) {
+    const reply = frames((await send(question)).text);
+    expect(reply[1]).toEqual({ type: 'text', text: '看来客厅已经换了主人。' });
+    expect(reply.at(-1)).toMatchObject({ actions: [], sources: [] });
+  }
+  expect(frames((await send('屋里还有蚊子，有什么办法？')).text)[1]).toMatchObject({
+    text: expect.stringContaining('你可以先把窗关上'),
+  });
+});
+
+it('睡梦知识与短追问共享可信来源，普通作息和反向请求不产生推荐', async () => {
+  const choose = vi
+    .fn<AssistantProvider['choose']>()
+    .mockResolvedValueOnce({
+      kind: 'answer',
+      sourceId: 'dreaming',
+      answer: '这是两个问题：做梦的条件，以及梦从哪里来。{evidence}',
+      intent: null,
+    })
+    .mockResolvedValue({ kind: 'chat', text: '听着像是今晚临时换了个频道。' });
+  const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
+  const question = '睡着了会做梦吗';
+  for (const text of [question, '为什么会做梦', '非快速眼动阶段也可能有梦境吗？']) {
+    const reply = frames((await post(api, [text]).expect(200)).text);
+    expect(reply[1]).toMatchObject({ text: expect.stringContaining('还不能解释梦为什么会出现') });
+    expect(reply.at(-1)).toMatchObject({ sources: [{ id: 'dreaming' }], actions: [] });
+  }
+  const following = await api
+    .post('/api/assistant/chat')
+    .set('Origin', origin)
+    .send({
+      mode: 'ai',
+      provider: 'deepseek',
+      messages: [question, '那为什么会这样？'],
+      previousReply: '睡着后可以做梦。',
+    })
+    .expect(200);
+  expect(choose.mock.calls[0]?.[2]).toContain('"id":"dreaming"');
+  expect(frames(following.text).at(-1)).toMatchObject({
+    sources: [{ id: 'dreaming' }],
+    actions: [],
+  });
+  for (const text of ['我现在又不想睡了，我想起来玩', '我平时都是12点睡', '今晚不用给我推荐练习']) {
+    const reply = frames((await post(api, [text], true).expect(200)).text);
+    expect(reply[0]).toMatchObject({ mode: 'model' });
+    expect(reply.at(-1)).toMatchObject({ sources: [], actions: [] });
+    const prompt = choose.mock.lastCall?.[2];
+    expect(prompt).toContain('a personal habit');
+    expect(prompt).not.toContain('"kind":"suggest"');
+  }
+});
+
 it.each(['deepseek', 'openai'] as const)('%s 使用相同的上下文、引用和动作校验', async (name) => {
   const choose = vi
     .fn<AssistantProvider['choose']>()
@@ -646,32 +716,42 @@ it.each([
     code,
   });
 });
-it('DeepSeek SSE、当前模型及禁用思考参数正确', async () => {
+it('DeepSeek SSE 使用当前模型，复杂请求启用低档思考且只返回最终正文', async () => {
   const fake = vi.fn<typeof fetch>(
     async () =>
       new Response(
         'data: ' +
           JSON.stringify({
             choices: [
-              { delta: { content: JSON.stringify(responseChoice) }, finish_reason: 'stop' },
+              {
+                delta: {
+                  reasoning_content: '不展示的内部推理',
+                  content: JSON.stringify(responseChoice),
+                },
+                finish_reason: 'stop',
+              },
             ],
           }) +
           '\n\ndata: [DONE]\n\n',
         { headers: { 'Content-Type': 'text/event-stream' } },
       ),
   );
-  await expect(
-    deepSeekProvider('fixture', 'deepseek-flash', 'https://api.deepseek.com', fake).choose(
-      '放松',
-      new AbortController().signal,
-      '统一规则',
-    ),
-  ).resolves.toEqual(responseChoice);
+  const adapter = deepSeekProvider('fixture', 'deepseek-flash', 'https://api.deepseek.com', fake);
+  const signal = new AbortController().signal;
+  await expect(adapter.choose('放松', signal, '统一规则')).resolves.toEqual(responseChoice);
+  await expect(adapter.choose('复杂输入', signal, '统一规则', true)).resolves.toEqual(
+    responseChoice,
+  );
   expect(fake.mock.calls[0]?.[0]).toBe('https://api.deepseek.com/chat/completions');
   expect(JSON.parse(String(fake.mock.calls[0]?.[1]?.body))).toMatchObject({
     model: 'deepseek-flash',
     thinking: { type: 'disabled' },
     max_tokens: 192,
+  });
+  expect(JSON.parse(String(fake.mock.calls[1]?.[1]?.body))).toMatchObject({
+    thinking: { type: 'enabled' },
+    reasoning_effort: 'low',
+    max_tokens: 1024,
   });
   expect(() => loadConfig({ DEEPSEEK_MODEL: 'deepseek-chat' })).toThrow();
   expect(() => loadConfig({ DEEPSEEK_BASE_URL: 'http://localhost' })).toThrow();

@@ -23,14 +23,12 @@ async function logout() {
 <template>
   <div class="content-page space-page">
     <h1 tabindex="-1">我的账户</h1>
-    <p v-if="checking" class="page-lead" role="status">正在检查会话…</p>
+    <p v-if="checking" class="page-lead" role="status">正在打开你的账户…</p>
     <template v-else-if="auth.user">
       <p class="page-lead">
         用户名：<strong>{{ auth.user.username }}</strong>
       </p>
-      <p class="auth-hint">
-        账户场景和默认播放设置保存在个人账户。设备收藏和设置可继续在当前浏览器使用。
-      </p>
+      <p class="auth-hint">存到账户的场景和默认播放设置会跟着你。设备收藏仍留在这个浏览器。</p>
       <p v-if="auth.error" class="field-error" role="alert">{{ auth.error }}</p>
       <div class="auth-account-actions">
         <RouterLink to="/relax" class="button button-secondary">打开声音库</RouterLink>

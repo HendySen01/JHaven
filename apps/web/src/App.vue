@@ -92,9 +92,9 @@ watch(
     </main>
     <footer class="site-footer">
       <p>{{ APP_INFO.tagline }}</p>
-      <p>不必追赶睡眠，只为休息留一点空间。</p>
+      <p>留一点时间，照自己的节奏来。</p>
       <div class="footer-meta">
-        <span>JHaven · {{ APP_INFO.version }} · 环境音 Alpha</span
+        <span>JHaven · {{ APP_INFO.version }} · Alpha</span
         ><RouterLink to="/about#boundaries">使用边界与隐私</RouterLink>
       </div>
     </footer>

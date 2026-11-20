@@ -2,7 +2,9 @@
   <article class="content-page">
     <RouterLink class="quiet-link" to="/relax#practice-choices">返回放松练习</RouterLink>
     <h1 tabindex="-1">放松练习的依据与边界</h1>
-    <p class="page-lead">这些短练习面向成年人，用于睡前一般放松。练习完成不代表睡眠改善。</p>
+    <p class="page-lead">
+      这些短练习为成年人设计，可以在睡前试一试。做完可以就此停下，完成次数不用于评估睡眠。
+    </p>
     <ul>
       <li>
         思绪整理参考一项健康青年在实验室写待办清单的单夜研究。这里仅提供简短提示，适用范围和效果仍不确定。

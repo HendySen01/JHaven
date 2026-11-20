@@ -64,6 +64,7 @@ for (const [id, name, seed, smoothing, hits] of [
   wav.writeUInt32LE(count * 2, 40);
   for (let i = 0; i < loop.length; i++)
     wav.writeInt16LE(Math.round((loop[i] - mean) * gain * 32767), 44 + 2 * i);
+  if (manifest.some((entry) => entry.id === id && entry.license === 'CC0-1.0')) continue;
   const file = id + '.wav';
   await writeFile(new URL(file, base), wav);
   const existing = manifest.findIndex((entry) => entry.id === id);

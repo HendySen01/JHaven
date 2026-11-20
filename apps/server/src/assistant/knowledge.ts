@@ -1,7 +1,19 @@
 import { assistantSource } from '@jhaven/shared';
 
-export const knowledgeVersion = '2026-11-18.1';
+export const knowledgeVersion = '2026-11-20.1';
 const records = [
+  {
+    id: 'dreaming',
+    title: 'Siclari 等 · 梦的神经相关性',
+    url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC5462120/',
+    published: '2017-04-10',
+    population: '在睡眠实验室接受脑电记录及分阶段唤醒访谈的健康成年人。',
+    evidence: '实验室高密度脑电和唤醒后自我报告研究。',
+    summary:
+      '睡着后可以做梦。快速眼动和非快速眼动睡眠中都有人报告梦境。研究发现了和做梦有关的脑活动，但还不能解释梦为什么会出现或有什么功能。',
+    limits: '脑电的相关性和醒后的报告不能证明梦为何产生，也不能确定梦是否有统一的功能。',
+    keywords: ['做梦', '梦境', '梦见', '梦到', '梦里', '快速眼动', 'dream', 'dreaming', 'rem'],
+  },
   {
     id: 'wind-down',
     title: 'NHLBI · 健康睡眠习惯',

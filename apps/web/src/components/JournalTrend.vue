@@ -116,7 +116,7 @@ const display = (value: string | null, timezone: string) =>
         <text x="598" y="153" text-anchor="end">{{ to }}</text>
       </svg>
     </div>
-    <h3>主观休息感</h3>
+    <h3>醒来感觉</h3>
     <div class="trend-plot">
       <p v-if="!rest.length" class="auth-hint trend-placeholder">
         {{ loading ? '正在读取休息感…' : '这段时间暂无休息感记录。' }}
@@ -126,7 +126,7 @@ const display = (value: string | null, timezone: string) =>
         :class="{ 'trend-hidden': !rest.length }"
         viewBox="0 0 620 160"
         role="img"
-        aria-label="主观休息感趋势，由很差到很好。对应记录见下表。"
+        aria-label="醒来感觉趋势，由很差到很好。对应记录见下表。"
       >
         <g v-for="(item, i) in restLabels" :key="item">
           <line x1="58" x2="598" :y1="y(i + 1, 1, 5)" :y2="y(i + 1, 1, 5)" />

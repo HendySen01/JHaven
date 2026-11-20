@@ -31,7 +31,7 @@ test('真实注册、登录失败、登录成功、刷新恢复和退出', async
   await form.getByLabel('确认密码').fill(password);
   await form.getByRole('button', { name: '注册', exact: true }).click();
   await expect(page).toHaveURL('/login');
-  await expect(page.getByText('账户已创建，请使用刚设置的密码登录。')).toBeVisible();
+  await expect(page.getByText('账户准备好了。用刚设置的密码登录吧。')).toBeVisible();
   await expect(form.getByLabel('密码', { exact: true })).toHaveAttribute(
     'autocomplete',
     'current-password',

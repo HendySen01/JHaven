@@ -6,20 +6,20 @@ const phases = [
   {
     number: '01',
     title: '让夜晚，有自己的样子',
-    status: 'Sprint 2.5 · 声音库 Alpha',
+    status: '声音库 · 现在可用',
     description: '选择今晚状态，试听和混合自然实录与稳定背景音，保存本地场景与定时渐弱。',
   },
   {
     number: '02',
     title: '让朋友真正用起来',
-    status: 'Alpha · 计划中',
-    description: '提供个人睡眠空间和随时可退出的短练习，真机音频仍待验证。',
+    status: '个人空间 · 现在可用',
+    description: '可以写私人日记、存下常听的场景，或随时做一段短练习。',
   },
   {
     number: '03',
     title: '一起把体验打磨好',
     status: 'Beta → V1.0 · 计划中',
-    description: '依据真实反馈完善兼容性、数据管理和可访问性，再评估个性化能力。',
+    description: '继续打磨手机上的听感、键盘操作和账户功能。',
   },
 ];
 </script>
@@ -35,8 +35,8 @@ const phases = [
     <div class="foundation-notice">
       <Check :size="19" aria-hidden="true" />
       <p>
-        <strong>当前版本：个人睡眠空间 Alpha</strong
-        ><br />你可以试听和混合声音，登录后管理账户场景、默认播放设置和私人睡眠日记。
+        <strong>当前版本 · Alpha</strong
+        ><br />声音随时可听。登录后，可以存下场景和默认播放设置，也能写只有你看得见的日记。
       </p>
     </div>
 
@@ -66,8 +66,7 @@ const phases = [
         <article>
           <h3>陪伴日常休息</h3>
           <p>
-            JHaven
-            不是医疗诊断或治疗软件，不承诺入睡速度或治疗效果。后续放松体验均可暂停、跳过或结束。
+            JHaven 不是医疗诊断或治疗软件，不承诺入睡速度或治疗效果。放松练习可以暂停、跳过或结束。
           </p>
         </article>
         <article>

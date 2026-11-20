@@ -7,7 +7,7 @@ import {
   type AccountPreset,
   type SpacePreferences,
 } from '@jhaven/shared';
-import { TRACK_IDS, TRACKS } from '../types/audio';
+import { availableTrackIds, TRACKS } from '../types/audio';
 import { BUILTIN_PRESETS, copyMix, singleTrackMix } from '../domain/audio';
 import { useAudioStore } from '../stores/audio';
 import { useAuthStore } from '../stores/auth';
@@ -152,7 +152,7 @@ function resetPreferences() {
     <h2 id="account-sound-heading">我的声音场景</h2>
     <p v-if="error" class="field-error" role="alert">{{ error }}</p>
     <p v-if="message" class="auth-hint" role="status">{{ message }}</p>
-    <p v-if="busy" class="auth-hint" role="status">正在处理…</p>
+    <p v-if="busy" class="auth-hint" role="status">稍等一下…</p>
     <button v-if="!ready && !busy" type="button" class="button button-secondary" @click="run(load)">
       重试读取账户场景
     </button>
@@ -176,7 +176,7 @@ function resetPreferences() {
           </div>
         </li>
       </ul>
-      <p v-else class="auth-hint">还没有账户场景。</p>
+      <p v-else class="auth-hint">想常听一份混音？可以把它存到这里。</p>
       <details class="space-details" :open="editId !== null || undefined">
         <summary>新建、导入或编辑场景</summary>
         <div v-if="devices.length" class="space-actions">
@@ -212,7 +212,7 @@ function resetPreferences() {
           </button>
           <fieldset class="space-tracks">
             <legend>音轨和音量</legend>
-            <div v-for="id in TRACK_IDS" :key="id">
+            <div v-for="id in availableTrackIds" :key="id">
               <label class="space-check"
                 ><input v-model="mix[id].enabled" type="checkbox" />{{ TRACKS[id].name }}</label
               >
@@ -239,7 +239,7 @@ function resetPreferences() {
       </details>
       <section class="space-section" aria-labelledby="defaults-heading">
         <h2 id="defaults-heading">默认播放设置</h2>
-        <p class="auth-hint">登录时，播放器空闲才应用账户设置。声音仍由你手动开启。</p>
+        <p class="auth-hint">登录时，只有播放器空闲才会换成你的默认设置。想听时，再按播放。</p>
         <form class="space-form" @submit.prevent="savePreferences">
           <label
             >默认场景

@@ -254,13 +254,13 @@ onBeforeUnmount(() => {
             />
             本机中文语音</label
           >
-          <p v-if="!speech.voice.value">此设备没有可用的本机中文语音，仍可阅读引导。</p>
+          <p v-if="!speech.voice.value">这台设备暂时没有中文语音。你可以跟着文字做。</p>
           <p v-if="speech.error.value" role="status">{{ speech.error.value }}</p>
         </details>
         <section class="practice-sound" aria-label="练习声音">
           <h2>练习声音</h2>
           <template v-if="outsideAudio">
-            <p>当前播放器的声音与计时会继续。你可以保留原播放，或先停止它再选择练习声音。</p>
+            <p>现在的声音和计时会继续。想换声音，可以先停下来。</p>
             <button type="button" class="quiet-link" @click="audio.stop">停止当前声音</button>
             <label class="practice-volume"
               >当前播放音量
@@ -348,12 +348,12 @@ onBeforeUnmount(() => {
         <p v-if="error" role="alert">{{ error }}</p>
         <p v-if="saved" role="status">练习已保存。</p>
         <template v-else-if="canSave">
-          <p>由你决定是否保存练习类型、实际时长和完成状态。</p>
+          <p>想留个记录的话，可以保存这次练了什么、多久，以及是否做完。</p>
           <button class="button button-secondary" type="button" :disabled="busy" @click="save">
             保存这次练习
           </button>
         </template>
-        <p v-else-if="!auth.user">访客练习无需注册，本次不会保存。</p>
+        <p v-else-if="!auth.user">这次练习不会保存。下次想做，随时回来。</p>
         <div class="practice-actions">
           <button class="button button-primary" type="button" :disabled="busy" @click="reset">
             再练一次

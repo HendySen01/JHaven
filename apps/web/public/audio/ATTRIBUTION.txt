@@ -1,5 +1,5 @@
 JHaven 环境音来源与署名
-外部录音采用 CC0-1.0。JHaven 合成 WAV 为项目自制素材，由 JHaven 随产品分发。
+公开声库的外部录音采用 CC0-1.0。项目自制音以 JHaven 名义随产品分发。
 许可：https://creativecommons.org/publicdomain/zero/1.0/
 
 rain.wav — Soft rain.WAV
@@ -66,18 +66,18 @@ white.wav — 白噪音
 SHA-256: 6230d9849caa46d12b5a7dccf4e55e165cd2a89322b5ce0253e0974901c5c43f
 
 fan.wav — 柔和风扇声
-作者：JHaven
-来源：scripts/prepare-audio.mjs
-许可：LicenseRef-JHaven-Original
-处理：确定性合成；去直流、等功率交叉渐变、RMS 及峰值整形。
-SHA-256: cacd6e96d87d52215f27f8aa5bc5d2aa5ac8273ad854518637f5f41f829b6276
+作者：TimBahrij
+来源：https://freesound.org/people/TimBahrij/sounds/191580/
+许可：CC0-1.0
+处理：5.1–15.9 秒连续片段；0.8 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。
+SHA-256: da4117bfca1669382786672d89fb35bf06da5562f3b9021c81fdee9898a46097
 
 soft-chew.wav — 轻柔咀嚼拟音
-作者：JHaven
-来源：scripts/prepare-textures.mjs
-许可：LicenseRef-JHaven-Original
-处理：原创确定性拟音，带限噪声、渐入渐出短包络、去直流、循环交叉淡化和峰值整形。
-SHA-256: a91da96de24e35b20e60c1a13eae4478607c648de4b649388b1c300ccb86eed1
+作者：89o_dev
+来源：https://freesound.org/people/89o_dev/sounds/680180/
+许可：CC0-1.0
+处理：1–53 秒连续片段；1 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。
+SHA-256: dc3d9ee2538fff338e1e63f0259b812ce4a76218b7e0c96f28a82651e39ad1d2
 
 gentle-crinkle.wav — 轻脆捏捏声
 作者：JHaven

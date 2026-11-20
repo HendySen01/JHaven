@@ -31,7 +31,7 @@ test('开始放松与三个场景详情，不会自动播放', async ({ page }) 
       /nav-active/,
     );
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(name!);
-    await expect(page.getByText('CC0 实录 · 可混合播放')).toBeVisible();
+    await expect(page.getByText('自然实录 · 可混合播放')).toBeVisible();
     await expect(page.locator('.player-status')).toContainText('尚未播放');
     await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
     await page.getByRole('link', { name: '返回场景选择' }).click();

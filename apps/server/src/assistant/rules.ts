@@ -41,11 +41,21 @@ export function assistantPlan(messages: string[]) {
   const followUp =
     /^(那|然后|还有|怎么做|怎么开始|好|可以|嗯|上面)/.test(latest) && latest.length <= 25;
   const relevant = followUp ? context : latest;
+  const priorQuestion = messages.at(-2) ?? '';
+  // 无主题的短追问只继承紧邻的知识提问，避免旧话题覆盖新的闲聊。
+  const factualFollowUp =
+    latest.length <= 24 &&
+    /^(?:那|所以|可)?(?:为什么(?:会)?这样|为何如此|为什么呢|为什么会这样|怎么回事)[？?。！!\s]*$/.test(
+      latest,
+    ) &&
+    asksForFacts(priorQuestion);
+  const factual = asksForFacts(latest) || factualFollowUp;
   const fixed = (text: string, sources = findKnowledge(''), actions: AssistantAction[] = []) => ({
     text,
     sources,
     actions,
     model: false,
+    factual,
   });
   if (
     /自杀|自残|伤害自己|不想活|呼吸困难|喘不过气|胸痛|suicid|self.harm|chest pain/i.test(relevant)
@@ -87,22 +97,22 @@ export function assistantPlan(messages: string[]) {
   const currentRule = rules.find(({ match }) => match.test(latest));
   const rule =
     currentRule ?? (followUp ? rules.find(({ match }) => match.test(relevant)) : undefined);
-  const sources = asksForFacts(latest) ? findKnowledge(relevant) : [];
-  if (!asksForAdvice(latest) && !asksForFacts(latest))
-    return { ...fixed(conversationalReply(latest)), grounded: true };
+  const advice = asksForAdvice(latest);
+  const sources = factual ? findKnowledge(factualFollowUp ? priorQuestion : relevant) : [];
+  if (!advice && !factual) return { ...fixed(conversationalReply(latest)), grounded: true };
   if (!rule && !sources.length) {
     return {
-      ...fixed(asksForFacts(latest) ? insufficientEvidence : conversationalReply(latest)),
+      ...fixed(factual ? insufficientEvidence : conversationalReply(latest)),
       grounded: true,
     };
   }
-  const actions =
-    rule && asksForAdvice(latest) && !asksForFacts(latest) ? [actionForIntent(rule.intent)] : [];
+  const actions = rule && advice && !factual ? [actionForIntent(rule.intent)] : [];
   return {
     text: sources[0]?.summary ?? '如果你愿意，可以先打开下面的选项，按自己的节奏决定是否开始。',
     sources,
     actions,
     model: true,
+    factual,
     intent: actions.length ? rule?.intent : undefined,
   };
 }

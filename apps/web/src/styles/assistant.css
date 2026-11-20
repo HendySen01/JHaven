@@ -72,6 +72,28 @@
   gap: 0.5rem;
   min-height: 44px;
 }
+.assistant-history {
+  position: relative;
+  min-width: 0;
+}
+.assistant-history-window {
+  max-height: clamp(13rem, 54dvh, 36rem);
+  overflow-y: auto;
+  padding: 0.25rem 0.65rem 0.75rem 0.2rem;
+  scrollbar-color: #726788 transparent;
+  border-radius: 0.65rem;
+}
+.assistant-return-latest {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.45rem;
+  background: #24213b;
+}
+.assistant-references {
+  color: #bfbad2;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
 .assistant-thread,
 .assistant-quick,
 .assistant-sources {
@@ -86,7 +108,7 @@
   min-width: 0;
 }
 .assistant-turn {
-  padding-block: 0.5rem;
+  padding-block: 0.25rem;
 }
 .assistant-question,
 .assistant-text {

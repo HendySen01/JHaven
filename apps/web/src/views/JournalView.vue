@@ -241,7 +241,7 @@ const showTime = (value: string | null, timezone: string) =>
       <p class="page-lead">有些夜晚，值得被轻轻记住。</p>
       <div class="foundation-notice">
         <ShieldCheck :size="22" aria-hidden="true" />
-        <p><strong>先把隐私，放在前面。</strong><br />睡眠日记仅供你本人查看和管理。</p>
+        <p><strong>这是只给自己看的日记。</strong><br />登录后，只有你能查看和修改。</p>
       </div>
       <div class="space-actions">
         <PrimaryButton to="/login">登录后记录</PrimaryButton
@@ -250,7 +250,7 @@ const showTime = (value: string | null, timezone: string) =>
     </template>
     <template v-else>
       <h1 tabindex="-1">我的睡眠日记</h1>
-      <p class="page-lead">随时记录，也可以留空。选择夜晚所属日期，跨午夜的时间请填写实际日期。</p>
+      <p class="page-lead">记想留住的细节就好。过了午夜，记得选实际发生的日期。</p>
       <div class="diary-feedback">
         <p v-show="error" class="field-error" role="alert">{{ error }}</p>
         <p v-show="!error" class="auth-hint" role="status">{{ message }}</p>
@@ -322,7 +322,7 @@ const showTime = (value: string | null, timezone: string) =>
             </div>
           </div>
           <label
-            >主观休息感
+            >醒来感觉
             <select v-model="form.rest">
               <option value="">不记录</option>
               <option v-for="(value, i) in restLabels" :key="value" :value="String(i + 1)">
@@ -361,7 +361,7 @@ const showTime = (value: string | null, timezone: string) =>
                     <dd>{{ showTime(entry[field.key], entry.timezone) }}</dd>
                   </div>
                   <div>
-                    <dt>主观休息感</dt>
+                    <dt>醒来感觉</dt>
                     <dd>{{ entry.rest === null ? '—' : restLabels[entry.rest - 1] }}</dd>
                   </div>
                 </dl>
@@ -382,7 +382,7 @@ const showTime = (value: string | null, timezone: string) =>
             </li>
           </ul>
           <p v-else class="auth-hint">
-            {{ ready ? '所选日期范围内没有日记。' : '日记记录将在这里显示。' }}
+            {{ ready ? '所选日期范围内没有日记。' : '写下的日记会出现在这里。' }}
           </p>
         </div>
       </section>
@@ -401,7 +401,7 @@ const showTime = (value: string | null, timezone: string) =>
             最近 {{ period }} 天
           </button>
         </div>
-        <p class="auth-hint">趋势截至所查询的结束日期。每项时间使用记录时区，空缺日期保留空白。</p>
+        <p class="auth-hint">从所选结束日往前看。时间按各条日记的时区显示，没写的日子留空。</p>
         <p class="diary-query-status auth-hint" role="status">
           {{ pendingDays ? '正在更新趋势…' : '' }}
         </p>
