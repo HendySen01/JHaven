@@ -6,12 +6,12 @@ export const trackNotes: Partial<Record<TrackId, { aliases: string[]; descriptio
     aliases: ['柔和颗粒声', '咀嚼声', 'chewing'],
     description: '近距离录下的咀嚼声，保留了轻重变化。',
   },
-  'crunchy-chew': { aliases: ['咬脆片'], description: '清楚的咬合声和轻碎响。仅本机试听。' },
-  'mouth-asmr': { aliases: ['口腔声'], description: '近距离的口腔细响。仅本机试听。' },
-  'lego-rustle': { aliases: ['LEGO', '乐高'], description: '积木翻动时的碰撞和摩擦。仅本机试听。' },
+  'crunchy-chew': { aliases: ['咬脆片'], description: '清楚的咬合声和轻碎响。' },
+  'mouth-asmr': { aliases: ['口腔声'], description: '近距离的口腔细响。' },
+  'lego-rustle': { aliases: ['LEGO', '乐高'], description: '积木翻动时的碰撞和摩擦。' },
   'leaf-steps': {
     aliases: ['枯叶', '脚步'],
-    description: '脚步踩过落叶时的起伏碎响。仅本机试听。',
+    description: '脚步踩过落叶时的起伏碎响。',
   },
   'gentle-crinkle': {
     aliases: ['轻脆捏捏声', '脆皮捏捏', 'crispy squishy', 'wax cracking'],

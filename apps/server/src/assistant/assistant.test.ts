@@ -141,6 +141,9 @@ it.each(['deepseek', 'openai'] as const)('%s 使用相同的上下文、引用�
   );
   expect(choose.mock.calls[0]?.[3]).toBe(true);
   expect(choose.mock.calls[0]?.[2]).toContain('infer conversational intent provisionally');
+  expect(choose.mock.calls[0]?.[2]).toContain('even if the previous reply was playful');
+  expect(choose.mock.calls[0]?.[2]).toContain('When feedback points out that your tone missed');
+  expect(choose.mock.calls[0]?.[2]).toContain('Never invent a personal history');
   expect(frames(chat.text).at(-1)).toMatchObject({ sources: [], actions: [] });
   const cited = await send({ messages: ['浓茶会影响睡眠吗'] });
   expect(frames(cited.text).at(-1)).toMatchObject({ sources: [{ id: 'caffeine' }], actions: [] });

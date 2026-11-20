@@ -1,5 +1,7 @@
 # 第三方来源与许可登记
 
+Sprint 9.2 复用现有 Playwright、Web Audio 和 DeepSeek 适配器，音频校准继续使用已登记的 TimBahrij CC0 原件。响度测量参考 ITU-R BS.1770-5。无新增依赖、组件、素材或 Skills。 [测量及许可](AUDIO_ASSETS.md)
+
 本轮使用已有 Playwright 和浏览器 Web Audio 解码本地音频，用现有 Vue 与 Vite 接入，无新增依赖。LeiBox Skill 索引查询未成功，沿用既有卡片和原生引用详情。两条 Freesound CC0 实录已集成，另外四条用户提供文件仅供本机使用。 [素材清单](AUDIO_ASSETS.md)
 
 Sprint 9 收尾使用既有 Pinia、Vue 与原生 details。LeiBox Skill 目录本轮无法访问，未新增依赖或第三方组件。睡梦知识复核了原始研究及 NINDS 公开科普资料。 [知识说明](ASSISTANT.md)

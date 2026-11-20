@@ -25,6 +25,31 @@ test('实录替换保留旧名搜索、收藏与音量', async ({ page }) => {
   await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0);
 });
 
+test('风扇试听从中档就有信号，分档音量和混音设置保持独立', async ({ page }) => {
+  await page.goto('/relax/rain');
+  const player = page.locator('#ambient-player');
+  const fan = player.getByRole('slider', { name: '柔和风扇声音量' });
+  await player.getByRole('slider', { name: '总音量' }).fill('45');
+  await fan.fill('50');
+  await player.getByRole('button', { name: '试听柔和风扇声' }).click();
+  const rms = async () => (await readAudioProbe(page)).rms;
+  await expect.poll(rms).toBeGreaterThan(0.00065);
+  const middle = await rms();
+  await fan.fill('75');
+  await expect.poll(rms).toBeGreaterThan(middle * 1.65);
+  const upper = await rms();
+  await fan.fill('100');
+  await expect.poll(rms).toBeGreaterThan(upper * 1.35);
+  await fan.fill('50');
+  await player.getByRole('button', { name: '停止试听柔和风扇声' }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
+  await player.getByRole('switch', { name: '开启柔和风扇声' }).check();
+  await player.getByRole('button', { name: '播放混音', exact: true }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).active).toBeGreaterThan(1);
+  await expect(fan).toHaveValue('50');
+  await expect(player.getByRole('slider', { name: '总音量' })).toHaveValue('45');
+});
+
 test('场景按钮播放手调混音，暂停图标与音量跨页保持一致', async ({ page }) => {
   await installAudioProbe(page);
   await page.goto('/relax/rain');
@@ -133,6 +158,8 @@ test('四条本机录音可搜可试听，并拦截转发请求', async ({ page,
   test.skip(process.env.JHAVEN_LOCAL_AUDIO !== '1', '本机试听模式未开启');
   await page.goto('/relax');
   const search = page.getByRole('searchbox', { name: '搜索声音' });
+  await page.getByLabel('声音分类').selectOption('local');
+  await expect(page.getByText('这些录音可在这里试听，暂未加入公开声库。')).toBeVisible();
   const tracks = [
     ['酥脆咀嚼声', 'crunchy-chew'],
     ['轻柔口腔 ASMR', 'mouth-asmr'],

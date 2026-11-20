@@ -16,7 +16,7 @@ const files = [
     5.1,
     15.9,
     0.8,
-    -23,
+    -19.5,
     'TimBahrij',
     '191580',
   ],
@@ -44,9 +44,11 @@ const browser = await chromium.launch(
   process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {},
 );
 const processed = [];
+const fanOnly = process.argv.includes('--fan-only');
 try {
   const page = await browser.newPage();
-  for (const [id, name, filename, start, end, fade, rms, author, freesound] of files) {
+  const selected = fanOnly ? files.filter(([id]) => id === 'fan') : files;
+  for (const [id, name, filename, start, end, fade, rms, author, freesound] of selected) {
     const raw = await readFile(new URL(filename, original));
     const sourceSha256 = sha(raw);
     if (freesound && sourceSha256 !== approvedHashes[id])
@@ -187,16 +189,18 @@ for (const { wave, data } of processed) {
     publicManifest[index] = data;
   } else await writeFile(new URL(data.file, rendered), wave);
 }
-await writeFile(
-  new URL('manifest.json', rendered),
-  JSON.stringify(
-    processed
-      .filter(({ data }) => data.license === 'LicenseRef-Local-Audition')
-      .map(({ data }) => data),
-    null,
-    2,
-  ) + '\n',
-);
+if (!fanOnly) {
+  await writeFile(
+    new URL('manifest.json', rendered),
+    JSON.stringify(
+      processed
+        .filter(({ data }) => data.license === 'LicenseRef-Local-Audition')
+        .map(({ data }) => data),
+      null,
+      2,
+    ) + '\n',
+  );
+}
 await writeFile(new URL('manifest.json', library), JSON.stringify(publicManifest, null, 2) + '\n');
 await writeFile(
   new URL('ATTRIBUTION.txt', library),

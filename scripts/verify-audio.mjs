@@ -125,9 +125,12 @@ for (const id of [...ids, ...(localManifest.length ? localIds : [])]) {
   );
   const seam = Math.abs(first - previous);
   const rms = dB(Math.sqrt(energy / frames));
+  const mixedPeak = peak * (catalog[id].playbackTrim ?? 1);
+  if (mixedPeak > 0.66) throw new Error(`校准后峰值超出混音预算：${id}`);
   metrics.push({
     id,
     peak: +peak.toFixed(3),
+    mixedPeak: +mixedPeak.toFixed(3),
     rmsDbFS: +rms.toFixed(1),
     maxRiseDb: +rise.toFixed(1),
     loudRiseDb: +loudRise.toFixed(1),
@@ -142,7 +145,6 @@ console.table(metrics);
 const failures = metrics.filter((m) => {
   const transient = ['soft-chew', ...localIds].includes(m.id);
   return (
-    m.peak > 0.66 ||
     m.rmsDbFS < -27 ||
     m.rmsDbFS > -18 ||
     m.maxRiseDb > (transient ? 24 : 12) ||

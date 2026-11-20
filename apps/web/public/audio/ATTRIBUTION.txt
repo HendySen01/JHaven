@@ -70,7 +70,7 @@ fan.wav — 柔和风扇声
 来源：https://freesound.org/people/TimBahrij/sounds/191580/
 许可：CC0-1.0
 处理：5.1–15.9 秒连续片段；0.8 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。
-SHA-256: da4117bfca1669382786672d89fb35bf06da5562f3b9021c81fdee9898a46097
+SHA-256: 8f5c29c708572e7483138281875ae4b93e168b390f69a7e952dfcfa162228255
 
 soft-chew.wav — 轻柔咀嚼拟音
 作者：89o_dev

@@ -201,10 +201,13 @@ export const useAudioStore = defineStore('audio', () => {
     if (preset) applyPreset(preset);
   }
   function updateTrack(id: TrackId, patch: Partial<AudioMix[TrackId]>) {
-    if (auditionId.value) engine?.stop(0);
+    const adjustingAudition = auditionId.value === id && patch.enabled === undefined;
+    if (auditionId.value && !adjustingAudition) engine?.stop(0);
     mix.value = copyMix(mix.value);
     mix.value[id] = { ...mix.value[id], ...patch };
-    ensureEngine().applyMix(playableMix(mix.value));
+    ensureEngine().applyMix(
+      adjustingAudition ? singleTrackMix(id, mix.value[id].volume) : playableMix(mix.value),
+    );
     identify();
     if (!accountMix.value && !practiceAudio.value) persist();
   }

@@ -24,6 +24,7 @@ const localAudio =
     const track = localFiles.get(pathname);
     const catalogRequest = pathname === '/audio/local-library.json';
     if (!track && !catalogRequest) return next();
+    if (!enabled && catalogRequest) return next();
     const loopback =
       ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress ?? '') &&
       /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(request.headers.host ?? '') &&

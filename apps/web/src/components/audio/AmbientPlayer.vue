@@ -78,11 +78,12 @@ function save() {
           <option value="nature">自然实录</option>
           <option value="steady">稳定背景音</option>
           <option value="texture">近距离细响</option>
-          <option v-if="hasLocalRecordings" value="local">本机录音</option>
+          <option v-if="hasLocalRecordings" value="local">试听录音</option>
           <option value="favorites">我的收藏</option>
         </select></label
       >
     </div>
+    <p v-if="category === 'local'" class="audio-hint">这些录音可在这里试听，暂未加入公开声库。</p>
     <p class="audio-hint">想单独听听？先停下混音。试听 12 秒后会自动收声。</p>
     <p v-if="audio.auditionId" class="audio-hint">单轨试听 · {{ TRACKS[audio.auditionId].name }}</p>
     <p v-if="!visibleTracks.length" class="audio-hint" role="status">没有匹配的声音。</p>
