@@ -13,7 +13,13 @@ import JournalTrend from '../components/JournalTrend.vue';
 import JournalDateTime from '../components/JournalDateTime.vue';
 import { useAuthStore } from '../stores/auth';
 import { useSpaceRequests } from '../lib/space';
-import { dateInZone, shiftDate, wallTime, wallTimeCandidates } from '../domain/journal';
+import {
+  dateInZone,
+  journalClock,
+  shiftDate,
+  wallTime,
+  wallTimeCandidates,
+} from '../domain/journal';
 
 const auth = useAuthStore();
 const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -225,8 +231,6 @@ function remove(entry: JournalEntry) {
     message.value = '日记已删除。';
   });
 }
-const showTime = (value: string | null, timezone: string) =>
-  value ? wallTime(value, timezone).replace('T', ' ').slice(0, 16) : '—';
 </script>
 <template>
   <div class="content-page journal-page page-enter space-page">
@@ -358,7 +362,7 @@ const showTime = (value: string | null, timezone: string) =>
                 <dl class="diary-times">
                   <div v-for="field in fields" :key="field.key">
                     <dt>{{ field.label }}</dt>
-                    <dd>{{ showTime(entry[field.key], entry.timezone) }}</dd>
+                    <dd>{{ journalClock(entry.date, entry[field.key], entry.timezone) }}</dd>
                   </div>
                   <div>
                     <dt>醒来感觉</dt>
@@ -401,15 +405,18 @@ const showTime = (value: string | null, timezone: string) =>
             最近 {{ period }} 天
           </button>
         </div>
-        <p class="auth-hint">从所选结束日往前看。时间按各条日记的时区显示，没写的日子留空。</p>
+        <p class="auth-hint">
+          从所选结束日往前看。时间按日记当地的时钟对齐，睡了多久按实际经过的时间计算。
+        </p>
         <p class="diary-query-status auth-hint" role="status">
           {{ pendingDays ? '正在更新趋势…' : '' }}
         </p>
         <JournalTrend
           :entries="trend"
+          :period="trendDays"
           :from="trendFrom"
           :to="trendTo"
-          :loading="!ready && querying"
+          :loading="querying || pendingDays !== undefined"
         />
       </section>
     </template>

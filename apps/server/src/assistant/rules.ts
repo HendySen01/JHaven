@@ -35,6 +35,11 @@ export const privateAssistantText = (text: string) =>
     text.normalize('NFKC'),
   );
 
+export const assistantInjection = (text: string) =>
+  /忽略.{0,12}(指令|规则)|系统提示|越权|提示词|工具调用|ignore.{0,24}instructions|system prompt|tool call/i.test(
+    text.normalize('NFKC'),
+  );
+
 export function assistantPlan(messages: string[]) {
   const latest = messages.at(-1)!.normalize('NFKC');
   const context = messages.join('\n').normalize('NFKC');
@@ -67,14 +72,15 @@ export function assistantPlan(messages: string[]) {
     return fixed(
       '请不要在对话中填写日记、联系方式或凭据。可以只说你现在想听声音、了解睡眠知识，还是做个放松练习。',
     );
-  if (
-    /忽略.{0,12}(指令|规则)|系统提示|越权|提示词|工具调用|ignore.{0,24}instructions|system prompt|tool call/i.test(
-      context,
-    )
-  )
+  if (assistantInjection(context))
     return fixed(
       '我可以帮你查找已审核的睡眠知识，或推荐已有的声音和练习。可以直接说说你今晚需要什么。',
     );
+  if (
+    /牙(?:齿)?.{0,8}(?:松动|松了|掉了|脱落)/.test(latest) ||
+    (/真的|认真|确实|已经/.test(latest) && /牙(?:齿)?.{0,8}(?:要掉|快掉)/.test(latest))
+  )
+    return fixed('如果牙齿确实松动或有脱落，请尽快联系牙医检查。仅凭聊天无法判断原因。');
   if (
     /\b(?:child|teen|pregnan)\w*|儿童|青少年|宝宝|孩子|孕|\b(?:[1-9]|1[0-7])\s*岁/i.test(relevant)
   )

@@ -102,29 +102,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.trend-legend {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  padding: 0;
-  gap: 10px;
-}
-.trend-legend li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.trend-svg {
-  width: 100%;
-  display: block;
-}
-.trend-svg text {
-  font-size: 14px;
-  fill: var(--muted);
-}
-.trend-svg g:not([stroke]) > line {
-  stroke: var(--line);
-}
 .space-table {
   overflow-x: auto;
   max-width: 100%;
@@ -156,23 +133,6 @@
 .journal-trend {
   display: grid;
   gap: 0.6rem;
-}
-.trend-plot {
-  position: relative;
-}
-.trend-placeholder {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  text-align: center;
-}
-.trend-hidden {
-  visibility: hidden;
-}
-.journal-trend .space-table {
-  block-size: 8rem;
-  overflow: auto;
 }
 [aria-pressed='true'].sound-action {
   background: var(--accent);

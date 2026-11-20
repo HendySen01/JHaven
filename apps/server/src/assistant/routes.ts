@@ -2,7 +2,7 @@ import { Router, type Request } from 'express';
 import { assistantRequest, type AssistantEvent, type AssistantProviderId } from '@jhaven/shared';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
-import { assistantPlan, privateAssistantText } from './rules.js';
+import { assistantInjection, assistantPlan, privateAssistantText } from './rules.js';
 import { knowledgeVersion } from './knowledge.js';
 import {
   estimateCost,
@@ -61,7 +61,8 @@ export function createAssistantRouter({
     const input = assistantRequest.safeParse(request.body);
     if (!input.success || !empty.safeParse(request.query).success)
       throw new AppError(400, 'INVALID_INPUT', '最多发送三条消息，每条不超过 400 字符。');
-    const { mode, provider, model, messages, previousReply, earlierReply } = input.data;
+    const { mode, provider, model, messages, previousReply, earlierReply, olderHistory } =
+      input.data;
     const plan = assistantPlan(messages);
     const chosen = mode === 'ai' && provider ? registry.get(provider) : undefined;
     const authorized = chosen && chosen.model === model ? chosen : undefined;
@@ -87,18 +88,30 @@ export function createAssistantRouter({
     const latest = messages.at(-1)!;
     const previous = messages.at(-2);
     const earlier = messages.at(-3);
+    const safeHistory = (text: string) => !privateAssistantText(text) && !assistantInjection(text);
     const prior =
-      previous && previousReply && !privateAssistantText(previousReply)
+      previous && previousReply && safeHistory(previousReply)
         ? { user: previous, reply: previousReply }
         : undefined;
     const older =
-      prior && earlier && earlierReply && !privateAssistantText(earlierReply)
+      prior && earlier && earlierReply && safeHistory(earlierReply)
         ? { user: earlier, reply: earlierReply }
         : undefined;
     const detailed =
       latest.length >= 90 || (!!prior && latest.length >= 40) || plan.sources.length > 1;
     const modelInput = prior
-      ? JSON.stringify({ ...(older ? { earlier: older } : {}), previous: prior, latest })
+      ? JSON.stringify({
+          ...(older ? { earlier: older } : {}),
+          ...(older && olderHistory?.length
+            ? {
+                history: olderHistory.filter(
+                  ({ user, reply }) => safeHistory(user) && safeHistory(reply),
+                ),
+              }
+            : {}),
+          previous: prior,
+          latest,
+        })
       : latest;
     const system = selected ? groundedPrompt(plan.sources, !!prior, latest, plan.factual) : '';
     const reservation = selected ? estimateCost(selected, system, modelInput, detailed) : 0;

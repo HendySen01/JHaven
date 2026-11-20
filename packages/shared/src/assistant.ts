@@ -8,6 +8,12 @@ export const assistantAction = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('scene'), id: assistantScene, mood: assistantMood }),
 ]);
 const messages = z.array(z.string().trim().min(1).max(400)).min(1).max(3);
+export const assistantHistoryLimit = 4;
+const exchange = z.strictObject({
+  user: z.string().trim().min(1).max(400),
+  reply: z.string().trim().min(1).max(400),
+});
+export type AssistantExchange = z.infer<typeof exchange>;
 export const assistantMode = z.enum(['ai', 'local']);
 export type AssistantMode = z.infer<typeof assistantMode>;
 export const assistantProviderId = z.enum(['openai', 'deepseek']);
@@ -21,6 +27,10 @@ export const assistantRequest = z.union([
     model: modelName.optional(),
     previousReply: z.string().trim().min(1).max(400).optional(),
     earlierReply: z.string().trim().min(1).max(400).optional(),
+    olderHistory: z
+      .array(exchange)
+      .max(assistantHistoryLimit - 2)
+      .optional(),
   }),
   z.strictObject({ messages, useModel: z.boolean() }).transform(({ messages, useModel }) => ({
     messages,
@@ -29,6 +39,7 @@ export const assistantRequest = z.union([
     model: undefined,
     previousReply: undefined,
     earlierReply: undefined,
+    olderHistory: undefined,
   })),
 ]);
 export const assistantSource = z.strictObject({

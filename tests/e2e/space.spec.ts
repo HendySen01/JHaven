@@ -59,7 +59,7 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   await page.getByRole('link', { name: '睡眠日记', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: /0 条记录/ })).toBeVisible();
   const journal = page.getByRole('region', { name: '日记查询结果' });
-  const graph = page.locator('.journal-trend .trend-svg').first();
+  const graph = page.locator('.journal-trend');
   await graph.evaluate((node) => node.setAttribute('data-test-retained', 'true'));
   const initialHeight = await graph.evaluate((node) => node.clientHeight);
   await page.getByRole('button', { name: '最近 30 天' }).scrollIntoViewIfNeeded();
@@ -165,9 +165,7 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
     } finally {
       finishQuery();
     }
-    await expect(page.getByRole('region', { name: '趋势数据表' })).toContainText(
-      '2026-11-13 07:00',
-    );
+    await expect(page.getByRole('region', { name: '当日睡眠详情' })).toContainText('次日 07:00');
     await expect(submit).toBeEnabled();
     expect(await page.evaluate(() => scrollY)).toBe(scroll);
   };
@@ -185,15 +183,18 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   await expect(journal.getByRole('listitem')).toHaveCount(2);
   await page.getByRole('button', { name: '删除 2026-11-11' }).click();
   await expect(page.getByRole('status').filter({ hasText: /1 条记录/ })).toBeVisible();
-  const series = page.getByRole('img', { name: /作息时间/ });
-  await expect(series.locator('circle')).toHaveCount(2);
-  await expect(series.getByText('00:00', { exact: true })).toBeVisible();
+  const selectedDay = page.getByRole('button', { name: '2026-11-12，查看睡眠记录' });
+  await expect(selectedDay.locator('.trend-marker')).toHaveCount(2);
+  await expect(selectedDay.locator('.trend-sleep')).toHaveCount(0);
+  await selectedDay.focus();
+  await expect(page.getByRole('region', { name: '当日睡眠详情' })).toContainText('较好');
   await page.getByRole('button', { name: '最近 30 天' }).click();
   await expect(page.getByRole('button', { name: '最近 30 天' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(series.locator('circle')).toHaveCount(2);
+  await selectedDay.click();
+  await expect(page.getByRole('region', { name: '当日睡眠详情' })).toContainText('次日 07:00');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: '编辑 2026-11-12' }).click();
   await page.getByLabel('备注（可选）').fill('已编辑的隔离记录');
@@ -217,5 +218,5 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   await expect(page.getByText('已编辑的隔离记录', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '删除 2026-11-12' }).click();
   await expect(page.getByText('所选日期范围内没有日记。')).toBeVisible();
-  await expect(page.getByText('这段时间暂无记录。图表会在你记录后更新。')).toBeVisible();
+  await expect(page.getByText('这段时间没有日记。', { exact: true })).toBeVisible();
 });

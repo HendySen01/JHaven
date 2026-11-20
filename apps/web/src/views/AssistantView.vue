@@ -3,7 +3,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MoonStar, ArrowUpRight } from '@lucide/vue';
 import {
   assistantAction,
+  assistantHistoryLimit,
   assistantStatus,
+  type AssistantExchange,
   type AssistantAction,
   type AssistantMode,
   type AssistantProviderId,
@@ -22,7 +24,6 @@ const evening = useEveningStore();
 const auth = useAuthStore();
 const conversation = useAssistantStore();
 const { turns, draft } = storeToRefs(conversation);
-type Turn = (typeof turns.value)[number];
 const composing = ref(false);
 let compositionEndedAt = -Infinity;
 const active = ref(false);
@@ -190,16 +191,21 @@ async function send(question: string, replace = false, event?: Event) {
   const trimmed = question.trim();
   const submittedDraft = !replace && draft.value.trim() === trimmed ? draft.value : null;
   conversation.addTurn(trimmed, replace, identity);
-  const previous = turns.value.at(-2);
-  const earlier = turns.value.at(-3);
-  const contextReply = (turn?: Turn) =>
-    target && turn?.source === 'ai' && turn.result && turn.recipient === identity
-      ? turn.text.slice(0, 400).trim() || undefined
-      : undefined;
-  const previousReply = contextReply(previous);
-  const earlierReply = previousReply ? contextReply(earlier) : undefined;
-  const messageCount = !target || earlierReply ? 3 : previousReply ? 2 : 1;
-  const messages = turns.value.slice(-messageCount).map((turn) => turn.question);
+  const history: AssistantExchange[] = [];
+  if (target) {
+    for (const turn of turns.value.slice(-9, -1).reverse()) {
+      if (turn.recipient !== identity) break;
+      if (turn.source !== 'ai' || !turn.result || !turn.text.trim()) continue;
+      history.unshift({ user: turn.question, reply: turn.text.slice(0, 400).trim() });
+      if (history.length === assistantHistoryLimit) break;
+    }
+  }
+  const previousReply = history.at(-1)?.reply;
+  const earlierReply = history.at(-2)?.reply;
+  const olderHistory = history.slice(0, -2);
+  const messages = target
+    ? [...history.slice(-2).map((turn) => turn.user), trimmed]
+    : turns.value.slice(-3).map((turn) => turn.question);
   const controller = new AbortController();
   request = controller;
   active.value = true;
@@ -226,6 +232,7 @@ async function send(question: string, replace = false, event?: Event) {
             ...(target.model ? { model: target.model } : {}),
             ...(previousReply ? { previousReply } : {}),
             ...(earlierReply ? { earlierReply } : {}),
+            ...(olderHistory.length ? { olderHistory } : {}),
           }
         : {},
     );
@@ -336,7 +343,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
         </p>
         <p>聊天只留在当前标签页内存。刷新、清空对话或切换账号后清除。</p>
         <p v-if="providerName">
-          开启 AI 模式后，本次输入和最多两轮同一供应商的 AI 对话可能发送给
+          开启 AI 模式后，本次输入和最多四轮同一供应商和模型已完成的 AI 对话可能发送给
           {{ providerName
           }}{{
             selectedProvider?.model ? `（${selectedProvider.model}）` : ''
@@ -362,7 +369,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
       </p>
       <div v-if="configured">
         <p v-if="!consent" id="assistant-consent-scope" class="assistant-muted">
-          开启后，本次消息和最多两轮在 {{ providerName }} 完成的对话会发给
+          开启后，本次消息和最多四轮在 {{ providerName }} 的当前模型已完成的对话会发给
           {{ providerName }}。日记不会自动发送。随时可关闭，继续用本地知识。
         </p>
         <label class="assistant-consent">

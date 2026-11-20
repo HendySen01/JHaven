@@ -47,3 +47,18 @@ export function journalHour(date: string, instant: string | null, zone: string) 
   const [hours, minutes, seconds] = local.slice(11).split(':').map(Number);
   return dayDistance(date, local.slice(0, 10)) * 24 + hours! + minutes! / 60 + seconds! / 3600;
 }
+
+export function sleepMinutes(asleep: string | null, wake: string | null) {
+  if (!asleep || !wake) return null;
+  const minutes = (Date.parse(wake) - Date.parse(asleep)) / 60_000;
+  return Number.isFinite(minutes) && minutes >= 0 ? Math.round(minutes) : null;
+}
+
+export function journalClock(date: string, instant: string | null, zone: string) {
+  if (!instant) return '未记录';
+  const local = wallTime(instant, zone);
+  const offset = dayDistance(date, local.slice(0, 10));
+  const prefix =
+    offset === 0 ? '' : offset === 1 ? '次日 ' : offset === -1 ? '前日 ' : `${local.slice(5, 10)} `;
+  return prefix + local.slice(11, 16);
+}

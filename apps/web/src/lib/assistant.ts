@@ -1,5 +1,6 @@
 import {
   assistantEvent,
+  type AssistantExchange,
   type AssistantEvent,
   type AssistantMode,
   type AssistantProviderId,
@@ -43,6 +44,7 @@ export async function readAssistant(
     model?: string;
     previousReply?: string;
     earlierReply?: string;
+    olderHistory?: AssistantExchange[];
   } = {},
 ) {
   const response = await fetch('/api/assistant/chat', {

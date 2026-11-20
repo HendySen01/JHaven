@@ -185,7 +185,8 @@ test('停止、重试、重新生成及站内返回保留会话与草稿，刷�
 });
 
 test('21 轮完整可读，流式片段尊重阅读位置，模型上下文仍受限', async ({ page }) => {
-  const sent: { messages: string[]; earlierReply?: string }[] = [];
+  const sent: { messages: string[]; earlierReply?: string; olderHistory?: { user: string }[] }[] =
+    [];
   await page.exposeFunction('captureChat', (body: (typeof sent)[number]) => sent.push(body));
   await page.route('**/api/assistant/status', (route) =>
     route.fulfill({
@@ -231,7 +232,7 @@ test('21 轮完整可读，流式片段尊重阅读位置，模型上下文仍�
   await page.goto('/assistant');
   const consent = page.getByRole('checkbox', { name: '使用 DeepSeek 聊天' });
   await expect(consent).not.toBeChecked();
-  await expect(page.getByText(/本次消息和最多两轮.*日记不会自动发送/)).toBeVisible();
+  await expect(page.getByText(/本次消息和最多四轮.*日记不会自动发送/)).toBeVisible();
   await consent.check();
   const draft = page.getByLabel('今晚想聊什么');
   const submit = async (question: string) => {
@@ -250,6 +251,7 @@ test('21 轮完整可读，流式片段尊重阅读位置，模型上下文仍�
   expect(sent[0]?.messages).toEqual(['话题 1']);
   expect(sent[20]?.messages).toEqual(['话题 19', '话题 20', '话题 21']);
   expect(sent[20]?.earlierReply).toContain('话题 19');
+  expect(sent[20]?.olderHistory?.map(({ user }) => user)).toEqual(['话题 17', '话题 18']);
   await submit('慢一点再答');
   await expect(page.getByText('正在等下一段')).toBeVisible();
   await region.evaluate((pane) => {

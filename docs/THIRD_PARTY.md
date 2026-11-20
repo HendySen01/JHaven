@@ -1,5 +1,7 @@
 # 第三方来源与许可登记
 
+Sprint 9.4 复用 Vue、SVG、Playwright 及现有模型适配器。新增牙科安全转介参考 NHS 公开指南，未引入图表依赖、组件或 Skills。 [助手边界](ASSISTANT.md)
+
 Sprint 9.3 沿用 Node Fetch、Zod 与 Playwright。维护者明确确认四条自选录音可公开分发。项目登记该确认，未收到具体许可证或作者信息。无新增 npm 依赖、组件或 Skills。 [音轨清单](AUDIO_ASSETS.md)
 
 Sprint 9.2 复用现有 Playwright、Web Audio 和 DeepSeek 适配器，音频校准继续使用已登记的 TimBahrij CC0 原件。响度测量参考 ITU-R BS.1770-5。无新增依赖、组件、素材或 Skills。 [测量及许可](AUDIO_ASSETS.md)
