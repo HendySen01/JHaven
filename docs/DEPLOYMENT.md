@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前骨架可构建为 Vue 静态资源与 Node ESM API；尚未部署，也未绑定域名、创建云资源或连接 MySQL。本说明为可操作的自托管路径，不表示已完成生产验收。当前没有私人业务可对外提供。
+当前可构建为 Vue 静态资源与 Express API。账户和私人数据功能需要已迁移且可达的 MySQL。Vercel 单项目和自托管配置均需在实际环境验收。
 
 静态部署保留 `apps/web/dist/audio` 内 16 条 WAV、清单与署名。音轨文件名沿用稳定 ID，部署示例允许浏览器重新验证缓存。若入口或 CDN 缓存过此前缺失资源的 404，发布时需清除这四条旧缓存。根构建校验哈希和数字质量。生产 Nginx 与 HTTPS 尚未实测。
 
@@ -26,6 +26,27 @@ npm run preview
 ```
 
 访问 `http://127.0.0.1:4173`，再打开 `/about` 验证真实健康接口。`preview` 只用于本地验证，生产使用静态服务器。
+
+## Vercel 单项目
+
+在导入页将 Framework Preset 设为 **Services**，Root Directory 保持仓库根目录，Node.js 选择 **24.x**。构建和输出沿用仓库根的 `vercel.json`，保持 npm workspace 的根锁文件和 `packages/shared` 可用。Vite 服务构建 `apps/web/dist`，Express 服务构建共享包和后端并导出应用实例。 [Vercel Services 指南](https://vercel.com/kb/guide/vercel-services)
+
+`/api` 与 `/api/*` 优先转给 Express，保留原路径。浏览器继续用相对路径访问 API，Cookie 与 Origin 校验保持同源。其余路径进入 Vite 服务，先匹配真实文件，页面路径回退到 `index.html`，缺失的音频或资源返回 404。静态前端无需内部 binding、额外 API 地址或 CORS 配置。 [服务路由](https://vercel.com/docs/services/routing)
+
+### 环境变量
+
+| 用途             | 变量与要求                                                                                                                                                                                                                                                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 正式域名         | `APP_ORIGIN` 填浏览器使用的完整 HTTPS 来源，末尾无斜杠，不含路径。                                                                                                                                                                                                                                                             |
+| Preview          | 默认使用 Vercel 注入的 `VERCEL_ENV` 与 `VERCEL_URL`。打开 Automatically expose System Environment Variables，并通过该次部署 URL 测试。如使用固定预览别名，给对应 Preview 环境单独设置 `APP_ORIGIN`。                                                                                                                           |
+| 账户、日记与收藏 | `DB_HOST`、`DB_NAME`、`DB_USER`、`DB_PASSWORD` 一起设置。`DB_PORT` 默认 3306，托管数据库按服务要求设置 `DB_TLS=1`。Preview 使用独立数据库。                                                                                                                                                                                    |
+| 可选 DeepSeek    | `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL`、`AI_VERIFIED_DEEPSEEK_MODEL`、`DEEPSEEK_BASE_URL`。默认官方地址及 `deepseek-flash`，非默认模型须核对验收标记。                                                                                                                                                                           |
+| 可选 OpenAI      | `AI_OPENAI_API_KEY`、`AI_OPENAI_MODEL`、`AI_VERIFIED_OPENAI_MODEL`、`AI_OPENAI_BASE_URL`。验收标记须与模型一致。                                                                                                                                                                                                               |
+| 可选用量控制     | `AI_DAILY_REQUEST_LIMIT`、`AI_DAILY_BUDGET_USD`、`AI_ACCOUNT_WINDOW_LIMIT`、`AI_GUEST_WINDOW_LIMIT`、`AI_IP_WINDOW_LIMIT`，以及 `AI_DEEPSEEK_DAILY_REQUEST_LIMIT`、`AI_DEEPSEEK_DAILY_BUDGET_USD`、`AI_OPENAI_DAILY_REQUEST_LIMIT`、`AI_OPENAI_DAILY_BUDGET_USD`。计数按实例维护，公开启用付费模型前在平台和供应商侧配置额度。 |
+
+密钥放在对应环境的服务端变量，不加 `VITE_` 前缀。Vercel 入口选择运行模式，无需填写 `HOST`、`PORT` 或 `TRUST_LOOPBACK_PROXY`。数据库地址须可从 Vercel Functions 访问，本机 `localhost` 或局域网地址不可用；迁移在发布流程中手动执行。
+
+首次部署后核对 `/`、刷新 `/assistant`、`/audio/manifest.json`、`/api/health`、`/api/auth/status` 及 `/api/assistant/status`。再在 Preview 独立库验证登录 Cookie、同源写请求、代理传输和助手 NDJSON。 [Vercel 系统变量](https://vercel.com/docs/environment-variables/system-environment-variables)
 
 ## 自托管发布路径（手动执行，尚未执行）
 

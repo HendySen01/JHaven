@@ -1,5 +1,7 @@
 # 第三方来源与许可登记
 
+Vercel 部署适配依据官方 Services、Vite 与 Express 文档。本地复验临时使用 Vercel CLI 66.5.0（Apache-2.0），无新增应用依赖或 Skills。 [Vercel Services](https://vercel.com/kb/guide/vercel-services)
+
 Sprint 9.7 复用 Vue、Zod、Vitest、Playwright 与既有 Provider 适配器，参考 DeepSeek 官方流结束原因定义。无新增依赖或 Skills。 [DeepSeek Chat Completions](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/)
 
 Sprint 9.6 复用既有 Vue、Zod、Vitest、Playwright 及模型适配器。DeepSeek 上游使用 Mock，无新增第三方依赖、资源或 Skills。
