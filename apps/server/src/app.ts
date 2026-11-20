@@ -9,6 +9,8 @@ import { createAuthRouter } from './auth/routes.js';
 import { AppError, errorHandler } from './middleware/error-handler.js';
 import { createAssistantRouter } from './assistant/routes.js';
 import { openAiProvider, deepSeekProvider, type AssistantProvider } from './assistant/provider.js';
+import { findAccount } from './auth/repository.js';
+import { sessionToken } from './auth/session-cookie.js';
 
 export function createApp({
   config = loadConfig({}),
@@ -59,12 +61,13 @@ export function createApp({
     },
   };
   const configured: AssistantProvider[] = [];
-  if (config.AI_DAILY_REQUEST_LIMIT > 0 && config.AI_DAILY_BUDGET_USD >= 0.01) {
+  const secure = config.NODE_ENV === 'production';
+  if (config.AI_DAILY_REQUEST_LIMIT > 0 && config.AI_DAILY_BUDGET_USD > 0) {
     if (
       config.DEEPSEEK_API_KEY &&
       config.AI_VERIFIED_DEEPSEEK_MODEL === config.DEEPSEEK_MODEL &&
       providerLimits.deepseek.dailyLimit > 0 &&
-      providerLimits.deepseek.dailyBudget >= 0.01
+      providerLimits.deepseek.dailyBudget > 0
     )
       configured.push(
         deepSeekProvider(config.DEEPSEEK_API_KEY, config.DEEPSEEK_MODEL, config.DEEPSEEK_BASE_URL),
@@ -73,7 +76,7 @@ export function createApp({
       config.AI_OPENAI_API_KEY &&
       config.AI_VERIFIED_OPENAI_MODEL === config.AI_OPENAI_MODEL &&
       providerLimits.openai.dailyLimit > 0 &&
-      providerLimits.openai.dailyBudget >= 0.01
+      providerLimits.openai.dailyBudget > 0
     )
       configured.push(
         openAiProvider(
@@ -92,6 +95,12 @@ export function createApp({
       providerLimits,
       dailyLimit: config.AI_DAILY_REQUEST_LIMIT,
       dailyBudget: config.AI_DAILY_BUDGET_USD,
+      secure,
+      async accountId(request) {
+        const token = sessionToken(request, secure);
+        if (!database || !token) return undefined;
+        return (await findAccount(database, token).catch(() => null))?.id;
+      },
       ...(assistantTimeoutMs === undefined ? {} : { timeoutMs: assistantTimeoutMs }),
     }),
   );
@@ -100,7 +109,7 @@ export function createApp({
     createAuthRouter({
       pool: database,
       origin: config.APP_ORIGIN,
-      secure: config.NODE_ENV === 'production',
+      secure,
     }),
   );
 

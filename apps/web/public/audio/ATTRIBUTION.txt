@@ -1,5 +1,5 @@
 JHaven 环境音来源与署名
-公开声库的外部录音采用 CC0-1.0。项目自制音以 JHaven 名义随产品分发。
+逐轨许可与分发来源如下。项目自制音以 JHaven 名义随产品分发。
 许可：https://creativecommons.org/publicdomain/zero/1.0/
 
 rain.wav — Soft rain.WAV
@@ -85,3 +85,31 @@ gentle-crinkle.wav — 轻脆捏捏声
 许可：LicenseRef-JHaven-Original
 处理：原创确定性拟音，带限噪声、渐入渐出短包络、去直流、循环交叉淡化和峰值整形。
 SHA-256: c444a223d44935b42dd6c823568278ed0ba88fe5ae5d245af361cd028118115d
+
+crunchy-chew.wav — 酥脆咀嚼声
+作者：未提供
+来源：crunchy-bite-and-chewing-sound-effect-eating-snack.mp3
+公开分发：维护者确认，未提供具体许可证名称
+处理：0.5–29.5 秒连续片段；0.75 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。
+SHA-256: bff90ba069fb70aebee46db1ca4a8a0b491c4fc419c9f3b03f1b69112b0706e1
+
+mouth-asmr.wav — 轻柔口腔 ASMR
+作者：未提供
+来源：wet-mouth-sounds-asmr.mp3
+公开分发：维护者确认，未提供具体许可证名称
+处理：13–53 秒连续片段；1 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。
+SHA-256: dbe2d1b2b102e2f9a37b7d0ea916e90eddbdf947f908d4254e420433411ef6d5
+
+lego-rustle.wav — 清脆积木翻动
+作者：未提供
+来源：looking-through-lego-box-sound.mp3
+公开分发：维护者确认，未提供具体许可证名称
+处理：1.05–18.7 秒连续片段；0.55 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。
+SHA-256: 4ed9d4c2bd2a927d883f4024986fd3b0db0b167458bc8b97fb49aa144468aeb7
+
+leaf-steps.wav — 落叶脚步声
+作者：未提供
+来源：Feet in leaves.mp3
+公开分发：维护者确认，未提供具体许可证名称
+处理：1–51 秒连续片段；0.9 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。
+SHA-256: 14de0164c1c046a9b817f126e4bf2065cb843c13d2e94b3cf9c9cfedd4c0f93f

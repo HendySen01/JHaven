@@ -2,19 +2,12 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
 const base = new URL('../apps/web/public/audio/', import.meta.url);
-const localBase = new URL('../artifacts/user-audio-rendered/', import.meta.url);
 const catalog = JSON.parse(
   await readFile(new URL('../packages/shared/src/sound-catalog.json', import.meta.url), 'utf8'),
 );
 const manifest = JSON.parse(await readFile(new URL('manifest.json', base), 'utf8'));
-const ids = Object.keys(catalog).filter((id) => !catalog[id].localOnly);
-const localIds = Object.keys(catalog).filter((id) => catalog[id].localOnly);
-const localManifest = await readFile(new URL('manifest.json', localBase), 'utf8')
-  .then(JSON.parse)
-  .catch((error) => {
-    if (error.code === 'ENOENT') return [];
-    throw error;
-  });
+const ids = Object.keys(catalog);
+const maintainerApproved = new Set(['crunchy-chew', 'mouth-asmr', 'lego-rustle', 'leaf-steps']);
 const approvedOriginals = new Map([
   ['soft-chew', 'https://freesound.org/people/89o_dev/sounds/680180/'],
   ['fan', 'https://freesound.org/people/TimBahrij/sounds/191580/'],
@@ -26,25 +19,25 @@ if (
   JSON.stringify(wavFiles) !== JSON.stringify(ids.map((id) => `${id}.wav`).sort())
 )
   throw new Error('声音目录、清单与 WAV 文件必须逐项一致');
-if (localManifest.length && localManifest.length !== localIds.length)
-  throw new Error('本机试听清单与本机轨道目录不一致');
-
 const dB = (value) => 20 * Math.log10(Math.max(1e-12, value));
 const metrics = [];
-for (const id of [...ids, ...(localManifest.length ? localIds : [])]) {
-  const local = catalog[id].localOnly === true;
-  const asset = (local ? localManifest : manifest).find((item) => item.id === id);
+for (const id of ids) {
+  const confirmed = maintainerApproved.has(id);
+  const asset = manifest.find((item) => item.id === id);
   const approved = approvedOriginals.get(id);
   const recorded = catalog[id].category === 'nature' || (approved && asset?.license === 'CC0-1.0');
   if (
     !asset ||
     asset.file !== `${id}.wav` ||
-    !asset.author ||
+    (!confirmed && !asset.author) ||
     !asset.name ||
     !asset.changes ||
     !/^\d{4}-\d{2}-\d{2}$/.test(asset.verifiedOn) ||
-    (local
-      ? asset.license !== 'LicenseRef-Local-Audition' ||
+    (confirmed
+      ? asset.distribution !== 'maintainer-confirmed' ||
+        asset.license !== null ||
+        asset.licenseUrl !== null ||
+        !asset.sourceFile ||
         asset.source !== asset.sourceFile ||
         !/^[a-f0-9]{64}$/.test(asset.sourceSha256)
       : recorded
@@ -60,7 +53,7 @@ for (const id of [...ids, ...(localManifest.length ? localIds : [])]) {
               : 'scripts/prepare-audio.mjs'))
   )
     throw new Error(`授权清单无效：${id}`);
-  const data = await readFile(new URL(asset.file, local ? localBase : base));
+  const data = await readFile(new URL(asset.file, base));
   if (
     data.length !== asset.bytes ||
     createHash('sha256').update(data).digest('hex') !== asset.sha256
@@ -143,7 +136,7 @@ for (const id of [...ids, ...(localManifest.length ? localIds : [])]) {
 }
 console.table(metrics);
 const failures = metrics.filter((m) => {
-  const transient = ['soft-chew', ...localIds].includes(m.id);
+  const transient = m.id === 'soft-chew' || maintainerApproved.has(m.id);
   return (
     m.rmsDbFS < -27 ||
     m.rmsDbFS > -18 ||
@@ -158,6 +151,4 @@ const failures = metrics.filter((m) => {
   );
 });
 if (failures.length) throw new Error(`需要重新审核音轨：${failures.map((m) => m.id).join('、')}`);
-console.info(
-  `${ids.length} 条公开音轨及 ${localManifest.length} 条本机试听通过清单、哈希、格式及 PCM 质量检查。`,
-);
+console.info(`${ids.length} 条公开音轨通过清单、哈希、格式及 PCM 质量检查。`);

@@ -133,7 +133,7 @@ test('声音库筛选、收藏、单独试听、默认收声选项及静音', as
 test('当前目录的所有 WAV 在同一原生音频图解码和混合', async ({ page }) => {
   await page.goto('/relax');
   const player = page.locator('#ambient-player');
-  const count = process.env.JHAVEN_LOCAL_AUDIO === '1' ? 16 : 12;
+  const count = 16;
   const tracks = player.getByRole('switch');
   await expect(tracks).toHaveCount(count);
   const switches = await tracks.all();
@@ -150,16 +150,19 @@ test('当前目录的所有 WAV 在同一原生音频图解码和混合', async 
       ),
     ),
   ).toBe(true);
+  await player.getByRole('button', { name: '暂停', exact: true }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
+  await player.getByRole('button', { name: '继续播放', exact: true }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).active).toBe(count);
+  expect(await readAudioProbe(page)).toMatchObject({ contexts: 1, decoded: count });
   await player.getByRole('button', { name: '停止', exact: true }).click();
   await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
 });
 
-test('四条本机录音可搜可试听，并拦截转发请求', async ({ page, request }) => {
-  test.skip(process.env.JHAVEN_LOCAL_AUDIO !== '1', '本机试听模式未开启');
+test('四条公开实录在生产预览可搜、可试听并保留收藏与音量', async ({ page }) => {
   await page.goto('/relax');
   const search = page.getByRole('searchbox', { name: '搜索声音' });
-  await page.getByLabel('声音分类').selectOption('local');
-  await expect(page.getByText('这些录音可在这里试听，暂未加入公开声库。')).toBeVisible();
+  await page.getByLabel('声音分类').selectOption('texture');
   const tracks = [
     ['酥脆咀嚼声', 'crunchy-chew'],
     ['轻柔口腔 ASMR', 'mouth-asmr'],
@@ -170,18 +173,19 @@ test('四条本机录音可搜可试听，并拦截转发请求', async ({ page,
     await search.fill(name!);
     const loaded = page.waitForResponse(`**/audio/${id}.wav`);
     await page.getByRole('button', { name: '试听' + name, exact: true }).click();
-    expect((await loaded).ok()).toBe(true);
+    const asset = await loaded;
+    expect(asset.status()).toBe(200);
+    expect(asset.headers()['content-type']).toMatch(/audio/);
     await expect.poll(async () => (await readAudioProbe(page)).active).toBe(1);
     await page.getByRole('button', { name: '停止试听' + name }).click();
     await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
   }
-  expect(
-    (
-      await request.get('/audio/lego-rustle.wav', {
-        headers: { 'X-Forwarded-For': '203.0.113.2' },
-      })
-    ).status(),
-  ).toBe(404);
+  const leaf = page.getByRole('slider', { name: '落叶脚步声音量' });
+  await leaf.fill('57');
+  await page.getByRole('button', { name: '收藏落叶脚步声' }).click();
+  await page.reload();
+  await page.getByLabel('声音分类').selectOption('favorites');
+  await expect(leaf).toHaveValue('57');
 });
 
 test('返回详情保留自定义混音，损坏或受限存储可恢复', async ({ page }) => {

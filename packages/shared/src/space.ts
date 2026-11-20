@@ -8,7 +8,7 @@ const volume = z.number().min(0).max(100);
 const mixSchema = z.record(z.enum(TRACK_IDS), z.strictObject({ enabled: z.boolean(), volume }));
 const optionalTracks = Object.fromEntries(
   TRACK_IDS.filter(
-    (id) => id === 'soft-chew' || id === 'gentle-crinkle' || 'localOnly' in TRACKS[id],
+    (id) => id === 'soft-chew' || id === 'gentle-crinkle' || 'presetOptional' in TRACKS[id],
   ).map((id) => [id, { enabled: false, volume: 40 }]),
 );
 export const presetInput = z.strictObject({

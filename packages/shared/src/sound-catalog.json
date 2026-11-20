@@ -23,24 +23,24 @@
     "name": "酥脆咀嚼声",
     "english": "Crunchy Chewing",
     "category": "texture",
-    "localOnly": true
+    "presetOptional": true
   },
   "mouth-asmr": {
     "name": "轻柔口腔 ASMR",
     "english": "Soft Mouth ASMR",
     "category": "texture",
-    "localOnly": true
+    "presetOptional": true
   },
   "lego-rustle": {
     "name": "清脆积木翻动",
     "english": "LEGO Box Rustle",
     "category": "texture",
-    "localOnly": true
+    "presetOptional": true
   },
   "leaf-steps": {
     "name": "落叶脚步声",
     "english": "Feet in Leaves",
     "category": "texture",
-    "localOnly": true
+    "presetOptional": true
   }
 }

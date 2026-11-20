@@ -8,13 +8,7 @@ import {
   parseSavedAudio,
   singleTrackMix,
 } from '../domain/audio';
-import {
-  availableTrackIds,
-  localTrackIds,
-  type AudioMix,
-  type SoundPreset,
-  type TrackId,
-} from '../types/audio';
+import { TRACK_IDS, type AudioMix, type SoundPreset, type TrackId } from '../types/audio';
 import { AudioEngine } from '../services/audio/AudioEngine';
 
 export const useAudioStore = defineStore('audio', () => {
@@ -46,19 +40,11 @@ export const useAudioStore = defineStore('audio', () => {
   let unsubscribe: (() => void) | null = null;
   let initialized = false;
   const snapshot = shallowRef(new AudioEngine().snapshot());
-  const selectedCount = computed(
-    () => availableTrackIds.filter((id) => mix.value[id].enabled).length,
-  );
-  function playableMix(mix: AudioMix) {
-    const playback = copyMix(mix);
-    for (const id of localTrackIds)
-      if (!availableTrackIds.includes(id)) playback[id].enabled = false;
-    return playback;
-  }
+  const selectedCount = computed(() => TRACK_IDS.filter((id) => mix.value[id].enabled).length);
   function ensureEngine() {
     if (!engine) {
       engine = new AudioEngine();
-      engine.applyMix(playableMix(mix.value));
+      engine.applyMix(mix.value);
       engine.setMasterVolume(masterVolume.value);
       unsubscribe = engine.subscribe((value) => {
         snapshot.value = value;
@@ -66,7 +52,7 @@ export const useAudioStore = defineStore('audio', () => {
           const timer = normalTimer;
           auditionId.value = null;
           normalTimer = null;
-          engine?.applyMix(playableMix(mix.value));
+          engine?.applyMix(mix.value);
           if (timer) engine?.setTimer(timer.duration, timer.fade);
         }
       });
@@ -131,7 +117,7 @@ export const useAudioStore = defineStore('audio', () => {
     mix.value = copyMix(preset.mix);
     currentName.value = preset.name;
     currentId.value = preset.id;
-    ensureEngine().applyMix(playableMix(mix.value));
+    ensureEngine().applyMix(mix.value);
   }
   function applyAccountMix(preset: SoundPreset | null, volume?: number, timerMinutes?: number) {
     if (!deviceMix)
@@ -160,7 +146,7 @@ export const useAudioStore = defineStore('audio', () => {
     currentId.value = saved.id;
     masterVolume.value = saved.volume;
     unmutedVolume = saved.volume || defaultAudio().masterVolume;
-    ensureEngine().applyMix(playableMix(saved.mix));
+    ensureEngine().applyMix(saved.mix);
     ensureEngine().setMasterVolume(saved.volume);
     accountTimerRevision.value++;
     formMessage.value = '';
@@ -206,7 +192,7 @@ export const useAudioStore = defineStore('audio', () => {
     mix.value = copyMix(mix.value);
     mix.value[id] = { ...mix.value[id], ...patch };
     ensureEngine().applyMix(
-      adjustingAudition ? singleTrackMix(id, mix.value[id].volume) : playableMix(mix.value),
+      adjustingAudition ? singleTrackMix(id, mix.value[id].volume) : mix.value,
     );
     identify();
     if (!accountMix.value && !practiceAudio.value) persist();
@@ -228,7 +214,7 @@ export const useAudioStore = defineStore('audio', () => {
     persist();
   }
   function audition(id: TrackId) {
-    if (snapshot.value.status !== 'idle' || !availableTrackIds.includes(id)) return;
+    if (snapshot.value.status !== 'idle') return;
     const player = ensureEngine();
     normalTimer = { duration: snapshot.value.timer.duration, fade: snapshot.value.fadeSeconds };
     player.applyMix(singleTrackMix(id, mix.value[id].volume));
@@ -315,7 +301,7 @@ export const useAudioStore = defineStore('audio', () => {
     normalTimer = null;
     if (previous) void previous.dispose();
     const initial = new AudioEngine();
-    initial.applyMix(playableMix(mix.value));
+    initial.applyMix(mix.value);
     initial.setMasterVolume(masterVolume.value);
     snapshot.value = initial.snapshot();
   }

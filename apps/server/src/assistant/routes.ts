@@ -1,13 +1,18 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { assistantRequest, type AssistantEvent, type AssistantProviderId } from '@jhaven/shared';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
 import { assistantPlan, privateAssistantText } from './rules.js';
 import { knowledgeVersion } from './knowledge.js';
-import { ProviderError, type AssistantProvider } from './provider.js';
+import {
+  estimateCost,
+  ProviderError,
+  type AssistantProvider,
+  type TokenUsage,
+} from './provider.js';
+import { createAssistantWindows, dayMs } from './quota.js';
 import { groundedPrompt, groundedResult } from './grounded.js';
 
-const ipWindow = 10 * 60_000;
 type Usage = { calls: number; cost: number; inflight: number };
 type Limits = { dailyLimit: number; dailyBudget: number };
 export function createAssistantRouter({
@@ -17,6 +22,8 @@ export function createAssistantRouter({
   dailyLimit,
   dailyBudget = 0.1,
   timeoutMs,
+  secure = false,
+  accountId,
   now = Date.now,
 }: {
   origin: string;
@@ -25,16 +32,17 @@ export function createAssistantRouter({
   dailyLimit: number;
   dailyBudget?: number;
   timeoutMs?: number;
+  secure?: boolean;
+  accountId?: (request: Request) => Promise<string | undefined>;
   now?: () => number;
 }) {
   const router = Router();
   const empty = z.strictObject({});
-  const clients = new Map<string, { until: number; count: number }>();
+  const windows = createAssistantWindows(secure);
   const registry = new Map(providers.map((provider) => [provider.name, provider]));
   const usage = new Map<AssistantProviderId, Usage>();
   const total: Usage = { calls: 0, cost: 0, inflight: 0 };
-  let nextCleanup = 0,
-    day = -1;
+  let day = -1;
 
   router.get('/status', (request, response) => {
     if (!empty.safeParse(request.query).success)
@@ -53,30 +61,22 @@ export function createAssistantRouter({
     const input = assistantRequest.safeParse(request.body);
     if (!input.success || !empty.safeParse(request.query).success)
       throw new AppError(400, 'INVALID_INPUT', '最多发送三条消息，每条不超过 400 字符。');
-    const timestamp = now();
-    if (timestamp >= nextCleanup) {
-      for (const [id, bucket] of clients) if (bucket.until <= timestamp) clients.delete(id);
-      nextCleanup = timestamp + 60_000;
-    }
-    const ip = request.ip ?? 'unknown';
-    const previousBucket = clients.get(ip);
-    const bucket =
-      previousBucket && previousBucket.until > timestamp
-        ? previousBucket
-        : { until: timestamp + ipWindow, count: 0 };
-    if (bucket.count >= 8 || (!previousBucket && clients.size >= 4096)) {
-      response.setHeader('Retry-After', Math.ceil((bucket.until - timestamp) / 1000));
-      throw new AppError(429, 'ASSISTANT_LIMIT', 'JHaven 请求过于频繁，请稍后再试。');
-    }
-    bucket.count++;
-    clients.set(ip, bucket);
-
     const { mode, provider, model, messages, previousReply, earlierReply } = input.data;
     const plan = assistantPlan(messages);
     const chosen = mode === 'ai' && provider ? registry.get(provider) : undefined;
     const authorized = chosen && chosen.model === model ? chosen : undefined;
     const selected = plan.model || ('grounded' in plan && plan.grounded) ? authorized : undefined;
-    const currentDay = Math.floor(timestamp / 86_400_000);
+    const ip = request.ip ?? 'unknown';
+    const arrival = now();
+    if (selected) {
+      windows.take('network:' + ip, 60, arrival, response);
+      const user = await accountId?.(request);
+      if (response.destroyed) return;
+      const actor = user ? 'account:' + user : 'guest:' + windows.guest(request, response);
+      windows.take(actor, user ? 24 : 12, now(), response);
+    } else windows.take('local:' + ip, 120, arrival, response, true);
+    const timestamp = now();
+    const currentDay = Math.floor(timestamp / dayMs);
     if (day !== currentDay) {
       day = currentDay;
       for (const entry of [total, ...usage.values()]) {
@@ -97,30 +97,35 @@ export function createAssistantRouter({
         : undefined;
     const detailed =
       latest.length >= 90 || (!!prior && latest.length >= 40) || plan.sources.length > 1;
-    // 失败与取消仍占当日预留，供应商账单需独立设置额度。
-    const reservation = detailed ? 0.02 : 0.01;
+    const modelInput = prior
+      ? JSON.stringify({ ...(older ? { earlier: older } : {}), previous: prior, latest })
+      : latest;
+    const system = selected ? groundedPrompt(plan.sources, !!prior, latest, plan.factual) : '';
+    const reservation = selected ? estimateCost(selected, system, modelInput, detailed) : 0;
     let ledger: Usage | undefined;
     if (selected) {
       ledger = usage.get(selected.name) ?? { calls: 0, cost: 0, inflight: 0 };
       usage.set(selected.name, ledger);
       const limit = providerLimits[selected.name];
-      const busy = total.inflight >= 3 || ledger.inflight >= 2;
-      if (
-        busy ||
-        total.calls >= dailyLimit ||
-        ledger.calls >= limit.dailyLimit ||
-        total.cost + reservation > dailyBudget + 1e-9 ||
-        ledger.cost + reservation > limit.dailyBudget + 1e-9
-      ) {
-        response.setHeader(
-          'Retry-After',
-          busy ? 15 : Math.ceil(((day + 1) * 86_400_000 - timestamp) / 1000),
-        );
-        throw new AppError(
-          429,
-          busy ? 'MODEL_CONCURRENCY' : 'MODEL_LIMIT',
-          busy ? 'JHaven 的 AI 请求正在排队。' : 'JHaven 的 AI 用量到达今日上限。',
-        );
+      if (total.inflight >= 8 || ledger.inflight >= 4)
+        throw new AppError(429, 'MODEL_CONCURRENCY', '现在有些忙，等一会儿再试。');
+      const limitCode =
+        total.calls >= dailyLimit
+          ? 'MODEL_LIMIT'
+          : ledger.calls >= limit.dailyLimit
+            ? 'MODEL_PROVIDER_LIMIT'
+            : total.cost + reservation > dailyBudget + 1e-9
+              ? 'MODEL_BUDGET'
+              : ledger.cost + reservation > limit.dailyBudget + 1e-9
+                ? 'MODEL_PROVIDER_BUDGET'
+                : undefined;
+      if (limitCode) {
+        if (!limitCode.endsWith('BUDGET'))
+          response.setHeader(
+            'Retry-After',
+            Math.ceil(((currentDay + 1) * dayMs - timestamp) / 1000),
+          );
+        throw new AppError(429, limitCode, '这次 AI 请求达到站点的用量限制。');
       }
     }
     const controller = new AbortController();
@@ -157,6 +162,8 @@ export function createAssistantRouter({
     const timeout = AbortSignal.timeout(timeoutMs ?? (detailed ? 25_000 : 12_000));
     const signal = AbortSignal.any([controller.signal, timeout]);
     let cancel: (() => void) | undefined;
+    let reported: TokenUsage | undefined;
+    let rejectedBeforeGeneration = false;
     try {
       const aborted = new Promise<never>((_resolve, reject) => {
         const abort = () => reject(signal.reason);
@@ -164,16 +171,10 @@ export function createAssistantRouter({
         signal.throwIfAborted();
         signal.addEventListener('abort', abort, { once: true });
       });
-      const modelInput = prior
-        ? JSON.stringify({ ...(older ? { earlier: older } : {}), previous: prior, latest })
-        : latest;
       const raw = await Promise.race([
-        selected.choose(
-          modelInput,
-          signal,
-          groundedPrompt(plan.sources, !!prior, latest, plan.factual),
-          detailed,
-        ),
+        selected.choose(modelInput, signal, system, detailed, (usage) => {
+          reported = usage;
+        }),
         aborted,
       ]);
       const reply = groundedResult(
@@ -202,6 +203,9 @@ export function createAssistantRouter({
         reason: reply.reason,
       });
     } catch (error) {
+      rejectedBeforeGeneration =
+        error instanceof ProviderError &&
+        ['authentication', 'balance', 'upstream_rate', 'model_unavailable'].includes(error.code);
       if (!controller.signal.aborted) {
         if (error instanceof ProviderError && error.code === 'invalid_output') {
           sendLocal(true);
@@ -230,6 +234,16 @@ export function createAssistantRouter({
       }
     } finally {
       cancel?.();
+      if (day === currentDay) {
+        // 上游用量不明时保留一次预留。已明确拒绝生成时仅记尝试次数。
+        const charge = reported
+          ? estimateCost(selected, system, modelInput, detailed, reported)
+          : rejectedBeforeGeneration
+            ? 0
+            : reservation;
+        total.cost = Math.max(0, total.cost + charge - reservation);
+        ledger.cost = Math.max(0, ledger.cost + charge - reservation);
+      }
       total.inflight--;
       ledger.inflight--;
       if (!response.destroyed && !response.writableEnded) response.end();

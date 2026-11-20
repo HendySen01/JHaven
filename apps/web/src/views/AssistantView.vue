@@ -38,13 +38,14 @@ const providers = ref<{ id: AssistantProviderId; model?: string }[]>([]);
 const recipient = ref<AssistantProviderId>();
 const selectedProvider = computed(() => providers.value.find(({ id }) => id === recipient.value));
 const providerName = computed(() => (recipient.value ? providerNames[recipient.value] : null));
-const cooldowns = ref(new Set<AssistantProviderId | 'all'>());
+type Cooldown = AssistantProviderId | AssistantMode;
+const cooldowns = ref(new Set<Cooldown>());
 const retryBlocked = computed(
   () =>
-    cooldowns.value.has('all') ||
+    cooldowns.value.has(assistantMode.value) ||
     (assistantMode.value === 'ai' && !!recipient.value && cooldowns.value.has(recipient.value)),
 );
-const retryTimers = new Map<AssistantProviderId | 'all', ReturnType<typeof setTimeout>>();
+const retryTimers = new Map<Cooldown, ReturnType<typeof setTimeout>>();
 function clearRetryTimers() {
   for (const timer of retryTimers.values()) clearTimeout(timer);
   retryTimers.clear();
@@ -232,7 +233,8 @@ async function send(question: string, replace = false, event?: Event) {
     if (request === controller && last.value) {
       last.value.source = 'error';
       if (error instanceof AssistantRequestError && error.retryAfter) {
-        const scope = error.code === 'ASSISTANT_LIMIT' ? 'all' : (target?.id ?? 'all');
+        const shared = ['ASSISTANT_LIMIT', 'MODEL_LIMIT', 'MODEL_BUDGET'].includes(error.code);
+        const scope = shared ? 'ai' : (target?.id ?? mode);
         clearTimeout(retryTimers.get(scope));
         cooldowns.value.add(scope);
         retryTimers.set(
@@ -254,6 +256,10 @@ async function send(question: string, replace = false, event?: Event) {
             : error instanceof Error && error.name !== 'ZodError' && !(error instanceof SyntaxError)
               ? error.message
               : '回复格式异常，可以重试。';
+      if (error instanceof AssistantRequestError && error.retryAfter) {
+        const retryAt = new Date(Date.now() + error.retryAfter * 1000);
+        last.value.note += ` 可在 ${retryAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} 后重试。`;
+      }
     }
   } finally {
     if (request === controller) {

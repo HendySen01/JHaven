@@ -110,6 +110,34 @@ integration('真实 MySQL 账户集成', () => {
       .set('Origin', siteOrigin)
       .send({ username, password: secret });
   }
+  it('助手用真实登录会话区分同网络的两个账户', async () => {
+    const api = request(
+      createApp({
+        database: pool,
+        assistantProvider: {
+          name: 'deepseek',
+          async choose(_text, _signal, _system, _detail, report) {
+            report?.({ prompt_tokens: 500, completion_tokens: 30 });
+            return { kind: 'chat', text: '今晚过得怎么样？' };
+          },
+        },
+      }),
+    );
+    const firstUser = await register(api);
+    const first = await login(firstUser, password, api).expect(200);
+    const second = await login(await register(api), password, api).expect(200);
+    const chat = (cookie: string, mode: 'ai' | 'local' = 'ai') =>
+      api
+        .post('/api/assistant/chat')
+        .set({ Cookie: cookie, Origin: origin })
+        .send({ mode, ...(mode === 'ai' ? { provider: 'deepseek' } : {}), messages: ['你好呀'] });
+    for (let n = 0; n < 24; n++) await chat(cookieFrom(first)).expect(200);
+    await chat(cookieFrom(first))
+      .expect(429)
+      .expect(({ body }) => expect(body.error.code).toBe('ASSISTANT_LIMIT'));
+    await chat(cookieFrom(second)).expect(200);
+    await chat(cookieFrom(first), 'local').expect(200);
+  });
   it('练习记录严格校验、按账户隔离、支持重试与删除', async () => {
     const api = request(app);
     const url = '/api/space/relaxation';

@@ -16,8 +16,12 @@ export const assistantErrors: Record<string, string> = {
   MODEL_CONCURRENCY: 'JHaven 的 AI 请求正在排队，可以稍后再试。',
   unknown_provider_error: 'AI 供应商未能完成请求，可以改用本地知识。',
   proxy_rate: '连接暂时受到限流，服务未返回原因。请稍后再试。',
-  MODEL_LIMIT: 'JHaven 的 AI 用量已达到今日上限，可以改用本地知识。',
-  ASSISTANT_LIMIT: 'JHaven 请求过于频繁，请稍后再试。',
+  MODEL_LIMIT: '本站今天的 AI 请求次数已用完，可以改用本地知识。',
+  MODEL_PROVIDER_LIMIT: '这个模型今天的站内请求次数已用完，可以改用本地知识。',
+  MODEL_BUDGET: '本站的 AI 预算暂时不够完成这条消息。可以稍后再试，或改用本地知识。',
+  MODEL_PROVIDER_BUDGET: '这个模型的站内预算暂时不够完成这条消息。可以稍后再试，或改用本地知识。',
+  ASSISTANT_LIMIT: 'AI 消息发得有点快，稍后再试或改用本地知识。',
+  LOCAL_MODE_LIMIT: '本地消息发得有点快，请稍后再试。',
 };
 
 export class AssistantRequestError extends Error {
@@ -43,7 +47,7 @@ export async function readAssistant(
 ) {
   const response = await fetch('/api/assistant/chat', {
     method: 'POST',
-    credentials: 'omit',
+    credentials: 'same-origin',
     cache: 'no-store',
     signal,
     headers: { 'Content-Type': 'application/json' },

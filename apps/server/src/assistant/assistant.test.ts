@@ -1,9 +1,19 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import request from 'supertest';
+import express from 'express';
 import { createApp } from '../app.js';
+import { errorHandler } from '../middleware/error-handler.js';
 import { loadConfig } from '../config.js';
 import { findKnowledge } from './knowledge.js';
-import { openAiProvider, deepSeekProvider, type AssistantProvider } from './provider.js';
+import {
+  openAiProvider,
+  deepSeekProvider,
+  estimateCost,
+  ProviderError,
+  type AssistantProvider,
+} from './provider.js';
+import { groundedPrompt } from './grounded.js';
+import { createAssistantRouter } from './routes.js';
 import type { AssistantEvent } from '@jhaven/shared';
 import { once } from 'node:events';
 import type { Server } from 'node:http';
@@ -112,7 +122,8 @@ it.each(['deepseek', 'openai'] as const)('%s 使用相同的上下文、引用�
       intent: null,
     })
     .mockResolvedValueOnce({ kind: 'suggest', intent: 'rain' });
-  const api = request(createApp({ assistantProviders: [{ name, model: 'fixture', choose }] }));
+  const model = name === 'deepseek' ? 'deepseek-flash' : 'gpt-4.1-mini';
+  const api = request(createApp({ assistantProviders: [{ name, model, choose }] }));
   const send = (contents: Record<string, unknown>) =>
     api
       .post('/api/assistant/chat')
@@ -120,7 +131,7 @@ it.each(['deepseek', 'openai'] as const)('%s 使用相同的上下文、引用�
       .send({
         mode: 'ai',
         provider: name,
-        model: 'fixture',
+        model,
         ...contents,
       })
       .expect(200);
@@ -143,6 +154,7 @@ it.each(['deepseek', 'openai'] as const)('%s 使用相同的上下文、引用�
   expect(choose.mock.calls[0]?.[2]).toContain('infer conversational intent provisionally');
   expect(choose.mock.calls[0]?.[2]).toContain('even if the previous reply was playful');
   expect(choose.mock.calls[0]?.[2]).toContain('When feedback points out that your tone missed');
+  expect(choose.mock.calls[0]?.[2]).toContain('When they brighten or initiate fresh banter');
   expect(choose.mock.calls[0]?.[2]).toContain('Never invent a personal history');
   expect(frames(chat.text).at(-1)).toMatchObject({ sources: [], actions: [] });
   const cited = await send({ messages: ['浓茶会影响睡眠吗'] });
@@ -202,6 +214,7 @@ it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且�
     expect.any(AbortSignal),
     expect.stringContaining('own the specific miss'),
     false,
+    expect.any(Function),
   );
   expect(frames(result.text)).toEqual([
     { type: 'start', mode: 'model' },
@@ -219,6 +232,7 @@ it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且�
     expect.any(AbortSignal),
     expect.any(String),
     false,
+    expect.any(Function),
   );
 });
 
@@ -270,6 +284,7 @@ it('开放式陪聊问题保留上一轮语境，不混入证据或产品推荐'
     expect.any(AbortSignal),
     expect.stringContaining('Answer the actual open question'),
     expect.any(Boolean),
+    expect.any(Function),
   );
   const prompt = choose.mock.calls[0]?.[2];
   expect(prompt).toContain('Do not infer a third party’s motives');
@@ -320,6 +335,7 @@ it('引用仅来自本次检索，审核原文保留在模型组织的回答中'
     expect.any(AbortSignal),
     expect.stringContaining('"id":"caffeine"'),
     false,
+    expect.any(Function),
   );
   expect(result[1]).toMatchObject({
     text: expect.stringContaining('你可以先留意晚间喝浓茶后的感受。咖啡因可能影响入睡'),
@@ -424,6 +440,7 @@ it.each([
     expect.any(AbortSignal),
     expect.stringContaining('Reviewed evidence: []'),
     false,
+    expect.any(Function),
   );
   expect(result[0]).toEqual({ type: 'start', mode, source: 'fallback' });
   expect(result[1]).toMatchObject({ text: expect.stringContaining('没有可核验') });
@@ -563,6 +580,7 @@ it('允许显式模型请求，验证响应并产生服务端准许的动作和�
     expect.any(AbortSignal),
     expect.any(String),
     false,
+    expect.any(Function),
   );
 });
 it('超时取消上游，错误后可切本地模式', async () => {
@@ -601,11 +619,35 @@ it('访客与模型预算分别限流且不会额外调用供应商', async () =
   await post(api, ['想听雨声'], true)
     .expect(429)
     .expect(({ body }) => expect(body.error.code).toBe('MODEL_LIMIT'));
-  for (let n = 0; n < 6; n++) await post(api, ['雨声']).expect(200);
-  await post(api, ['雨声'])
-    .expect(429)
-    .expect(({ body }) => expect(body.error.code).toBe('ASSISTANT_LIMIT'));
+  for (let n = 0; n < 12; n++) await post(api, ['雨声']).expect(200);
   expect(provider.choose).toHaveBeenCalledTimes(1);
+});
+it('站内每日次数按 UTC 重置，Retry-After 到下一次零点且本地不受限', async () => {
+  let timestamp = Date.parse('2026-11-20T23:59:55Z');
+  const provider = testProvider();
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/assistant',
+    createAssistantRouter({
+      origin,
+      providers: [provider],
+      dailyLimit: 1,
+      now: () => timestamp,
+      providerLimits: {
+        deepseek: { dailyLimit: 2, dailyBudget: 0.1 },
+        openai: { dailyLimit: 2, dailyBudget: 0.1 },
+      },
+    }),
+  );
+  app.use(errorHandler);
+  const api = request.agent(app);
+  await post(api, ['你好呀'], true).expect(200);
+  await post(api, ['你好呀'], true).expect(429).expect('Retry-After', '5');
+  await post(api, ['你好呀']).expect(200);
+  timestamp += 5000;
+  await post(api, ['你好呀'], true).expect(200);
+  expect(provider.choose).toHaveBeenCalledTimes(2);
 });
 let server: Server | undefined;
 afterEach(async () => {
@@ -638,10 +680,11 @@ it('客户端在结构化回复完成前断线会取消上游', async () => {
         );
       }),
   );
-  server = createApp({ assistantProvider: provider, assistantTimeoutMs: 2000 }).listen(
-    0,
-    '127.0.0.1',
-  );
+  server = createApp({
+    assistantProvider: provider,
+    assistantTimeoutMs: 2000,
+    config: loadConfig({ AI_DAILY_REQUEST_LIMIT: '1' }),
+  }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();
   if (!address || typeof address === 'string') throw Error('测试监听失败');
@@ -656,6 +699,13 @@ it('客户端在结构化回复完成前断线会取消上游', async () => {
   controller.abort();
   await aborted;
   expect(await response).toMatchObject({ name: 'AbortError' });
+  const api = request(server);
+  await post(api, ['睡前习惯是什么？'], true)
+    .expect(429)
+    .expect(({ body }) => {
+      expect(body.error.code).toBe('MODEL_LIMIT');
+    });
+  await post(api, ['睡前习惯是什么？']).expect(200);
 });
 it('OpenAI SSE 只转发限定上下文，解析分片并隔离密钥', async () => {
   const payload =
@@ -761,11 +811,74 @@ it('DeepSeek SSE 使用当前模型，复杂请求启用低档思考且只返回
 });
 it('预算不足时阻止调用且本地仍可用', async () => {
   const provider = testProvider();
+  const text = '你好呀';
+  const budget = 1.5 * estimateCost(provider, groundedPrompt([], false, text), text, false);
   const api = request(
-    createApp({ assistantProvider: provider, config: loadConfig({ AI_DAILY_BUDGET_USD: '0.01' }) }),
+    createApp({
+      assistantProvider: provider,
+      config: loadConfig({ AI_DAILY_BUDGET_USD: String(budget) }),
+    }),
   );
-  await post(api, ['想听雨声'], true).expect(200);
-  await post(api, ['想听雨声'], true).expect(429);
+  await post(api, [text], true).expect(200);
+  await post(api, [text], true)
+    .expect(429)
+    .expect(({ body, headers }) => {
+      expect(body.error.code).toBe('MODEL_BUDGET');
+      expect(headers['retry-after']).toBeUndefined();
+    });
   await post(api, ['雨声'], false).expect(200);
   expect(provider.choose).toHaveBeenCalledTimes(1);
+});
+
+it('用实际用量结算，上游限流仅计一次尝试，两个同网访客各有自己的窗口', async () => {
+  const choose = vi
+    .fn<AssistantProvider['choose']>(async (_message, _signal, _system, _detailed, report) => {
+      report?.({ prompt_tokens: 500, completion_tokens: 40 });
+      return { kind: 'chat', text: '晚上好。' };
+    })
+    .mockRejectedValueOnce(new ProviderError('upstream_rate', 3));
+  const app = createApp({ assistantProvider: testProvider(choose) });
+  const first = request.agent(app);
+  const second = request.agent(app);
+  await post(first, ['你好呀'], true).expect(429).expect('Retry-After', '3');
+  for (let n = 0; n < 11; n++) await post(first, ['你好呀'], true).expect(200);
+  await post(first, ['你好呀'], true)
+    .expect(429)
+    .expect(({ body, headers }) => {
+      expect(body.error.code).toBe('ASSISTANT_LIMIT');
+      expect(Number(headers['retry-after'])).toBeGreaterThan(0);
+    });
+  await post(first, ['雨声'], false).expect(200);
+  await post(second, ['你好呀'], true).expect(200);
+  expect(choose).toHaveBeenCalledTimes(13);
+});
+
+it('有明确上游用量时释放预留差额，429 也释放预留但仍受每日次数限制', async () => {
+  const text = '你好呀';
+  const choose = vi
+    .fn<AssistantProvider['choose']>(async (_message, _signal, _system, _detailed, report) => {
+      report?.({ prompt_tokens: 5, completion_tokens: 5 });
+      return { kind: 'chat', text: '晚上好。' };
+    })
+    .mockRejectedValueOnce(new ProviderError('upstream_rate'));
+  const provider = testProvider(choose);
+  const budget = 1.5 * estimateCost(provider, groundedPrompt([], false, text), text, false);
+  const api = request(
+    createApp({
+      assistantProvider: provider,
+      config: loadConfig({
+        AI_DAILY_BUDGET_USD: String(budget),
+        AI_DAILY_REQUEST_LIMIT: '4',
+      }),
+    }),
+  );
+  await post(api, [text], true).expect(429);
+  for (let n = 0; n < 3; n++) await post(api, [text], true).expect(200);
+  await post(api, [text], true)
+    .expect(429)
+    .expect(({ body, headers }) => {
+      expect(body.error.code).toBe('MODEL_LIMIT');
+      expect(Number(headers['retry-after'])).toBeGreaterThan(0);
+    });
+  expect(choose).toHaveBeenCalledTimes(4);
 });

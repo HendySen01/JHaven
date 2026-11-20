@@ -7,7 +7,7 @@ import {
   type AccountPreset,
   type SpacePreferences,
 } from '@jhaven/shared';
-import { availableTrackIds, TRACKS } from '../types/audio';
+import { TRACK_IDS, TRACKS } from '../types/audio';
 import { BUILTIN_PRESETS, copyMix, singleTrackMix } from '../domain/audio';
 import { useAudioStore } from '../stores/audio';
 import { useAuthStore } from '../stores/auth';
@@ -212,7 +212,7 @@ function resetPreferences() {
           </button>
           <fieldset class="space-tracks">
             <legend>音轨和音量</legend>
-            <div v-for="id in availableTrackIds" :key="id">
+            <div v-for="id in TRACK_IDS" :key="id">
               <label class="space-check"
                 ><input v-model="mix[id].enabled" type="checkbox" />{{ TRACKS[id].name }}</label
               >

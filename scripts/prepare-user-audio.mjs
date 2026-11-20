@@ -39,6 +39,7 @@ const approvedHashes = {
   'soft-chew': 'd39644ccf094d9329e7f6bcb421273bffadb344d51fb262f519b8f1a485feda2',
   fan: 'cec3862ceaee13c2ecd55dd3f1121d4e3d8e0eb1d198b5a0ec7e5d90fa9b4554',
 };
+const publicManifest = JSON.parse(await readFile(new URL('manifest.json', library), 'utf8'));
 const rate = 32000;
 const browser = await chromium.launch(
   process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {},
@@ -51,7 +52,12 @@ try {
   for (const [id, name, filename, start, end, fade, rms, author, freesound] of selected) {
     const raw = await readFile(new URL(filename, original));
     const sourceSha256 = sha(raw);
-    if (freesound && sourceSha256 !== approvedHashes[id])
+    const known = publicManifest.find((asset) => asset.id === id);
+    const expectedHash = freesound ? approvedHashes[id] : known?.sourceSha256;
+    if (
+      (!freesound && known?.distribution !== 'maintainer-confirmed') ||
+      sourceSha256 !== expectedHash
+    )
       throw new Error(`${filename} 与本轮核对过的公开原件不一致。`);
     const result = await page.evaluate(
       async ({ encoded, start, end, fade, rms, rate }) => {
@@ -147,7 +153,7 @@ try {
     const data = {
       id,
       name,
-      author: author ?? '待核实',
+      author: author ?? null,
       source: freesound ? `https://freesound.org/people/${author}/sounds/${freesound}/` : filename,
       sourceFile: filename,
       sourceSha256,
@@ -155,7 +161,8 @@ try {
       sourceChannels: result.channels,
       inputRmsDb: +result.inputRmsDb.toFixed(1),
       changes: `${start}–${end} 秒连续片段；${fade} 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。`,
-      license: freesound ? 'CC0-1.0' : 'LicenseRef-Local-Audition',
+      license: freesound ? 'CC0-1.0' : null,
+      ...(!freesound ? { distribution: 'maintainer-confirmed' } : {}),
       licenseUrl: freesound ? 'https://creativecommons.org/publicdomain/zero/1.0/' : null,
       file: `${id}.wav`,
       format: 'PCM WAV 16-bit mono',
@@ -171,46 +178,31 @@ try {
   await browser.close();
 }
 await mkdir(rendered, { recursive: true });
-const publicManifest = JSON.parse(await readFile(new URL('manifest.json', library), 'utf8'));
 for (const { wave, data } of processed) {
-  if (data.license === 'CC0-1.0') {
-    const index = publicManifest.findIndex(({ id }) => id === data.id);
-    if (index < 0) throw new Error(`缺少待替换音轨 ${data.id}`);
-    if (publicManifest[index].license === 'LicenseRef-JHaven-Original') {
-      await copyFile(
-        new URL(data.file, library),
-        new URL(`${data.id}.previous-synthetic.wav`, rendered),
-        constants.COPYFILE_EXCL,
-      ).catch((error) => {
-        if (error.code !== 'EEXIST') throw error;
-      });
-    }
-    await writeFile(new URL(data.file, library), wave);
-    publicManifest[index] = data;
-  } else await writeFile(new URL(data.file, rendered), wave);
-}
-if (!fanOnly) {
-  await writeFile(
-    new URL('manifest.json', rendered),
-    JSON.stringify(
-      processed
-        .filter(({ data }) => data.license === 'LicenseRef-Local-Audition')
-        .map(({ data }) => data),
-      null,
-      2,
-    ) + '\n',
-  );
+  const index = publicManifest.findIndex(({ id }) => id === data.id);
+  if (index < 0) throw new Error('缺少待更新音轨：' + data.id);
+  if (publicManifest[index].license === 'LicenseRef-JHaven-Original') {
+    await copyFile(
+      new URL(data.file, library),
+      new URL(data.id + '.previous-synthetic.wav', rendered),
+      constants.COPYFILE_EXCL,
+    ).catch((error) => {
+      if (error.code !== 'EEXIST') throw error;
+    });
+  }
+  await writeFile(new URL(data.file, library), wave);
+  publicManifest[index] = data;
 }
 await writeFile(new URL('manifest.json', library), JSON.stringify(publicManifest, null, 2) + '\n');
 await writeFile(
   new URL('ATTRIBUTION.txt', library),
   [
     'JHaven 环境音来源与署名',
-    '公开声库的外部录音采用 CC0-1.0。项目自制音以 JHaven 名义随产品分发。',
+    '逐轨许可与分发来源如下。项目自制音以 JHaven 名义随产品分发。',
     '许可：https://creativecommons.org/publicdomain/zero/1.0/',
     ...publicManifest.map(
       (asset) =>
-        `\n${asset.file} — ${asset.name}\n作者：${asset.author}\n来源：${asset.source}\n许可：${asset.license}\n处理：${asset.changes}\nSHA-256: ${asset.sha256}`,
+        `\n${asset.file} — ${asset.name}\n作者：${asset.author ?? '未提供'}\n来源：${asset.source}\n授权：${asset.license ?? '维护者确认可公开分发，未提供具体许可证名称'}\n处理：${asset.changes}\nSHA-256: ${asset.sha256}`,
     ),
     '',
   ].join('\n'),

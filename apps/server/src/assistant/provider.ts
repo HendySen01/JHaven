@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import type { AssistantProviderId } from '@jhaven/shared';
 
+const tokenUsage = z.object({
+  prompt_tokens: z.number().int().min(0).max(2_000_000),
+  completion_tokens: z.number().int().min(0).max(2_000_000),
+});
+export type TokenUsage = z.infer<typeof tokenUsage>;
+
 export interface AssistantProvider {
   readonly name: AssistantProviderId;
   readonly model?: string;
@@ -9,7 +15,34 @@ export interface AssistantProvider {
     signal: AbortSignal,
     system: string,
     detailed?: boolean,
+    reportUsage?: (usage: TokenUsage) => void,
   ): Promise<unknown>;
+}
+
+function outputLimit(name: AssistantProviderId, detailed: boolean) {
+  return detailed ? (name === 'deepseek' ? 1024 : 768) : 192;
+}
+
+export function estimateCost(
+  provider: AssistantProvider,
+  system: string,
+  message: string,
+  detailed: boolean,
+  usage?: TokenUsage,
+) {
+  // 用公开高峰价、不依赖缓存折扣。未审核的 OpenAI 型号使用更高的占位价。
+  const [inputRate, outputRate] =
+    provider.name === 'deepseek'
+      ? provider.model === 'deepseek-v4-pro'
+        ? [1.32, 3.96]
+        : [0.3, 1.2]
+      : !provider.model || /^gpt-4\.1-mini(?:-2025-04-14)?$/.test(provider.model)
+        ? [0.4, 1.6]
+        : [30, 180];
+  const input =
+    usage?.prompt_tokens ?? Buffer.byteLength(system) + Buffer.byteLength(message) + 128;
+  const output = usage?.completion_tokens ?? outputLimit(provider.name, detailed);
+  return (input * inputRate + output * outputRate) / 1_000_000;
 }
 export class ProviderError extends Error {
   constructor(
@@ -73,7 +106,7 @@ function chatProvider(
   return {
     name,
     model,
-    async choose(message, signal, system, detailed = false) {
+    async choose(message, signal, system, detailed = false, reportUsage) {
       const response = await fetcher(baseUrl + '/chat/completions', {
         method: 'POST',
         redirect: 'error',
@@ -82,13 +115,14 @@ function chatProvider(
         body: JSON.stringify({
           model,
           stream: true,
+          stream_options: { include_usage: true },
           ...(name === 'deepseek'
             ? {
-                max_tokens: detailed ? 1024 : 192,
+                max_tokens: outputLimit(name, detailed),
                 thinking: { type: detailed ? 'enabled' : 'disabled' },
                 ...(detailed ? { reasoning_effort: 'low' } : {}),
               }
-            : { store: false, max_completion_tokens: detailed ? 768 : 192 }),
+            : { store: false, max_completion_tokens: outputLimit(name, detailed) }),
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: system },
@@ -141,7 +175,10 @@ function chatProvider(
               if (!finished) throw new ProviderError('invalid_output');
               return JSON.parse(output) as unknown;
             }
-            const part = chunkSchema.parse(JSON.parse(data)).choices[0];
+            const frame = JSON.parse(data) as { usage?: unknown };
+            const usage = tokenUsage.safeParse(frame.usage);
+            if (usage.success) reportUsage?.(usage.data);
+            const part = chunkSchema.parse(frame).choices[0];
             if (!part) continue;
             output += part.delta.content ?? '';
             if (output.length > 4096) throw new ProviderError('invalid_output');

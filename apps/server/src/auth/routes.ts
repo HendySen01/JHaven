@@ -3,6 +3,7 @@ import { Router, type CookieOptions, type Request, type RequestHandler } from 'e
 import type { Pool } from 'mysql2/promise';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
+import { sessionCookieName, sessionToken } from './session-cookie.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { createSpaceRouter } from '../space/routes.js';
 import { createRelaxationRouter } from '../space/relaxation.js';
@@ -55,17 +56,8 @@ export function createAuthRouter({
   secure: boolean;
 }) {
   const router = Router();
-  const cookieName = secure ? '__Host-jhaven_session' : 'jhaven_session';
+  const cookieName = sessionCookieName(secure);
   const cookie: CookieOptions = { httpOnly: true, secure, sameSite: 'lax', path: '/' };
-  function tokenOf(request: Request) {
-    const matches = (request.headers.cookie ?? '')
-      .split(';')
-      .map((part) => part.trim())
-      .filter((part) => part.startsWith(`${cookieName}=`));
-    if (matches.length !== 1) return undefined;
-    const token = matches[0]!.slice(cookieName.length + 1);
-    return /^[A-Za-z0-9_-]{43}$/.test(token) ? token : undefined;
-  }
   const requireSameOrigin: RequestHandler = (request, _response, next) => {
     if (request.get('Origin') !== origin || request.get('Sec-Fetch-Site') === 'cross-site') {
       throw new AppError(403, 'INVALID_ORIGIN', '请从本站页面提交账户请求。');
@@ -85,7 +77,7 @@ export function createAuthRouter({
     return parsed.data;
   }
   const requireSession: RequestHandler = async (request, response, next) => {
-    const token = tokenOf(request);
+    const token = sessionToken(request, secure);
     const account = token ? await findAccount(database(), token) : null;
     if (!account) throw new AppError(401, 'UNAUTHENTICATED', '请先登录。');
     response.locals.account = account;
@@ -119,13 +111,13 @@ export function createAuthRouter({
     const user = await findCredentials(db, username);
     const correct = await verifyPassword(password, user?.password_hash);
     if (!user || !correct) throw new AppError(401, 'INVALID_CREDENTIALS', '用户名或密码不正确。');
-    const token = await createSession(db, String(user.id), tokenOf(request));
+    const token = await createSession(db, String(user.id), sessionToken(request, secure));
     response.cookie(cookieName, token, { ...cookie, maxAge: SESSION_SECONDS * 1000 });
     response.json(accountFrom(user));
   });
   router.post('/auth/logout', requireSameOrigin, async (request, response) => {
     parse(empty, request.body);
-    const token = tokenOf(request);
+    const token = sessionToken(request, secure);
     if (token) await removeSession(database(), token);
     response.clearCookie(cookieName, cookie);
     response.status(204).end();

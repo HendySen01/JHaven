@@ -336,7 +336,7 @@ test('模型需逐页同意，限流后可以改用本地知识', async ({ page 
     return route.fulfill({
       status: 429,
       headers: { 'Retry-After': '30' },
-      json: { error: { code: 'MODEL_LIMIT' } },
+      json: { error: { code: 'ASSISTANT_LIMIT' } },
     });
   });
   await page.goto('/assistant');
@@ -346,7 +346,7 @@ test('模型需逐页同意，限流后可以改用本地知识', async ({ page 
   await expect(page.getByRole('button', { name: '推荐 · 思绪整理' })).toBeVisible();
   await consent.check();
   await page.getByRole('button', { name: '重新生成' }).click();
-  await expect(page.getByText('JHaven 的 AI 用量已达到今日上限，可以改用本地知识。')).toBeVisible();
+  await expect(page.getByText(/AI 消息发得有点快/)).toBeVisible();
   await expect(page.getByRole('button', { name: '重试回复' })).toBeDisabled();
   await expect(page.getByText('请求未完成', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '改用本地知识' }).click();

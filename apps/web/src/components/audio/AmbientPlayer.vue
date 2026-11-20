@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { AudioLines, Trash2 } from '@lucide/vue';
-import { availableTrackIds, localTrackIds, TRACKS } from '../../types/audio';
+import { TRACK_IDS, TRACKS } from '../../types/audio';
 import { BUILTIN_PRESETS, trackNotes } from '../../domain/audio';
 import { useAudioEngine } from '../../composables/useAudioEngine';
 import AudioTrackControl from './AudioTrackControl.vue';
@@ -12,15 +12,13 @@ const audio = useAudioEngine();
 const name = ref('');
 const query = ref('');
 const category = ref('all');
-const hasLocalRecordings = availableTrackIds.some((id) => localTrackIds.includes(id));
 const visibleTracks = computed(() => {
   const search = query.value.trim().toLowerCase();
-  return availableTrackIds.filter((id) => {
+  return TRACK_IDS.filter((id) => {
     const track = TRACKS[id];
     const matchesCategory =
       category.value === 'all' ||
       category.value === track.category ||
-      (category.value === 'local' && localTrackIds.includes(id)) ||
       (category.value === 'favorites' && audio.favorites.includes(id));
     const names = [track.name, track.english, ...(trackNotes[id]?.aliases ?? [])];
     return matchesCategory && names.some((name) => name.toLowerCase().includes(search));
@@ -78,12 +76,10 @@ function save() {
           <option value="nature">自然实录</option>
           <option value="steady">稳定背景音</option>
           <option value="texture">近距离细响</option>
-          <option v-if="hasLocalRecordings" value="local">试听录音</option>
           <option value="favorites">我的收藏</option>
         </select></label
       >
     </div>
-    <p v-if="category === 'local'" class="audio-hint">这些录音可在这里试听，暂未加入公开声库。</p>
     <p class="audio-hint">想单独听听？先停下混音。试听 12 秒后会自动收声。</p>
     <p v-if="audio.auditionId" class="audio-hint">单轨试听 · {{ TRACKS[audio.auditionId].name }}</p>
     <p v-if="!visibleTracks.length" class="audio-hint" role="status">没有匹配的声音。</p>
