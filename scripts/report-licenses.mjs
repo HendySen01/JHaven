@@ -37,6 +37,14 @@ for (const [location, entry] of Object.entries(lock.packages)) {
     );
     continue;
   }
+  if (licenseFiles.length === 0 && (key === 'pg-types@2.2.0' || key === 'pgpass@1.0.5')) {
+    const readme = await readFile(path.join(root, location, 'README.md'), 'utf8');
+    const notice = /^#+ License[^\S\r\n]*\r?\n([\s\S]+)$/im.exec(readme)?.[1]?.trim();
+    if (!notice?.includes('Permission is hereby granted'))
+      throw new Error(`未找到 README 许可：${key}`);
+    notices.push(`\n${'='.repeat(72)}\n${key} — README 许可\n${source}\n`, notice);
+    continue;
+  }
   if (licenseFiles.length === 0) throw new Error(`生产依赖缺少许可文件，请人工核查：${key}`);
   for (const file of licenseFiles) {
     notices.push(

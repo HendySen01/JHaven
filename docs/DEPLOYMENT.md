@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-当前可构建为 Vue 静态资源与 Express API。账户和私人数据功能需要已迁移且可达的 MySQL。Vercel 单项目和自托管配置均需在实际环境验收。
+当前可构建为 Vue 静态资源与 Express API。账户和私人数据功能需要可达、已迁移的 PostgreSQL。Vercel 单项目配置保留，目标 Supabase 项目通过 Preview 后再上线。
 
 静态部署保留 `apps/web/dist/audio` 内 16 条 WAV、清单与署名。音轨文件名沿用稳定 ID，部署示例允许浏览器重新验证缓存。若入口或 CDN 缓存过此前缺失资源的 404，发布时需清除这四条旧缓存。根构建校验哈希和数字质量。生产 Nginx 与 HTTPS 尚未实测。
 
@@ -39,12 +39,20 @@ npm run preview
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 正式域名         | `APP_ORIGIN` 填浏览器使用的完整 HTTPS 来源，末尾无斜杠，不含路径。                                                                                                                                                                                                                                                             |
 | Preview          | 默认使用 Vercel 注入的 `VERCEL_ENV` 与 `VERCEL_URL`。打开 Automatically expose System Environment Variables，并通过该次部署 URL 测试。如使用固定预览别名，给对应 Preview 环境单独设置 `APP_ORIGIN`。                                                                                                                           |
-| 账户、日记与收藏 | `DB_HOST`、`DB_NAME`、`DB_USER`、`DB_PASSWORD` 一起设置。`DB_PORT` 默认 3306，托管数据库按服务要求设置 `DB_TLS=1`。Preview 使用独立数据库。                                                                                                                                                                                    |
+| 账户、日记与收藏 | `DATABASE_URL` 使用受限角色的 Supavisor Transaction pooler，`DATABASE_CA_PEM` 粘贴 Dashboard 下载的完整 CA PEM。Preview 使用独立项目或独立数据库。                                                                                                                                                                             |
 | 可选 DeepSeek    | `DEEPSEEK_API_KEY`、`DEEPSEEK_MODEL`、`AI_VERIFIED_DEEPSEEK_MODEL`、`DEEPSEEK_BASE_URL`。默认官方地址及 `deepseek-flash`，非默认模型须核对验收标记。                                                                                                                                                                           |
 | 可选 OpenAI      | `AI_OPENAI_API_KEY`、`AI_OPENAI_MODEL`、`AI_VERIFIED_OPENAI_MODEL`、`AI_OPENAI_BASE_URL`。验收标记须与模型一致。                                                                                                                                                                                                               |
 | 可选用量控制     | `AI_DAILY_REQUEST_LIMIT`、`AI_DAILY_BUDGET_USD`、`AI_ACCOUNT_WINDOW_LIMIT`、`AI_GUEST_WINDOW_LIMIT`、`AI_IP_WINDOW_LIMIT`，以及 `AI_DEEPSEEK_DAILY_REQUEST_LIMIT`、`AI_DEEPSEEK_DAILY_BUDGET_USD`、`AI_OPENAI_DAILY_REQUEST_LIMIT`、`AI_OPENAI_DAILY_BUDGET_USD`。计数按实例维护，公开启用付费模型前在平台和供应商侧配置额度。 |
 
 密钥放在对应环境的服务端变量，不加 `VITE_` 前缀。Vercel 入口选择运行模式，无需填写 `HOST`、`PORT` 或 `TRUST_LOOPBACK_PROXY`。数据库地址须可从 Vercel Functions 访问，本机 `localhost` 或局域网地址不可用；迁移在发布流程中手动执行。
+
+### Supabase 首次配置
+
+1. 在 Supabase Dashboard 创建 JHaven 的独立项目。启用数据库 SSL Enforcement，下载 Database Settings → SSL Configuration 的 CA 公开证书。保持 `jhaven` schema 不对 Data API 开放。 [SSL Enforcement](https://supabase.com/docs/guides/platform/ssl-enforcement)
+2. 通过项目管理员的已验证 TLS 连接创建登录角色 `jhaven_owner` 和 `jhaven_app`。可用 `CREATE ROLE jhaven_owner LOGIN;` 与 `CREATE ROLE jhaven_app LOGIN;`，分别以 `psql` 的 `\password` 设置独立密码。由可切换到 `jhaven_owner` 的管理员执行 `CREATE SCHEMA jhaven AUTHORIZATION jhaven_owner;`，把对象所有权留给迁移角色。
+3. 在维护环境设 `MIGRATION_DATABASE_URL`，使用 Connect 页的 Direct `5432`，或在只有 IPv4 时用 Session pooler `5432`，以 `jhaven_owner` 连接。共享 pooler 的用户名为 `角色名.项目引用`。同时设置 `DATABASE_CA_PEM`，在仓库根目录运行 `npm run db:migrate`，然后由对象所有者在同一目标库执行 [运行权限 SQL](../apps/server/migrations-postgres/runtime-grants.sql)。通过 `psql` 运行授权时用 `sslmode=verify-full` 及对应 CA 文件。 [连接方式](https://supabase.com/docs/guides/database/connecting-to-postgres)
+4. 在 Vercel → JHaven → Settings → Environment Variables 为目标环境设置 `DATABASE_URL` 和 `DATABASE_CA_PEM`。运行 URL 使用 Connect 页的 Transaction pooler `6543`，账号为 `jhaven_app.项目引用`，密码中的特殊字符需 URL 编码。应用 URL 不附加 `sslmode` 或其他查询参数，CA 和 TLS 由连接池控制，避免 URL 参数覆盖证书选项。应用每热实例复用一个连接，不使用命名预编译语句。保留现有 `APP_ORIGIN` 规则。 [pg TLS 参数](https://node-postgres.com/features/ssl)
+5. 删除 Vercel 的旧变量 `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_TLS`。`MIGRATION_DATABASE_URL` 仅留在维护环境。此流程创建新 PostgreSQL 结构，后续需要迁移旧业务数据时须单独处理。
 
 首次部署后核对 `/`、刷新 `/assistant`、`/audio/manifest.json`、`/api/health`、`/api/auth/status` 及 `/api/assistant/status`。再在 Preview 独立库验证登录 Cookie、同源写请求、代理传输和助手 NDJSON。 [Vercel 系统变量](https://vercel.com/docs/environment-variables/system-environment-variables)
 
@@ -54,7 +62,7 @@ npm run preview
 2. 根目录执行 `npm ci`、`npm run check`，需要时执行 E2E；保留发布版本与输出，禁止在正在服务的目录直接覆盖构建。
 3. 将 `apps/web/dist` 的内容放到静态根目录，例如 `/srv/jhaven/web`。该目录中应有 `index.html`、`assets`、favicon 和第三方许可声明。
 4. API 保留根 `package.json`、根 `node_modules`、`apps/server` 和 `packages/shared` 的清单及各自 `dist`，保证 workspace 符号链接有效。不能仅复制 `apps/server/dist` 后期待共享包自动存在。
-5. 为已创建的独立数据库设置 `DB_*`，用迁移账号显式执行数据库迁移，再切换为运行时账号。运行构建后迁移可从 `apps/server` 执行 `node --env-file-if-exists=.env dist/db/migrate.js`。设置 `NODE_ENV=production`、`HOST=127.0.0.1`、`PORT=3001`、`APP_ORIGIN` 为对外 HTTPS 来源，以无特权用户运行 `npm start`。账户部署应探测 `/api/auth/status`，保留进程健康接口 `/api/health`。 [数据库](DATABASE.md) [账户](AUTH.md)
+5. 在独立 PostgreSQL 目标库使用 `MIGRATION_DATABASE_URL` 和 `DATABASE_CA_PEM` 执行迁移与授权，运行时切换到受限 `DATABASE_URL`。设置 `NODE_ENV=production`、`HOST=127.0.0.1`、`PORT=3001` 和实际 HTTPS `APP_ORIGIN`，以无特权用户运行 `npm start`。探测 `/api/auth/status` 和 `/api/health`。 [数据库](DATABASE.md) [账户](AUTH.md)
 6. Nginx 同域提供静态内容并代理 `/api/`。可在现有 Nginx 的 `http` 上下文包含 `deploy/nginx.conf`，按实际路径与域名替换。外部 HTTPS 入口的证书/终止层由宿主负责配置，示例只监听本地 8080，不直接开放到公网。
 7. 经 HTTPS 入口验证 `/`、刷新 `/about`、404 路由和 `/api/health`。API 不应被 SPA fallback 吞掉；`/assets/` 不存在的文件必须返回 404。
 

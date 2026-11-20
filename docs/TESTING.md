@@ -1,5 +1,14 @@
 # 测试与验证
 
+## Sprint 10.2 PostgreSQL 切换（2026-11-21）
+
+- 本地数据库回归使用 `JHAVEN_TEST_POSTGRES=1`、回环地址且库名以 `jhaven_test_` 开头的独立 PostgreSQL。分别提供 `DATABASE_URL`、`MIGRATION_DATABASE_URL` 与测试 CA，提前创建 `jhaven_app` 受限角色。先运行 `npm run check` 完成迁移与授权，再运行浏览器测试。
+- PostgreSQL 17.6 上 `npm run check` 通过 148 项单元与 API 测试、格式、ESLint、TypeScript、生产构建及 16 条音轨校验。核验六份迁移的 SHA-256、重复执行、七张表及关键约束、运行角色权限、认证与会话轮换、双账户隔离、收藏、偏好、跨午夜日记和练习记录。
+- `npm run test:e2e -- --workers=5` 的系统 Chrome 在 375、768、1440 px 通过 138 项。最终版本在同样三档重跑账户、个人空间及练习专项，24 项通过。Firefox 46 项通过，Windows WebKit 30 项通过，按现有兼容条件跳过 16 项原生 Web Audio 用例。
+- 额外使用同一隔离实例做 TLS 负向验证。错误 CA 返回 `UNABLE_TO_VERIFY_LEAF_SIGNATURE`，证书只含 `localhost` 时以 `127.0.0.1` 连接返回 `ERR_TLS_CERT_ALTNAME_INVALID`。
+- 仓库根配置通过 Vercel 官方 JSON Schema 校验。使用 Preview 模式本地加载 Express 构建入口，连接隔离 PostgreSQL 后，`/api/health` 与 `/api/auth/status` 返回 200，访客访问 `/api/auth/me` 返回 401。
+- 本阶段未连接 Supabase、未部署或进行真实模型请求。实际 Safari、移动真机及 Supavisor 未验证。
+
 ## Sprint 9.7 对话回顾与安全反馈（2026-11-20）
 
 - 隔离测试覆盖原文按顺序传输、跨日发送日期、9,600 字节裁剪、站内隐私输入保留草稿、无害项目取舍、含混表达、上游 `content_filter` 和原有安全转介。40 轮 Chrome 用例核实第 31 轮准备时长在第 40 轮仍可作为相关历史传输，且较早的闲聊偏好只发标记。

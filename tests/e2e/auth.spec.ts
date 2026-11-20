@@ -13,8 +13,7 @@ test('访客可用声音库，账户页需由服务端确认会话', async ({ pa
 });
 
 test('真实注册、登录失败、登录成功、刷新恢复和退出', async ({ page }) => {
-  test.skip(process.env.JHAVEN_TEST_MYSQL !== '1', '需要已迁移的独立 MySQL 测试库。');
-  expect(process.env.DB_NAME).toMatch(/^jhaven_test_/);
+  test.skip(process.env.JHAVEN_TEST_POSTGRES !== '1', '需要已迁移的独立 PostgreSQL 测试库。');
   const username = `browser_${randomBytes(8).toString('hex')}`;
   const password = '仅用于浏览器测试的临时密码 932';
   await page.goto('/register');

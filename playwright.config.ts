@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import { testDatabaseUrl } from './apps/server/src/db/test-target.js';
 
 const apiPort = process.env.PLAYWRIGHT_API_PORT ?? '3001';
+const database = process.env.JHAVEN_TEST_POSTGRES === '1' ? process.env.DATABASE_URL : '';
+if (process.env.JHAVEN_TEST_POSTGRES === '1') testDatabaseUrl(database);
 const compat = process.env.PLAYWRIGHT_COMPAT_BROWSER;
 if (compat && compat !== 'firefox' && compat !== 'webkit')
   throw new Error('PLAYWRIGHT_COMPAT_BROWSER 只接受 firefox 或 webkit。');
@@ -49,7 +52,7 @@ export default defineConfig({
       ],
   webServer: [
     {
-      command: 'npm run start -w @jhaven/server',
+      command: 'node apps/server/dist/index.js',
       url: `http://127.0.0.1:${apiPort}/api/health`,
       env: {
         PORT: apiPort,
@@ -60,6 +63,7 @@ export default defineConfig({
         DEEPSEEK_API_KEY: '',
         AI_OPENAI_API_KEY: '',
         AI_DAILY_REQUEST_LIMIT: '0',
+        DATABASE_URL: database ?? '',
       },
       reuseExistingServer: false,
     },

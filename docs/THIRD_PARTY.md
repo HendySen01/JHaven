@@ -1,5 +1,7 @@
 # 第三方来源与许可登记
 
+Sprint 10.2 服务端新增 `pg` 8.23.1（MIT）和 `@types/pg`，移除运行时 `mysql2`。间接依赖中 `pg-types`、`pgpass` 的原始许可随发布包 README 改为从该节收录。本机验证临时使用 Zonky 分发的 PostgreSQL 17.6 Windows 测试二进制，无运行时依赖或 Skills。 [node-postgres](https://github.com/brianc/node-postgres) · [Zonky 测试包](https://central.sonatype.com/artifact/io.zonky.test.postgres/embedded-postgres-binaries-windows-amd64/17.6.0)
+
 Vercel 部署适配依据官方 Services、Vite 与 Express 文档。本地复验临时使用 Vercel CLI 66.5.0（Apache-2.0），无新增应用依赖或 Skills。 [Vercel Services](https://vercel.com/kb/guide/vercel-services)
 
 Sprint 9.7 复用 Vue、Zod、Vitest、Playwright 与既有 Provider 适配器，参考 DeepSeek 官方流结束原因定义。无新增依赖或 Skills。 [DeepSeek Chat Completions](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/)

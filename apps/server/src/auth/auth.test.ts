@@ -1,10 +1,13 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { rootCertificates } from 'node:tls';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import type { RowDataPacket } from 'mysql2/promise';
+import type { Pool } from 'pg';
 import { createApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import { createDatabasePool } from '../db/pool.js';
+import { createDatabasePool, createMigrationPool } from '../db/pool.js';
+import { testDatabaseUrl } from '../db/test-target.js';
 import { migrate } from '../db/migrate.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { TRACK_IDS } from '@jhaven/shared';
@@ -47,7 +50,14 @@ describe('无数据库时的账户和边界行为', () => {
       .expect(415);
   });
   it('拒绝不完整数据库配置及 HTTP 生产 Origin', () => {
-    expect(() => loadConfig({ DB_HOST: '127.0.0.1' })).toThrow('数据库配置不完整');
+    const DATABASE_URL = 'postgresql://fixture:fixture@localhost/jhaven_test_fixture';
+    expect(() => loadConfig({ DATABASE_URL })).toThrow('DATABASE_CA_PEM');
+    expect(() =>
+      loadConfig({ DATABASE_URL: DATABASE_URL + '?sslmode=disable', DATABASE_CA_PEM: 'fixture' }),
+    ).toThrow('环境配置无效');
+    expect(() =>
+      testDatabaseUrl('postgresql://fixture:fixture@db.example/jhaven_test_fixture'),
+    ).toThrow('本机');
     expect(() => loadConfig({ NODE_ENV: 'production', APP_ORIGIN: origin })).toThrow('HTTPS');
     expect(() => loadConfig({ APP_ORIGIN: `${origin}/other` })).toThrow('无路径');
   });
@@ -70,26 +80,114 @@ describe('无数据库时的账户和边界行为', () => {
   });
 });
 
-const integration = process.env.JHAVEN_TEST_MYSQL === '1' ? describe : describe.skip;
-integration('真实 MySQL 账户集成', () => {
+const integration = process.env.JHAVEN_TEST_POSTGRES === '1' ? describe : describe.skip;
+integration('真实 PostgreSQL 账户集成', () => {
   const names: string[] = [];
   let config: ReturnType<typeof loadConfig>;
   let pool: NonNullable<ReturnType<typeof createDatabasePool>>;
+  let admin: Pool;
   let app: ReturnType<typeof createApp>;
   beforeAll(async () => {
     config = loadConfig({ ...process.env, APP_ORIGIN: origin, NODE_ENV: 'test' });
-    if (!config.DB_NAME?.startsWith('jhaven_test_'))
-      throw new Error('仅允许对 jhaven_test_ 前缀的隔离库运行写入测试。');
+    const runtime = testDatabaseUrl(config.DATABASE_URL);
+    const migration = testDatabaseUrl(config.MIGRATION_DATABASE_URL);
+    if (runtime.host !== migration.host || runtime.pathname !== migration.pathname)
+      throw new Error('测试的两种角色必须连接同一个隔离库。');
+    admin = createMigrationPool(config);
+    await migrate(admin);
+    await admin.query(
+      await readFile(
+        new URL('../../migrations-postgres/runtime-grants.sql', import.meta.url),
+        'utf8',
+      ),
+    );
     pool = createDatabasePool(config)!;
-    await migrate(pool);
     app = createApp({ config, database: pool });
   });
   afterAll(async () => {
-    if (!pool) return;
+    if (!admin) return;
     try {
-      for (const name of names) await pool.execute('DELETE FROM users WHERE username = ?', [name]);
+      for (const name of names)
+        await admin.query('DELETE FROM jhaven.users WHERE username = $1', [name]);
     } finally {
-      await pool.end();
+      await Promise.all([pool?.end(), admin.end()]);
+    }
+  });
+
+  it('六份迁移可重复核验，受限角色仅能访问业务表并使用 TLS', async () => {
+    const tables = [
+      'auth_sessions',
+      'relaxation_sessions',
+      'schema_migrations',
+      'sleep_diaries',
+      'sound_presets',
+      'user_preferences',
+      'users',
+    ];
+    const { rows } = await admin.query<{ tablename: string }>(
+      "SELECT tablename FROM pg_tables WHERE schemaname = 'jhaven' ORDER BY tablename",
+    );
+    expect(rows.map((row) => row.tablename)).toEqual(tables);
+    const { rows: constraints } = await admin.query<{ definition: string }>(
+      `SELECT pg_get_constraintdef(c.oid) AS definition
+       FROM pg_constraint c JOIN pg_namespace n ON c.connamespace = n.oid
+       WHERE n.nspname = 'jhaven'`,
+    );
+    expect(constraints.map(({ definition }) => definition)).toEqual(
+      expect.arrayContaining([
+        'UNIQUE (user_id, name)',
+        'UNIQUE (user_id, entry_date)',
+        'PRIMARY KEY (user_id, id)',
+        'FOREIGN KEY (user_id) REFERENCES jhaven.users(id) ON DELETE CASCADE',
+        'FOREIGN KEY (preset_id) REFERENCES jhaven.sound_presets(id) ON DELETE SET NULL',
+        expect.stringContaining('octet_length(token_hash) = 32'),
+      ]),
+    );
+    const { rows: indexes } = await admin.query<{ indexname: string; indexdef: string }>(
+      "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'jhaven'",
+    );
+    expect(indexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ indexname: 'idx_sessions_expiration' }),
+        expect.objectContaining({
+          indexdef: expect.stringContaining('(user_id, created_at DESC, id DESC)'),
+        }),
+      ]),
+    );
+    const history = 'SELECT name, checksum, applied_at FROM jhaven.schema_migrations ORDER BY name';
+    const before = (await admin.query(history)).rows;
+    expect(before).toHaveLength(6);
+    await migrate(admin);
+    expect((await admin.query(history)).rows).toEqual(before);
+    expect(
+      (await pool.query('SELECT ssl, version FROM pg_stat_ssl WHERE pid = pg_backend_pid()'))
+        .rows[0],
+    ).toMatchObject({ ssl: true, version: /^TLSv1\.[23]$/ });
+    expect(
+      (
+        await pool.query(
+          "SELECT current_user AS role, has_schema_privilege(current_user, 'jhaven', 'CREATE') AS ddl",
+        )
+      ).rows[0],
+    ).toEqual({ role: 'jhaven_app', ddl: false });
+    await expect(pool.query(history)).rejects.toMatchObject({ code: '42501' });
+    await request(app).get('/api/auth/status').expect(200);
+  });
+
+  it('不信任签发 CA 时拒绝连接，登录返回脱敏的数据库不可用错误', async () => {
+    const untrusted = createDatabasePool({ ...config, DATABASE_CA_PEM: rootCertificates[0]! })!;
+    try {
+      await expect(untrusted.query('SELECT 1')).rejects.toMatchObject({
+        code: expect.stringMatching(/UNABLE_TO_VERIFY|SELF_SIGNED|UNABLE_TO_GET_ISSUER/),
+      });
+      await request(createApp({ config, database: untrusted }))
+        .post('/api/auth/login')
+        .set('Origin', origin)
+        .send({ username: randomName(), password })
+        .expect(503)
+        .expect(({ body }) => expect(body.error.code).toBe('DATABASE_UNAVAILABLE'));
+    } finally {
+      await untrusted.end();
     }
   });
 
@@ -230,6 +328,31 @@ integration('真实 MySQL 账户集成', () => {
       .send({ ...preset, mix: { ...preset.mix, rain: { enabled: true, volume: 99 } } })
       .expect(409);
     const presetUrl = '/api/space/presets/' + created.id;
+    const { body: accented } = await api
+      .post('/api/space/presets')
+      .set(owner)
+      .send({ ...preset, name: 'Café' })
+      .expect(201);
+    await api
+      .post('/api/space/presets')
+      .set(owner)
+      .send({ ...preset, name: 'CAFÉ' })
+      .expect(409);
+    const { body: plain } = await api
+      .post('/api/space/presets')
+      .set(owner)
+      .send({ ...preset, name: 'Cafe' })
+      .expect(201);
+    await api
+      .delete('/api/space/presets/' + plain.id)
+      .set(owner)
+      .send({})
+      .expect(204);
+    await api
+      .delete('/api/space/presets/' + accented.id)
+      .set(owner)
+      .send({})
+      .expect(204);
     const settings = { scene: { kind: 'preset', id: created.id }, volume: 29, timerMinutes: 30 };
     await api.put('/api/space/preferences').set(stranger).send(settings).expect(404);
     await api.put(presetUrl).set(stranger).send(preset).expect(404);
@@ -317,8 +440,8 @@ integration('真实 MySQL 账户集成', () => {
     const missing = await login(randomName(), 'wrong').expect(401);
     expect(wrong.body.error.code).toBe(missing.body.error.code);
     expect(wrong.body.error.message).toBe(missing.body.error.message);
-    const [rows] = await pool.execute<RowDataPacket[]>(
-      'SELECT password_hash FROM users WHERE username = ?',
+    const { rows } = await pool.query<{ password_hash: string }>(
+      'SELECT password_hash FROM jhaven.users WHERE username = $1',
       [username],
     );
     expect(rows[0]?.password_hash).toMatch(/^scrypt-v1\$/);
@@ -363,8 +486,8 @@ integration('真实 MySQL 账户集成', () => {
     await api.get('/api/account').set('Cookie', rotatedCookie).expect(401);
     await api.get('/api/account').set('Cookie', cookieB).expect(200, second.body);
     const digest = createHash('sha256').update(cookieB.split('=')[1]!).digest();
-    await pool.execute(
-      'UPDATE auth_sessions SET expires_at = UTC_TIMESTAMP(3) - INTERVAL 1 SECOND WHERE token_hash = ?',
+    await admin.query(
+      "UPDATE jhaven.auth_sessions SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE token_hash = $1",
       [digest],
     );
     await api.get('/api/account').set('Cookie', cookieB).expect(401);

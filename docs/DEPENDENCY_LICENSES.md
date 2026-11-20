@@ -117,6 +117,7 @@
 | @types/json-schema                     | 7.0.15       | MIT           | 已安装                                | https://github.com/DefinitelyTyped/DefinitelyTyped.git               |
 | @types/methods                         | 1.1.4        | MIT           | 已安装                                | https://github.com/DefinitelyTyped/DefinitelyTyped.git               |
 | @types/node                            | 24.10.1      | MIT           | 已安装                                | https://github.com/DefinitelyTyped/DefinitelyTyped.git               |
+| @types/pg                              | 8.23.1       | MIT           | 已安装                                | https://github.com/DefinitelyTyped/DefinitelyTyped.git               |
 | @types/qs                              | 6.15.1       | MIT           | 已安装                                | https://github.com/DefinitelyTyped/DefinitelyTyped.git               |
 | @types/range-parser                    | 1.2.7        | MIT           | 已安装                                | https://github.com/DefinitelyTyped/DefinitelyTyped.git               |
 | @types/send                            | 1.2.1        | MIT           | 已安装                                | https://github.com/DefinitelyTyped/DefinitelyTyped.git               |
@@ -164,7 +165,6 @@
 | asap                                   | 2.0.6        | MIT           | 已安装                                | https://github.com/kriskowal/asap.git                                |
 | assertion-error                        | 2.0.1        | MIT           | 已安装                                | git@github.com:chaijs/assertion-error.git                            |
 | asynckit                               | 0.4.0        | MIT           | 已安装                                | git+https://github.com/alexindigo/asynckit.git                       |
-| aws-ssl-profiles                       | 1.1.2        | MIT           | 已安装                                | https://github.com/mysqljs/aws-ssl-profiles                          |
 | balanced-match                         | 4.0.4        | MIT           | 已安装                                | git://github.com/juliangruber/balanced-match.git                     |
 | birpc                                  | 2.9.0        | MIT           | 已安装                                | git+https://github.com/antfu-collective/birpc.git                    |
 | body-parser                            | 2.4.0        | MIT           | 已安装                                | https://www.npmjs.com/package/body-parser                            |
@@ -241,7 +241,6 @@
 | fresh                                  | 2.0.0        | MIT           | 已安装                                | https://www.npmjs.com/package/fresh                                  |
 | fsevents                               | 2.3.3        | MIT           | 未安装（可选/平台项，需目标平台复核） | https://www.npmjs.com/package/fsevents                               |
 | function-bind                          | 1.1.2        | MIT           | 已安装                                | https://github.com/Raynos/function-bind.git                          |
-| generate-function                      | 2.3.1        | MIT           | 已安装                                | https://github.com/mafintosh/generate-function                       |
 | get-caller-file                        | 2.0.5        | ISC           | 已安装                                | git+https://github.com/stefanpenner/get-caller-file.git              |
 | get-east-asian-width                   | 1.7.0        | MIT           | 已安装                                | https://www.npmjs.com/package/get-east-asian-width                   |
 | get-intrinsic                          | 1.3.0        | MIT           | 已安装                                | git+https://github.com/ljharb/get-intrinsic.git                      |
@@ -268,7 +267,6 @@
 | is-extglob                             | 2.1.1        | MIT           | 已安装                                | https://github.com/jonschlinkert/is-extglob                          |
 | is-glob                                | 4.0.3        | MIT           | 已安装                                | https://github.com/micromatch/is-glob                                |
 | is-promise                             | 4.0.0        | MIT           | 已安装                                | https://github.com/then/is-promise.git                               |
-| is-property                            | 1.0.2        | MIT           | 已安装                                | git://github.com/mikolalysenko/is-property.git                       |
 | isexe                                  | 2.0.0        | ISC           | 已安装                                | git+https://github.com/isaacs/isexe.git                              |
 | jiti                                   | 2.7.0        | MIT           | 已安装                                | https://www.npmjs.com/package/jiti                                   |
 | json-schema-traverse                   | 0.4.1        | MIT           | 已安装                                | git+https://github.com/epoberezkin/json-schema-traverse.git          |
@@ -288,8 +286,6 @@
 | lightningcss-win32-arm64-msvc          | 1.33.0       | MPL-2.0       | 未安装（可选/平台项，需目标平台复核） | https://www.npmjs.com/package/lightningcss-win32-arm64-msvc          |
 | lightningcss-win32-x64-msvc            | 1.33.0       | MPL-2.0       | 已安装                                | https://github.com/parcel-bundler/lightningcss.git                   |
 | locate-path                            | 6.0.0        | MIT           | 已安装                                | https://www.npmjs.com/package/locate-path                            |
-| long                                   | 5.3.2        | Apache-2.0    | 已安装                                | https://github.com/dcodeIO/long.js.git                               |
-| lru.min                                | 1.1.5        | MIT           | 已安装                                | git+https://github.com/wellwelwel/lru.min.git                        |
 | magic-string                           | 0.30.21      | MIT           | 已安装                                | git+https://github.com/Rich-Harris/magic-string.git                  |
 | magic-string                           | 1.4.5        | MIT           | 已安装                                | git+https://github.com/Rich-Harris/magic-string.git                  |
 | math-intrinsics                        | 1.1.0        | MIT           | 已安装                                | git+https://github.com/es-shims/math-intrinsics.git                  |
@@ -305,8 +301,6 @@
 | mitt                                   | 3.0.1        | MIT           | 已安装                                | https://github.com/developit/mitt                                    |
 | ms                                     | 2.1.3        | MIT           | 已安装                                | https://www.npmjs.com/package/ms                                     |
 | muggle-string                          | 0.4.1        | MIT           | 已安装                                | https://github.com/johnsoncodehk/muggle-string.git                   |
-| mysql2                                 | 3.24.6       | MIT           | 已安装                                | git+https://github.com/sidorares/node-mysql2.git                     |
-| named-placeholders                     | 1.1.6        | MIT           | 已安装                                | https://github.com/mysqljs/named-placeholders                        |
 | nanoid                                 | 3.3.20       | MIT           | 已安装                                | https://www.npmjs.com/package/nanoid                                 |
 | natural-compare                        | 1.4.0        | MIT           | 已安装                                | https://www.npmjs.com/package/natural-compare                        |
 | negotiator                             | 1.1.0        | MIT           | 已安装                                | https://www.npmjs.com/package/negotiator                             |
@@ -324,6 +318,14 @@
 | path-key                               | 3.1.1        | MIT           | 已安装                                | https://www.npmjs.com/package/path-key                               |
 | path-to-regexp                         | 8.4.2        | MIT           | 已安装                                | https://github.com/pillarjs/path-to-regexp.git                       |
 | perfect-debounce                       | 1.0.0        | MIT           | 已安装                                | https://www.npmjs.com/package/perfect-debounce                       |
+| pg                                     | 8.23.1       | MIT           | 已安装                                | git://github.com/brianc/node-postgres.git                            |
+| pg-cloudflare                          | 1.4.1        | MIT           | 已安装                                | git://github.com/brianc/node-postgres.git                            |
+| pg-connection-string                   | 2.14.1       | MIT           | 已安装                                | git://github.com/brianc/node-postgres.git                            |
+| pg-int8                                | 1.0.1        | ISC           | 已安装                                | https://github.com/charmander/pg-int8                                |
+| pg-pool                                | 3.14.0       | MIT           | 已安装                                | git://github.com/brianc/node-postgres.git                            |
+| pg-protocol                            | 1.16.1       | MIT           | 已安装                                | git://github.com/brianc/node-postgres.git                            |
+| pg-types                               | 2.2.0        | MIT           | 已安装                                | git://github.com/brianc/node-pg-types.git                            |
+| pgpass                                 | 1.0.5        | MIT           | 已安装                                | https://github.com/hoegaarden/pgpass.git                             |
 | picocolors                             | 1.1.1        | ISC           | 已安装                                | https://www.npmjs.com/package/picocolors                             |
 | picomatch                              | 4.0.7        | MIT           | 已安装                                | https://github.com/micromatch/picomatch                              |
 | pinia                                  | 3.0.4        | MIT           | 已安装                                | git+https://github.com/vuejs/pinia.git                               |
@@ -331,6 +333,10 @@
 | playwright-core                        | 1.65.1       | Apache-2.0    | 已安装                                | git+https://github.com/microsoft/playwright.git                      |
 | postcss                                | 8.5.33       | MIT           | 已安装                                | https://postcss.org/                                                 |
 | postcss-selector-parser                | 7.2.1        | MIT           | 已安装                                | https://github.com/postcss/postcss-selector-parser.git               |
+| postgres-array                         | 2.0.0        | MIT           | 已安装                                | https://www.npmjs.com/package/postgres-array                         |
+| postgres-bytea                         | 1.0.1        | MIT           | 已安装                                | https://www.npmjs.com/package/postgres-bytea                         |
+| postgres-date                          | 1.0.7        | MIT           | 已安装                                | https://www.npmjs.com/package/postgres-date                          |
+| postgres-interval                      | 1.2.0        | MIT           | 已安装                                | https://www.npmjs.com/package/postgres-interval                      |
 | prelude-ls                             | 1.2.1        | MIT           | 已安装                                | git://github.com/gkz/prelude-ls.git                                  |
 | prettier                               | 3.10.1       | MIT           | 已安装                                | https://prettier.io                                                  |
 | proxy-addr                             | 2.0.8        | MIT           | 已安装                                | https://www.npmjs.com/package/proxy-addr                             |
@@ -357,7 +363,7 @@
 | side-channel-weakmap                   | 1.0.2        | MIT           | 已安装                                | git+https://github.com/ljharb/side-channel-weakmap.git               |
 | source-map-js                          | 1.2.2        | BSD-3-Clause  | 已安装                                | https://github.com/7rulnik/source-map-js                             |
 | speakingurl                            | 14.0.1       | BSD-3-Clause  | 已安装                                | git+https://github.com/pid/speakingurl.git                           |
-| sql-escaper                            | 1.9.0        | MIT           | 已安装                                | git+https://github.com/mysqljs/sql-escaper.git                       |
+| split2                                 | 4.2.0        | ISC           | 已安装                                | https://github.com/mcollina/split2.git                               |
 | statuses                               | 2.0.2        | MIT           | 已安装                                | https://www.npmjs.com/package/statuses                               |
 | std-env                                | 4.3.0        | MIT           | 已安装                                | unjs/std-env                                                         |
 | string-width                           | 7.2.0        | MIT           | 已安装                                | https://www.npmjs.com/package/string-width                           |
@@ -403,6 +409,7 @@
 | wrap-ansi                              | 9.0.2        | MIT           | 已安装                                | https://www.npmjs.com/package/wrap-ansi                              |
 | wrappy                                 | 1.0.2        | ISC           | 已安装                                | https://github.com/npm/wrappy                                        |
 | xml-name-validator                     | 5.0.0        | Apache-2.0    | 已安装                                | https://www.npmjs.com/package/xml-name-validator                     |
+| xtend                                  | 4.0.2        | MIT           | 已安装                                | https://github.com/Raynos/xtend                                      |
 | y18n                                   | 5.0.8        | ISC           | 已安装                                | https://github.com/yargs/y18n                                        |
 | yargs                                  | 18.0.0       | MIT           | 已安装                                | https://github.com/yargs/yargs.git                                   |
 | yargs-parser                           | 22.0.0       | ISC           | 已安装                                | https://github.com/yargs/yargs-parser.git                            |

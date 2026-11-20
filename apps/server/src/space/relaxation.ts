@@ -1,6 +1,6 @@
 import { relaxationInput, relaxationRecord } from '@jhaven/shared';
 import { Router, type RequestHandler } from 'express';
-import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type { Pool, QueryResultRow } from 'pg';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
 
@@ -16,8 +16,8 @@ export function createRelaxationRouter(
   router.get('/', async (request, response) => {
     if (!empty.safeParse(request.query).success)
       throw new AppError(400, 'INVALID_INPUT', '请检查请求字段。');
-    const [rows] = await database().execute<RowDataPacket[]>(
-      'SELECT id, practice, duration_seconds, completed, created_at FROM relaxation_sessions WHERE user_id=? ORDER BY created_at DESC, id DESC LIMIT 50',
+    const { rows } = await database().query<QueryResultRow>(
+      'SELECT id, practice, duration_seconds, completed, created_at FROM jhaven.relaxation_sessions WHERE user_id=$1 ORDER BY created_at DESC, id DESC LIMIT 50',
       [response.locals.account.id],
     );
     response.json(
@@ -26,7 +26,7 @@ export function createRelaxationRouter(
           id: row.id,
           practice: row.practice,
           seconds: row.duration_seconds,
-          completed: row.completed === 1,
+          completed: row.completed,
           createdAt: row.created_at.toISOString(),
         }),
       ),
@@ -38,17 +38,17 @@ export function createRelaxationRouter(
       throw new AppError(400, 'INVALID_INPUT', '请检查练习记录字段。');
     const { id, practice, seconds, completed } = record.data;
     try {
-      await database().execute(
-        'INSERT INTO relaxation_sessions (user_id, id, practice, duration_seconds, completed) VALUES (?, ?, ?, ?, ?)',
-        [response.locals.account.id, id, practice, seconds, Number(completed)],
+      await database().query(
+        'INSERT INTO jhaven.relaxation_sessions (user_id, id, practice, duration_seconds, completed) VALUES ($1, $2, $3, $4, $5)',
+        [response.locals.account.id, id, practice, seconds, completed],
       );
       response.status(201).json({ id });
     } catch (error) {
-      if (!(typeof error === 'object' && error && 'code' in error && error.code === 'ER_DUP_ENTRY'))
+      if (!(typeof error === 'object' && error && 'code' in error && error.code === '23505'))
         throw error;
-      const [rows] = await database().execute<RowDataPacket[]>(
-        'SELECT id FROM relaxation_sessions WHERE user_id=? AND id=? AND practice=? AND duration_seconds=? AND completed=?',
-        [response.locals.account.id, id, practice, seconds, Number(completed)],
+      const { rows } = await database().query<QueryResultRow>(
+        'SELECT id FROM jhaven.relaxation_sessions WHERE user_id=$1 AND id=$2 AND practice=$3 AND duration_seconds=$4 AND completed=$5',
+        [response.locals.account.id, id, practice, seconds, completed],
       );
       if (!rows.length) throw new AppError(409, 'ENTRY_CONFLICT', '同一练习记录已经保存。');
       response.status(200).json({ id });
@@ -62,11 +62,11 @@ export function createRelaxationRouter(
       !empty.safeParse(request.body).success
     )
       throw new AppError(400, 'INVALID_INPUT', '请检查练习记录编号。');
-    const [result] = await database().execute<ResultSetHeader>(
-      'DELETE FROM relaxation_sessions WHERE user_id=? AND id=?',
+    const result = await database().query(
+      'DELETE FROM jhaven.relaxation_sessions WHERE user_id=$1 AND id=$2',
       [response.locals.account.id, id.data],
     );
-    if (!result.affectedRows) throw new AppError(404, 'ENTRY_NOT_FOUND', '此记录不存在。');
+    if (!result.rowCount) throw new AppError(404, 'ENTRY_NOT_FOUND', '此记录不存在。');
     response.status(204).end();
   });
   return router;

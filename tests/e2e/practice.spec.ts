@@ -131,8 +131,7 @@ test('本机语音暂停与继续、错误提示和声线消失后取消', async
 });
 
 test('账户练习需主动保存，并可在账户页删除', async ({ page }) => {
-  test.skip(process.env.JHAVEN_TEST_MYSQL !== '1', '需要隔离 MySQL。');
-  expect(process.env.DB_NAME).toMatch(/^jhaven_test_/);
+  test.skip(process.env.JHAVEN_TEST_POSTGRES !== '1', '需要隔离 PostgreSQL。');
   const username = 'practice_' + randomBytes(7).toString('hex');
   const password = '隔离账户测试的临时示范口令 58';
   await page.goto('/register');

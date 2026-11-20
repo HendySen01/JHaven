@@ -6,8 +6,7 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   browserName,
   hasTouch,
 }) => {
-  test.skip(process.env.JHAVEN_TEST_MYSQL !== '1', '需要已迁移的隔离 MySQL。');
-  expect(process.env.DB_NAME).toMatch(/^jhaven_test_/);
+  test.skip(process.env.JHAVEN_TEST_POSTGRES !== '1', '需要已迁移的隔离 PostgreSQL。');
   test.setTimeout(60_000);
   page.on('dialog', (dialog) => void dialog.accept());
   const user = `space_${randomBytes(7).toString('hex')}`;

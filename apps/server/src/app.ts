@@ -3,7 +3,7 @@ import { APP_INFO, type HealthResponse } from '@jhaven/shared';
 import express from 'express';
 import helmet from 'helmet';
 import { z } from 'zod';
-import type { Pool } from 'mysql2/promise';
+import type { Pool } from 'pg';
 import { loadConfig, type Config } from './config.js';
 import { createAuthRouter } from './auth/routes.js';
 import { AppError, errorHandler } from './middleware/error-handler.js';

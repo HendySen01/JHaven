@@ -1,19 +1,27 @@
 import { z } from 'zod';
 
+const postgresUrl = z.url().refine((value) => {
+  const url = URL.parse(value);
+  return (
+    !!url &&
+    ['postgres:', 'postgresql:'].includes(url.protocol) &&
+    !!url.hostname &&
+    !!url.username &&
+    !!url.password &&
+    /^\/[^/]+$/.test(url.pathname) &&
+    !url.search &&
+    !url.hash
+  );
+});
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().trim().min(1).default('127.0.0.1'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   APP_ORIGIN: z.url().optional(),
-  DB_HOST: z.string().trim().min(1).optional(),
-  DB_PORT: z.coerce.number().int().min(1).max(65535).default(3306),
-  DB_NAME: z
-    .string()
-    .regex(/^[a-zA-Z0-9_]{1,64}$/)
-    .optional(),
-  DB_USER: z.string().trim().min(1).optional(),
-  DB_PASSWORD: z.string().optional(),
-  DB_TLS: z.enum(['0', '1']).default('0'),
+  DATABASE_URL: postgresUrl.or(z.literal('').transform(() => undefined)).optional(),
+  MIGRATION_DATABASE_URL: postgresUrl.optional(),
+  DATABASE_CA_PEM: z.string().trim().min(1).optional(),
   TRUST_LOOPBACK_PROXY: z.enum(['0', '1']).default('0'),
   AI_OPENAI_API_KEY: z.string().trim().max(512).optional(),
   AI_OPENAI_BASE_URL: z.literal('https://api.openai.com/v1').default('https://api.openai.com/v1'),
@@ -60,15 +68,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
   ) {
     throw new Error('APP_ORIGIN 必须是完整站点来源（无路径），生产环境必须使用 HTTPS。');
   }
-  const databaseFields = [config.DB_HOST, config.DB_NAME, config.DB_USER, config.DB_PASSWORD];
-  if (
-    databaseFields.some((field) => field !== undefined) &&
-    databaseFields.some((field) => field === undefined)
-  ) {
-    throw new Error('数据库配置不完整，请检查 DB_HOST、DB_NAME、DB_USER 和 DB_PASSWORD。');
-  }
-  if (config.NODE_ENV === 'production' && config.DB_HOST && !config.DB_PASSWORD) {
-    throw new Error('生产数据库必须配置凭据。');
+  if ((config.DATABASE_URL || config.MIGRATION_DATABASE_URL) && !config.DATABASE_CA_PEM) {
+    throw new Error('数据库配置不完整，请配置 DATABASE_CA_PEM。');
   }
   return { ...config, APP_ORIGIN: origin };
 }

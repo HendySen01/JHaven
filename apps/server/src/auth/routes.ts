@@ -1,6 +1,6 @@
 import { credentialsSchema, registrationSchema } from '@jhaven/shared';
 import { Router, type CookieOptions, type Request, type RequestHandler } from 'express';
-import type { Pool } from 'mysql2/promise';
+import type { Pool } from 'pg';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
 import { sessionCookieName, sessionToken } from './session-cookie.js';
@@ -138,10 +138,16 @@ export function createAuthRouter({
   router.use(
     (error: unknown, _request: Request, _response: unknown, next: (error: unknown) => void) => {
       const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
-      if (
-        !(error instanceof AppError) &&
-        /^(ER_|ECONN|ETIMEDOUT|EHOST|ENOTFOUND|PROTOCOL_|HANDSHAKE_|CERT_|POOL_)/.test(code)
-      ) {
+      const connectionError =
+        /^(?:08[A-Z0-9]{3}|28[A-Z0-9]{3}|3D000|42P01|42501|53300|57P0[123])$/.test(code) ||
+        /^(?:ECONN|ETIMEDOUT|EHOST|ENET|ENOTFOUND|EAI_AGAIN|ERR_TLS_|CERT_|UNABLE_TO_|SELF_SIGNED_|DEPTH_ZERO_)/.test(
+          code,
+        ) ||
+        (error instanceof Error &&
+          /^(?:timeout exceeded when trying to connect|Connection terminated(?: unexpectedly| due to connection timeout)?)$/.test(
+            error.message,
+          ));
+      if (!(error instanceof AppError) && connectionError) {
         next(new AppError(503, 'DATABASE_UNAVAILABLE', '账户数据库暂不可用，请稍后重试。'));
         return;
       }

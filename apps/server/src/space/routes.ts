@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response, type RequestHandler } from 'express';
-import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type { Pool, QueryResultRow } from 'pg';
 import { z } from 'zod';
 import {
   accountPreset,
@@ -10,13 +10,13 @@ import {
   presetInput,
   spacePreferences,
 } from '@jhaven/shared';
+import { inTransaction } from '../db/pool.js';
 import { AppError } from '../middleware/error-handler.js';
 
 const uuid = z.uuid();
 const empty = z.strictObject({});
 const diaryColumns =
-  'id, CAST(entry_date AS CHAR) AS date, timezone, bedtime, asleep, wake, rest, note';
-const sqlTime = (value: string | null) => value?.slice(0, 19).replace('T', ' ') ?? null;
+  "id, to_char(entry_date, 'YYYY-MM-DD') AS date, timezone, bedtime, asleep, wake, rest, note";
 const isoTime = (value: Date | null) => value?.toISOString().replace('.000Z', 'Z') ?? null;
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -28,14 +28,14 @@ function missing(): never {
   throw new AppError(404, 'ENTRY_NOT_FOUND', '此记录不存在。');
 }
 function duplicate(error: unknown, message: string): never {
-  if (typeof error === 'object' && error && 'code' in error && error.code === 'ER_DUP_ENTRY')
+  if (typeof error === 'object' && error && 'code' in error && error.code === '23505')
     throw new AppError(409, 'ENTRY_CONFLICT', message);
   throw error;
 }
-function preset(row: RowDataPacket) {
+function preset(row: QueryResultRow) {
   return accountPreset.parse({ id: row.id, name: row.name, mix: row.mix });
 }
-function diary(row: RowDataPacket) {
+function diary(row: QueryResultRow) {
   return journalEntry.parse({
     id: row.id,
     date: row.date,
@@ -59,13 +59,13 @@ export function createSpaceRouter(
     parse(empty, request.query);
     const user = String(response.locals.account.id);
     const db = database();
-    const [[presets], [settings]] = await Promise.all([
-      db.execute<RowDataPacket[]>(
-        'SELECT id, name, mix FROM sound_presets WHERE user_id = ? ORDER BY name, id',
+    const [{ rows: presets }, { rows: settings }] = await Promise.all([
+      db.query<QueryResultRow>(
+        'SELECT id, name, mix FROM jhaven.sound_presets WHERE user_id = $1 ORDER BY name, id',
         [user],
       ),
-      db.execute<RowDataPacket[]>(
-        'SELECT p.builtin_id, s.id AS preset_id, p.volume, p.timer_minutes FROM user_preferences p LEFT JOIN sound_presets s ON s.id=p.preset_id AND s.user_id=p.user_id WHERE p.user_id=?',
+      db.query<QueryResultRow>(
+        'SELECT p.builtin_id, s.id AS preset_id, p.volume, p.timer_minutes FROM jhaven.user_preferences p LEFT JOIN jhaven.sound_presets s ON s.id=p.preset_id AND s.user_id=p.user_id WHERE p.user_id=$1',
         [user],
       ),
     ]);
@@ -90,12 +90,10 @@ export function createSpaceRouter(
     const input = parse(presetInput, request.body);
     const id = randomUUID();
     try {
-      await database().execute('INSERT INTO sound_presets (id,user_id,name,mix) VALUES (?,?,?,?)', [
-        id,
-        String(response.locals.account.id),
-        input.name,
-        JSON.stringify(input.mix),
-      ]);
+      await database().query(
+        'INSERT INTO jhaven.sound_presets (id,user_id,name,mix) VALUES ($1,$2,$3,$4)',
+        [id, String(response.locals.account.id), input.name, JSON.stringify(input.mix)],
+      );
     } catch (error) {
       duplicate(error, '已有同名场景，请改名后重试。');
     }
@@ -106,11 +104,11 @@ export function createSpaceRouter(
     const id = parse(uuid, request.params.id);
     const input = parse(presetInput, request.body);
     try {
-      const [result] = await database().execute<ResultSetHeader>(
-        'UPDATE sound_presets SET name=?,mix=? WHERE id=? AND user_id=?',
+      const result = await database().query(
+        'UPDATE jhaven.sound_presets SET name=$1,mix=$2 WHERE id=$3 AND user_id=$4',
         [input.name, JSON.stringify(input.mix), id, String(response.locals.account.id)],
       );
-      if (!result.affectedRows) missing();
+      if (!result.rowCount) missing();
     } catch (error) {
       duplicate(error, '已有同名场景，请改名后重试。');
     }
@@ -119,11 +117,11 @@ export function createSpaceRouter(
   router.delete('/presets/:id', write, async (request: Request, response: Response) => {
     parse(empty, request.query);
     parse(empty, request.body);
-    const [result] = await database().execute<ResultSetHeader>(
-      'DELETE FROM sound_presets WHERE id=? AND user_id=?',
+    const result = await database().query(
+      'DELETE FROM jhaven.sound_presets WHERE id=$1 AND user_id=$2',
       [parse(uuid, request.params.id), String(response.locals.account.id)],
     );
-    if (!result.affectedRows) missing();
+    if (!result.rowCount) missing();
     response.status(204).end();
   });
   router.put('/preferences', write, async (request: Request, response: Response) => {
@@ -132,42 +130,33 @@ export function createSpaceRouter(
     const user = String(response.locals.account.id);
     const builtin = input.scene?.kind === 'builtin' ? input.scene.id : null;
     const id = input.scene?.kind === 'preset' ? input.scene.id : null;
-    const connection = await database().getConnection();
-    try {
-      await connection.beginTransaction();
+    await inTransaction(database(), async (connection) => {
       if (id) {
-        const [owned] = await connection.execute<RowDataPacket[]>(
-          'SELECT id FROM sound_presets WHERE id=? AND user_id=? FOR SHARE',
+        const { rows: owned } = await connection.query<QueryResultRow>(
+          'SELECT id FROM jhaven.sound_presets WHERE id=$1 AND user_id=$2 FOR SHARE',
           [id, user],
         );
         if (!owned.length) missing();
       }
-      const fields = [builtin, id, input.volume, input.timerMinutes];
-      await connection.execute(
-        'INSERT INTO user_preferences (user_id,builtin_id,preset_id,volume,timer_minutes) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE builtin_id=?,preset_id=?,volume=?,timer_minutes=?',
-        [user, ...fields, ...fields],
+      await connection.query(
+        'INSERT INTO jhaven.user_preferences (user_id,builtin_id,preset_id,volume,timer_minutes) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_id) DO UPDATE SET builtin_id=EXCLUDED.builtin_id,preset_id=EXCLUDED.preset_id,volume=EXCLUDED.volume,timer_minutes=EXCLUDED.timer_minutes',
+        [user, builtin, id, input.volume, input.timerMinutes],
       );
-      await connection.commit();
-    } catch (error) {
-      await connection.rollback().catch(() => connection.destroy());
-      throw error;
-    } finally {
-      connection.release();
-    }
+    });
     response.json(input);
   });
   router.delete('/preferences', write, async (request: Request, response: Response) => {
     parse(empty, request.query);
     parse(empty, request.body);
-    await database().execute('DELETE FROM user_preferences WHERE user_id=?', [
+    await database().query('DELETE FROM jhaven.user_preferences WHERE user_id=$1', [
       String(response.locals.account.id),
     ]);
     response.status(204).end();
   });
   router.get('/diary', async (request, response) => {
     const { from, to } = parse(journalRange, request.query);
-    const [rows] = await database().execute<RowDataPacket[]>(
-      `SELECT ${diaryColumns} FROM sleep_diaries WHERE user_id=? AND entry_date BETWEEN ? AND ? ORDER BY entry_date DESC`,
+    const { rows } = await database().query<QueryResultRow>(
+      `SELECT ${diaryColumns} FROM jhaven.sleep_diaries WHERE user_id=$1 AND entry_date BETWEEN $2 AND $3 ORDER BY entry_date DESC`,
       [String(response.locals.account.id), from, to],
     );
     response.json(rows.map(diary));
@@ -181,23 +170,23 @@ export function createSpaceRouter(
       const values = [
         input.date,
         input.timezone,
-        sqlTime(input.bedtime),
-        sqlTime(input.asleep),
-        sqlTime(input.wake),
+        input.bedtime,
+        input.asleep,
+        input.wake,
         input.rest,
         input.note,
       ];
       try {
-        const [result] = edit
-          ? await database().execute<ResultSetHeader>(
-              'UPDATE sleep_diaries SET entry_date=?,timezone=?,bedtime=?,asleep=?,wake=?,rest=?,note=? WHERE id=? AND user_id=?',
+        const result = edit
+          ? await database().query(
+              'UPDATE jhaven.sleep_diaries SET entry_date=$1,timezone=$2,bedtime=$3,asleep=$4,wake=$5,rest=$6,note=$7 WHERE id=$8 AND user_id=$9',
               [...values, id, user],
             )
-          : await database().execute<ResultSetHeader>(
-              'INSERT INTO sleep_diaries (id,user_id,entry_date,timezone,bedtime,asleep,wake,rest,note) VALUES (?,?,?,?,?,?,?,?,?)',
+          : await database().query(
+              'INSERT INTO jhaven.sleep_diaries (id,user_id,entry_date,timezone,bedtime,asleep,wake,rest,note) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
               [id, user, ...values],
             );
-        if (edit && !result.affectedRows) missing();
+        if (edit && !result.rowCount) missing();
       } catch (error) {
         duplicate(error, '该日期已有日记，请编辑原记录或选择其他日期。');
       }
@@ -209,11 +198,11 @@ export function createSpaceRouter(
   router.delete('/diary/:id', write, async (request: Request, response: Response) => {
     parse(empty, request.query);
     parse(empty, request.body);
-    const [result] = await database().execute<ResultSetHeader>(
-      'DELETE FROM sleep_diaries WHERE id=? AND user_id=?',
+    const result = await database().query(
+      'DELETE FROM jhaven.sleep_diaries WHERE id=$1 AND user_id=$2',
       [parse(uuid, request.params.id), String(response.locals.account.id)],
     );
-    if (!result.affectedRows) missing();
+    if (!result.rowCount) missing();
     response.status(204).end();
   });
   return router;

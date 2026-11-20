@@ -8,7 +8,7 @@ JHaven 是以科学睡眠知识为基础，逐步融合环境音、睡前放松�
 
 ## 当前交付
 
-当前版本为 `0.1.0-alpha.7`，进入 **Sprint 6 睡前助手 Alpha**。访客可直接使用声音库、四项放松练习和审核知识助手；账户放松记录需要 MySQL 迁移至 006。启用模型时请设置服务端环境变量并在页面单独确认。 [助手配置与说明](docs/ASSISTANT.md)
+当前版本为 `0.1.0-alpha.7`，处于 **Sprint 10.2**。访客可直接使用声音库、四项放松练习和审核知识助手。账户功能使用 PostgreSQL，需完成 001–006 和运行授权。启用模型时在服务端配置供应商，并由用户在页面单独确认。 [助手配置与说明](docs/ASSISTANT.md)
 
 - 已实现：沉浸式首页、状态建议、十轨声音库与混音、独立音量、暂停/继续/停止、内置/本地自定义场景、计时/渐弱、跨页面控制、设置、About/404 与 API 检查。
 - 设备存储：界面偏好、设备声音配比、总音量与本地预设留在当前浏览器，只有主动导入才上传所选场景。今晚状态仅存内存。刷新不会自动播放。
@@ -34,18 +34,19 @@ npm run dev
 - API：[http://127.0.0.1:3001/api/health](http://127.0.0.1:3001/api/health)
 - 按 `Ctrl+C` 停止两端与共享包监听。若端口已被占用，启动会报错，不会静默切换。
 
-访客声音库可直接启动。启用注册与登录前，请创建专用 MySQL 数据库及数据库账号，按以下顺序操作。
+访客声音库可直接启动。启用注册与登录前，请按部署文档创建独立的 PostgreSQL 库和角色，并配置可信 CA。
 
 ```powershell
 Copy-Item apps/server/.env.example apps/server/.env
-# 编辑 apps/server/.env，填入 DB_HOST、DB_NAME、DB_USER、DB_PASSWORD
+# 编辑 apps/server/.env，设置受限 DATABASE_URL、独立迁移连接和 CA
 npm run db:migrate
+# 由对象所有者执行 migrations-postgres/runtime-grants.sql 后启动
 npm run dev
 ```
 
-仅在本地尚无 `.env` 时复制示例。首次迁移需要目标库的建表和索引权限，生产部署使用单独迁移账号。运行时账户须能读写会话与用户记录。默认 `APP_ORIGIN=http://127.0.0.1:5173`，浏览器应访问这一来源。生产配置使用实际 HTTPS 来源。数据库错误会写入启动提示，`/api/auth/status` 返回 503。数据库与 Cookie 配置见 [账户与会话](docs/AUTH.md)。从 Sprint 3 升级正式库时，按 [个人空间](docs/PERSONAL_SPACE.md) 先审核 Navicat 迁移。
+仅在本地尚无 `.env` 时复制示例。运行与迁移角色分开。默认 `APP_ORIGIN=http://127.0.0.1:5173`，生产配置使用实际 HTTPS 来源。数据库未就绪时 `/api/auth/status` 返回 503。 [部署步骤](docs/DEPLOYMENT.md)
 
-服务 API 改端口时，同步设置 `PORT` 和 `JHAVEN_PROXY_PORT`。测试端口冲突时，可用 `PLAYWRIGHT_API_PORT` 选择专用端口。数据库测试需要已创建的 `jhaven_test_` 前缀隔离库及其凭据，并显式设置 `JHAVEN_TEST_MYSQL=1`。测试环境使用独立配置，详情见 [验证记录](docs/TESTING.md)。
+服务 API 改端口时，同步设置 `PORT` 和 `JHAVEN_PROXY_PORT`。测试端口冲突时，可用 `PLAYWRIGHT_API_PORT`。数据库集成测试须显式设置 `JHAVEN_TEST_POSTGRES=1`，两种连接均限本机 `jhaven_test_` 前缀的隔离 PostgreSQL。 [验证记录](docs/TESTING.md)
 
 `npm run dev` 会先构建共享包。单独使用 `npm run dev:web` 或 `npm run dev:server` 前先运行 `npm run build -w @jhaven/shared`；单独启动前端时，服务检查会显示连接失败，符合真实状态。
 

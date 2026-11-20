@@ -61,7 +61,7 @@ packages/shared：应用元信息、Zod 健康检查契约、公共错误类型
 
 ## 账户链路
 
-Vue 表单和 Express 共用 Zod 账户契约。Pinia 通过同源 `/api/auth/me` 恢复身份，路由守卫负责导航。受保护 `/api/account` 每次从有效 Cookie 会话查询自身资料。Express 将写请求限制为指定 Origin 的 JSON，使用有界限流和异步 scrypt，参数化查询走 mysql2 连接池。MySQL 保存用户与会话摘要。显式 SQL 迁移由命名锁保护；`/api/auth/status` 独立表示数据库和结构就绪。 [账户与会话](AUTH.md) [数据库](DATABASE.md)
+Vue 和 Express 共用 Zod 账户契约，Pinia 以同源 `/api/auth/me` 恢复身份。Express 保留 Origin 校验、有界限流、异步 scrypt 和 Cookie 会话。用户与会话摘要保存在 PostgreSQL 的 `jhaven` schema，服务通过 `pg` 参数化访问。迁移在单独连接中使用事务锁；`/api/auth/status` 检查账户结构就绪。 [账户与会话](AUTH.md) [数据库](DATABASE.md)
 
 ## 个人空间链路
 
@@ -76,7 +76,7 @@ Vue 表单和 Express 共用 Zod 账户契约。Pinia 通过同源 `/api/auth/me
 
 ## 睡前助手
 
-Vue 助手页通过独立无凭据接口接收 NDJSON。Express 的助手模块独立于账户路由及 MySQL，使用版本化的审核内容、确定性推荐和可替换的供应商接口。OpenAI 适配器当前仅接受两个枚举，所有动作及来源在服务端决定。 [配置与边界](ASSISTANT.md)
+Vue 助手页通过同源接口接收 NDJSON。助手模块使用版本化的审核内容、确定性推荐和可替换的供应商接口。所有动作及来源在服务端决定，已登录时可用现有会话分配用量，不读取私人业务正文。 [配置与边界](ASSISTANT.md)
 
 ## 后续模块边界
 
@@ -95,7 +95,7 @@ Sprint 1 组件：`NightNavigation`/`JHavenLogo` 负责导航品牌，`MoodSelec
 - 后端业务按 auth、diaries、presets、sessions、preferences 组织；路由负责解析和权限入口，服务负责业务，repository 负责参数化 SQL。
 - Web Audio 放在独立可释放的音频模块，Vue 组件通过明确 API 操作，不把 AudioContext 深度代理为响应式对象。
 - 推荐逻辑为可单测的纯规则函数，知识内容审核与交互独立于音频引擎。
-- MySQL 只在数据功能开始时引入，迁移、外键、时区与删除规则见 `DATABASE.md`。
+- PostgreSQL 迁移、外键、时区和删除规则见 `DATABASE.md`，内含 MySQL 历史记录。
 - OpenAI 为可选辅助，规则与知识可独立使用。后续供应商接入沿用主动授权、输出白名单和本地降级。
 
 不引入微服务、消息队列、Redis、Kubernetes 或复杂云基础设施。最终宿主与域名尚未选择，不自动发布。

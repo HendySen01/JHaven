@@ -4,9 +4,9 @@
 
 ## 约定
 
-SQL 以 MySQL 8.4 LTS 语法为目标，InnoDB 和 utf8mb4。实际集成使用本机 MySQL 9.6.0。部署时仍须在目标版本执行迁移和验证。主键采用无业务含义的 `BIGINT UNSIGNED` 自增值，API 以字符串序列化，防止 JavaScript 整数精度损失。
+运行数据库为 PostgreSQL，目标托管服务为 Supabase。业务表全部在 `jhaven` schema，保持现有 API 与 Express 认证。用户主键为正数 `bigint` identity，API 始终序列化为字符串。MySQL 的历史库、迁移与校验记录单独保留。本次建立 PostgreSQL 结构，现有 MySQL 数据搬运不在范围内。
 
-账户时间用 UTC `DATETIME(3)`，日记时间事件以 UTC 秒精度 `DATETIME` 保存，连接会话时区设为 `+00:00`。日记日期为用户选定的本地 `DATE`，另存当时 IANA 时区（如 `Asia/Macau`）；用户更改时区不追溯移动旧日记日期。不得依靠运行主机时区决定记录归属。
+账户和练习时间用 `timestamptz(3)`，日记实际事件用 `timestamptz(0)`，API 输出 UTC。用户选定的本地 `DATE` 按 `YYYY-MM-DD` 回传，并单独保留 IANA 时区（例如 `Asia/Macau`）。会话摘要用 32 字节 `bytea`，预设用 `uuid` 与 `jsonb`。预设名称用 ICU 二级排序规则，同账户大小写不区分、重音保留。
 
 ## 已实现实体
 
@@ -16,7 +16,7 @@ SQL 以 MySQL 8.4 LTS 语法为目标，InnoDB 和 utf8mb4。实际集成使用�
 | `auth_sessions`     | `token_hash`、`user_id`、`created_at`、`expires_at`           | SHA-256 摘要主键、用户与过期索引、外键级联删除             |
 | `schema_migrations` | `name`、`checksum`、`applied_at`                              | 文件名主键，SHA-256 校验和                                 |
 
-Sprint 4 新表均用 InnoDB 和用户外键，删除账户时由数据库级联清理。
+私人业务表使用用户外键，删除账户时由数据库级联清理。
 
 | 表                    | 数据与约束                                                                                                |
 | --------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -33,7 +33,9 @@ Sprint 4 新表均用 InnoDB 和用户外键，删除账户时由数据库级联
 
 ## 迁移与访问
 
-运行 `npm run db:migrate` 显式执行 `apps/server/migrations/` 中的递增 SQL。执行器用 MySQL 命名锁串行化同库迁移，核对版本和 SHA-256。迁移须单独显式执行，运行应用不自动修改生产结构；MySQL DDL 常有隐式提交，不能宣称可事务回滚全部迁移。破坏性变更先备份、验证恢复并获得用户明确要求。
+运行 `npm run db:migrate` 会读取 `apps/server/migrations-postgres/` 的 001–006。执行器使用独立的 `MIGRATION_DATABASE_URL`，在同一事务加 PostgreSQL advisory xact 锁，核对已应用版本是完整前缀，并以 LF 计算 SHA-256。六个迁移和 `jhaven.schema_migrations` 合计七张表。未应用迁移的 DDL 与记录一起提交，失败后整体回滚。运行时不自动迁移。
+
+迁移角色拥有 `jhaven` schema 和其中对象。平台管理员可先创建 schema 并指定迁移角色为所有者。由对象所有者在六份迁移完成后显式执行 [运行权限 SQL](../apps/server/migrations-postgres/runtime-grants.sql)。`jhaven_app` 只获得 schema USAGE、业务所需读写及用户 ID 序列 USAGE，无 DDL、授权或迁移记录访问权限。保持 `jhaven` 不在 Supabase Data API 的 Exposed schemas 中，Express 从 Cookie 解析用户身份后才访问私人行。
 
 采用参数化 SQL，表名/排序字段只能来自服务端白名单。所有读、改、删同时限定 `id` 与已认证 `user_id`，不信任客户端传入的所有者 ID；日记列表按用户日期范围查询，最多 366 天，每天最多一条。测试至少覆盖用户 A 无法读改删用户 B 的每类私人资源。
 
@@ -43,7 +45,11 @@ Sprint 4 新表均用 InnoDB 和用户外键，删除账户时由数据库级联
 
 备份的保存周期、删除滞后、导出格式与恢复演练需在朋友内测前确定并披露。当前会话到期后立即拒绝认证，后续登录分批清除过期条目。可在成熟运维流程里补充定期清理，同时验证备份及恢复。
 
-## Sprint 5 放松记录
+## MySQL 历史验收
+
+以下记录对应既有 MySQL 环境及 `apps/server/migrations/`，用于追溯。Supabase 初始化采用上方 PostgreSQL 流程。
+
+### Sprint 5 放松记录
 
 `006_relaxation_sessions.sql` 新增 `relaxation_sessions`。使用账户和随机记录 ID 作为复合主键，按账户及 UTC 保存时间索引，用户删除时级联。仅保存练习枚举、实际秒数、完成状态和服务端保存时间。旧迁移保持原样。
 
