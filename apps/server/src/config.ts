@@ -26,6 +26,9 @@ const environmentSchema = z.object({
     .regex(/^[\w.-]{1,80}$/)
     .default('gpt-4.1-mini'),
   AI_DAILY_REQUEST_LIMIT: z.coerce.number().int().min(0).max(500).default(120),
+  AI_ACCOUNT_WINDOW_LIMIT: z.coerce.number().int().min(1).max(180).default(60),
+  AI_GUEST_WINDOW_LIMIT: z.coerce.number().int().min(1).max(90).default(30),
+  AI_IP_WINDOW_LIMIT: z.coerce.number().int().min(1).max(500).default(180),
   DEEPSEEK_API_KEY: z.string().trim().max(512).optional(),
   DEEPSEEK_BASE_URL: z
     .enum(['https://api.deepseek.com', 'https://api.deepseek.com/v1'])

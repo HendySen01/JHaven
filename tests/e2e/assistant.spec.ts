@@ -184,9 +184,14 @@ test('停止、重试、重新生成及站内返回保留会话与草稿，刷�
   );
 });
 
-test('21 轮完整可读，流式片段尊重阅读位置，模型上下文仍受限', async ({ page }) => {
-  const sent: { messages: string[]; earlierReply?: string; olderHistory?: { user: string }[] }[] =
-    [];
+test('40 轮完整可读，保留聊天偏好且原文上下文仍受限', async ({ page }) => {
+  const sent: {
+    messages: string[];
+    prefersChat?: boolean;
+    earlierReply?: string;
+    olderHistory?: { user: string; sentOn: string }[];
+    latestSentOn?: string;
+  }[] = [];
   await page.exposeFunction('captureChat', (body: (typeof sent)[number]) => sent.push(body));
   await page.route('**/api/assistant/status', (route) =>
     route.fulfill({
@@ -232,26 +237,41 @@ test('21 轮完整可读，流式片段尊重阅读位置，模型上下文仍�
   await page.goto('/assistant');
   const consent = page.getByRole('checkbox', { name: '使用 DeepSeek 聊天' });
   await expect(consent).not.toBeChecked();
-  await expect(page.getByText(/本次消息和最多四轮.*日记不会自动发送/)).toBeVisible();
+  await expect(page.getByText(/本次消息和最多六轮.*发送日期.*日记不会自动发送/)).toBeVisible();
   await consent.check();
   const draft = page.getByLabel('今晚想聊什么');
   const submit = async (question: string) => {
     await draft.fill(question);
     await page.getByRole('button', { name: '发送', exact: true }).click();
   };
-  for (let n = 1; n <= 21; n++) {
-    await submit(`话题 ${n}`);
+  for (let n = 1; n <= 40; n++) {
+    await submit(
+      n === 2
+        ? '我只是想和你闲聊，不用给我建议'
+        : n === 31
+          ? '为展示准备了一个星期'
+          : n === 40
+            ? '我之前说为展示准备了多久？'
+            : `话题 ${n}`,
+    );
     await expect(draft).toHaveValue('');
   }
   const region = page.getByRole('region', { name: '完整对话' });
   const gap = () =>
     region.evaluate((pane) => pane.scrollHeight - pane.clientHeight - pane.scrollTop);
-  await expect(region.locator('.assistant-turn')).toHaveCount(21);
+  await expect(region.locator('.assistant-turn')).toHaveCount(40);
   await expect.poll(gap).toBeLessThan(3);
   expect(sent[0]?.messages).toEqual(['话题 1']);
-  expect(sent[20]?.messages).toEqual(['话题 19', '话题 20', '话题 21']);
-  expect(sent[20]?.earlierReply).toContain('话题 19');
-  expect(sent[20]?.olderHistory?.map(({ user }) => user)).toEqual(['话题 17', '话题 18']);
+  expect(sent[39]?.messages).toEqual(['话题 38', '话题 39', '我之前说为展示准备了多久？']);
+  expect(sent[39]?.earlierReply).toContain('话题 38');
+  expect(sent[39]?.olderHistory?.map(({ user }) => user)).toEqual([
+    '为展示准备了一个星期',
+    '话题 36',
+    '话题 37',
+  ]);
+  expect(sent[39]?.olderHistory?.[0]?.sentOn).toBe(sent[39]?.latestSentOn);
+  expect(sent[39]?.prefersChat).toBe(true);
+  expect(JSON.stringify(sent[39])).not.toContain('不用给我建议');
   await submit('慢一点再答');
   await expect(page.getByText('正在等下一段')).toBeVisible();
   await region.evaluate((pane) => {
@@ -268,7 +288,7 @@ test('21 轮完整可读，流式片段尊重阅读位置，模型上下文仍�
   await expect(draft).toHaveValue('下一条草稿');
   await latest.click();
   await expect.poll(gap).toBeLessThan(3);
-  await expect(region.locator('.assistant-turn')).toHaveCount(22);
+  await expect(region.locator('.assistant-turn')).toHaveCount(41);
 });
 
 test('桌面 Enter、触屏换行、中文组合键与请求失败时的草稿', async ({ page }) => {
@@ -352,6 +372,8 @@ test('模型需逐页同意，限流后可以改用本地知识', async ({ page 
   await expect(page.getByRole('button', { name: '重试回复' })).toBeDisabled();
   await expect(page.getByText('请求未完成', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '改用本地知识' }).click();
+  expect(choices).toEqual([false, true]);
+  await page.getByRole('button', { name: '重试回复' }).click();
   await expect(page.getByRole('button', { name: '推荐 · 思绪整理' })).toBeVisible();
   await expect(consent).not.toBeChecked();
   await expect(page.getByText('本地知识模式')).toBeVisible();
@@ -396,12 +418,115 @@ test('发送只产生一个 AI 请求，等待期间改为本地会忽略迟到�
   await expect.poll(() => modes).toEqual(['ai']);
   await page.getByRole('button', { name: '改用本地知识' }).click();
   await expect(consent).not.toBeChecked();
+  await expect(page.getByLabel('今晚想聊什么')).toHaveValue('有呀有呀');
+  expect(modes).toEqual(['ai']);
+  await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.locator('.assistant-reply-mode')).toHaveText('本地知识');
   finish();
   await expect(page.getByText('迟到的模型答复')).toHaveCount(0);
   await page.getByLabel('今晚想聊什么').fill('呃呃呃');
   await page.getByRole('button', { name: '发送' }).click();
   await expect.poll(() => modes).toEqual(['ai', 'local', 'local']);
+});
+
+test('每日次数暂停发送但保留草稿和会话，到期后等待手动发送', async ({ page }) => {
+  await page.clock.install();
+  await page.route('**/api/assistant/status', (route) =>
+    route.fulfill({ json: { provider: 'deepseek', knowledgeVersion: 'fixture' } }),
+  );
+  const sent: string[] = [];
+  await page.route('**/api/assistant/chat', (route) => {
+    sent.push(route.request().postDataJSON().messages.at(-1));
+    return route.fulfill({
+      status: 429,
+      headers: { 'Retry-After': '30' },
+      json: { error: { code: 'MODEL_LIMIT' } },
+    });
+  });
+  await page.goto('/assistant');
+  await page.getByRole('checkbox', { name: /DeepSeek/ }).check();
+  const draft = page.getByLabel('今晚想聊什么');
+  const send = page.getByRole('button', { name: '发送', exact: true });
+  await draft.fill('今天天气不错');
+  await send.click();
+  await expect(send).toBeDisabled();
+  const notice = page.locator('#assistant-composer-status');
+  await expect(notice).toContainText('后可以再试');
+  await expect(draft).toBeEditable();
+  await draft.fill('我想说另一件事');
+  await page.locator('form').evaluate((form) => (form as HTMLFormElement).requestSubmit());
+  expect(sent).toEqual(['今天天气不错']);
+  await page.clock.fastForward(30_100);
+  await expect(send).toBeEnabled();
+  await expect(draft).toHaveValue('我想说另一件事');
+  await expect(page.getByText('今天天气不错', { exact: true })).toBeVisible();
+  expect(sent).toEqual(['今天天气不错']);
+  await send.click();
+  await expect.poll(() => sent).toEqual(['今天天气不错', '我想说另一件事']);
+});
+
+test('预算恢复查询不提交草稿，恢复后手动发送走同一模型', async ({ page }) => {
+  await page.clock.install();
+  await page.route('**/api/assistant/status', (route) =>
+    route.fulfill({
+      json: {
+        provider: 'deepseek',
+        providers: [{ id: 'deepseek', model: 'deepseek-flash' }],
+        knowledgeVersion: 'fixture',
+      },
+    }),
+  );
+  let sent = 0;
+  let checks = 0;
+  await page.route('**/api/assistant/availability?*', (route) => {
+    checks++;
+    const url = new URL(route.request().url());
+    expect([...url.searchParams.keys()].sort()).toEqual(['model', 'provider', 'reservation']);
+    return route.fulfill({ json: { available: true } });
+  });
+  await page.route('**/api/assistant/chat', (route) => {
+    sent++;
+    expect(route.request().postDataJSON().mode).toBe('ai');
+    if (sent > 1)
+      return route.fulfill({
+        contentType: 'application/x-ndjson',
+        body:
+          [
+            { type: 'start', mode: 'model' },
+            { type: 'text', text: '听你说。' },
+            { type: 'done', actions: [], sources: [] },
+          ]
+            .map((event) => JSON.stringify(event))
+            .join('\n') + '\n',
+      });
+    return route.fulfill({
+      status: 429,
+      headers: { 'X-JHaven-Reservation': '0.002' },
+      json: { error: { code: 'MODEL_BUDGET' } },
+    });
+  });
+  await page.goto('/assistant');
+  await page.getByRole('checkbox', { name: /DeepSeek/ }).check();
+  const draft = page.getByLabel('今晚想聊什么');
+  await draft.fill('原本的内容');
+  const send = page.getByRole('button', { name: '发送', exact: true });
+  await send.click();
+  await expect(page.locator('#assistant-composer-status')).toContainText('站内额度可用后');
+  await expect(send).toBeDisabled();
+  await expect(draft).toHaveAttribute('aria-describedby', /assistant-composer-status/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await draft.fill('编辑后的草稿');
+  await page.clock.fastForward(5100);
+  await expect(send).toBeEnabled();
+  expect(checks).toBe(1);
+  expect(sent).toBe(1);
+  await expect(draft).toHaveValue('编辑后的草稿');
+  await expect(page.getByRole('checkbox', { name: /DeepSeek/ })).toBeChecked();
+  await send.click();
+  await expect(
+    page.getByRole('region', { name: '完整对话' }).getByText('听你说。', { exact: true }),
+  ).toBeVisible();
+  expect(sent).toBe(2);
 });
 
 test('明确同意后只带紧邻的已完成 AI 对话，知识问答可显示来源', async ({ page }) => {
@@ -469,4 +594,112 @@ test('明确同意后只带紧邻的已完成 AI 对话，知识问答可显示�
   await expect(page.getByRole('button', { name: /^推荐 ·/ })).toHaveCount(0);
   await page.getByText('参考资料', { exact: true }).click();
   await expect(page.getByRole('link', { name: 'NHLBI 睡眠习惯' })).toBeVisible();
+});
+test('DeepSeek 回退展示原因并保留草稿，手动重试可收到模型回复', async ({ page }) => {
+  await page.route('**/api/assistant/status', (route) =>
+    route.fulfill({
+      json: {
+        provider: 'deepseek',
+        providers: [{ id: 'deepseek', model: 'deepseek-flash' }],
+        knowledgeVersion: 'fixture',
+      },
+    }),
+  );
+  let calls = 0;
+  const question = '你说人为什么总是这样啊，白天想休息，晚上又不想睡。';
+  await page.route('**/api/assistant/chat', (route) => {
+    expect(route.request().postDataJSON()).toMatchObject({
+      mode: 'ai',
+      provider: 'deepseek',
+      model: 'deepseek-flash',
+      messages: [question],
+    });
+    const fallback = ++calls === 1;
+    return route.fulfill({
+      contentType: 'application/x-ndjson',
+      body:
+        [
+          fallback
+            ? {
+                type: 'start',
+                mode: 'local',
+                source: 'fallback',
+                fallbackCode: 'provider_invalid_output',
+              }
+            : { type: 'start', mode: 'model' },
+          {
+            type: 'text',
+            text: fallback
+              ? '暂时没有可用的模型回复。'
+              : '白天盼着休息，晚上又舍不得把今天交出去。',
+          },
+          { type: 'done', sources: [], actions: [] },
+        ]
+          .map((event) => JSON.stringify(event))
+          .join('\n') + '\n',
+    });
+  });
+  await page.goto('/assistant');
+  await page.getByRole('checkbox', { name: /DeepSeek/ }).check();
+  const draft = page.getByLabel('今晚想聊什么');
+  await draft.fill(question);
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await expect(page.getByText('本地回退', { exact: true })).toBeVisible();
+  await expect(page.getByText('模型返回格式异常。', { exact: true })).toBeVisible();
+  await expect(draft).toHaveValue(question);
+  await page.getByRole('button', { name: '重试回复' }).click();
+  await expect(
+    page
+      .getByRole('region', { name: '完整对话' })
+      .getByText('白天盼着休息，晚上又舍不得把今天交出去。'),
+  ).toBeVisible();
+  await expect(page.getByText('本地回退', { exact: true })).toHaveCount(0);
+  expect(calls).toBe(2);
+});
+
+test('模型拒答与站内限制均保留草稿，并提供不同反馈', async ({ page }) => {
+  await page.route('**/api/assistant/status', (route) =>
+    route.fulfill({
+      json: {
+        provider: 'deepseek',
+        providers: [{ id: 'deepseek', model: 'deepseek-flash' }],
+        knowledgeVersion: 'fixture',
+      },
+    }),
+  );
+  let calls = 0;
+  await page.route('**/api/assistant/chat', (route) => {
+    if (++calls === 1) {
+      return route.fulfill({ status: 422, json: { error: { code: 'provider_content_filtered' } } });
+    }
+    return route.fulfill({
+      contentType: 'application/x-ndjson',
+      body:
+        [
+          { type: 'start', mode: 'local', inputRestricted: true },
+          { type: 'text', text: '请不要发送联系方式。' },
+          { type: 'done', sources: [], actions: [] },
+        ]
+          .map((frame) => JSON.stringify(frame))
+          .join('\n') + '\n',
+    });
+  });
+  await page.goto('/assistant');
+  await page.getByRole('checkbox', { name: '使用 DeepSeek 聊天' }).check();
+  const draft = page.getByLabel('今晚想聊什么');
+  const send = page.getByRole('button', { name: '发送', exact: true });
+  const text = '砍掉不重要的功能，先保住演示。';
+  await draft.fill(text);
+  await send.click();
+  await expect(page.getByText(/草稿还在，可以调整措辞后再试/)).toBeVisible();
+  await expect(draft).toHaveValue(text);
+  const sensitive = '示例联系地址是 test@example.org';
+  await draft.fill(sensitive);
+  await send.click();
+  await expect(
+    page.getByRole('region', { name: '完整对话' }).getByText('请不要发送联系方式。'),
+  ).toBeVisible();
+  await expect(send).toBeEnabled();
+  await expect(draft).toHaveValue(sensitive);
+  expect(calls).toBe(2);
 });

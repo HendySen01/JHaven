@@ -95,6 +95,11 @@ export function createApp({
       providerLimits,
       dailyLimit: config.AI_DAILY_REQUEST_LIMIT,
       dailyBudget: config.AI_DAILY_BUDGET_USD,
+      windowsLimits: {
+        account: config.AI_ACCOUNT_WINDOW_LIMIT,
+        guest: config.AI_GUEST_WINDOW_LIMIT,
+        network: config.AI_IP_WINDOW_LIMIT,
+      },
       secure,
       async accountId(request) {
         const token = sessionToken(request, secure);

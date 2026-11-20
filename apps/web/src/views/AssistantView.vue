@@ -3,7 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MoonStar, ArrowUpRight } from '@lucide/vue';
 import {
   assistantAction,
+  assistantExchangeBytes,
+  assistantHistoryBytes,
   assistantHistoryLimit,
+  assistantPrefersChat,
+  assistantRecentHistory,
   assistantStatus,
   type AssistantExchange,
   type AssistantAction,
@@ -16,14 +20,19 @@ import { findScene } from '../domain/evening';
 import { practices } from '../domain/relaxation';
 import { useEveningStore } from '../stores/evening';
 import { useAuthStore } from '../stores/auth';
-import { useAssistantStore } from '../stores/assistant';
-import { AssistantRequestError, readAssistant } from '../lib/assistant';
+import { useAssistantStore, type AssistantBlockScope } from '../stores/assistant';
+import {
+  AssistantRequestError,
+  assistantErrors,
+  checkAssistantAvailability,
+  readAssistant,
+} from '../lib/assistant';
 
 const router = useRouter();
 const evening = useEveningStore();
 const auth = useAuthStore();
 const conversation = useAssistantStore();
-const { turns, draft } = storeToRefs(conversation);
+const { turns, draft, blocks } = storeToRefs(conversation);
 const composing = ref(false);
 let compositionEndedAt = -Infinity;
 const active = ref(false);
@@ -39,18 +48,114 @@ const providers = ref<{ id: AssistantProviderId; model?: string }[]>([]);
 const recipient = ref<AssistantProviderId>();
 const selectedProvider = computed(() => providers.value.find(({ id }) => id === recipient.value));
 const providerName = computed(() => (recipient.value ? providerNames[recipient.value] : null));
-type Cooldown = AssistantProviderId | AssistantMode;
-const cooldowns = ref(new Set<Cooldown>());
-const retryBlocked = computed(
-  () =>
-    cooldowns.value.has(assistantMode.value) ||
-    (assistantMode.value === 'ai' && !!recipient.value && cooldowns.value.has(recipient.value)),
+const blockScope = computed<AssistantBlockScope | undefined>(() => {
+  const mode = assistantMode.value;
+  if (blocks.value[mode]) return mode;
+  if (mode === 'ai' && recipient.value && blocks.value[recipient.value]) return recipient.value;
+  return undefined;
+});
+const composerBlock = computed(() =>
+  blockScope.value ? blocks.value[blockScope.value] : undefined,
 );
-const retryTimers = new Map<Cooldown, ReturnType<typeof setTimeout>>();
-function clearRetryTimers() {
-  for (const timer of retryTimers.values()) clearTimeout(timer);
-  retryTimers.clear();
+const retryBlocked = computed(() => !!composerBlock.value);
+const recoveryTime = computed(() => {
+  const until = composerBlock.value?.until;
+  return until
+    ? new Date(until).toLocaleString('zh-CN', {
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    : undefined;
+});
+const polledCodes = ['MODEL_BUDGET', 'MODEL_PROVIDER_BUDGET', 'MODEL_CONCURRENCY'];
+const globalCodes = ['ASSISTANT_LIMIT', 'ASSISTANT_IP_LIMIT', 'MODEL_LIMIT', 'MODEL_BUDGET'];
+const pausedCodes = [
+  ...polledCodes,
+  ...globalCodes,
+  'MODEL_PROVIDER_LIMIT',
+  'LOCAL_MODE_LIMIT',
+  'upstream_rate',
+  'proxy_rate',
+  'authentication',
+  'balance',
+  'model_unavailable',
+];
+function pauseSending(
+  error: AssistantRequestError,
+  mode: AssistantMode,
+  provider?: AssistantProviderId,
+) {
+  if (error.retryAfter === 0 || (!pausedCodes.includes(error.code) && !error.retryAfter))
+    return false;
+  const scope =
+    mode === 'local' ? mode : globalCodes.includes(error.code) ? 'ai' : (provider ?? 'ai');
+  blocks.value[scope] = {
+    code: error.code,
+    ...(error.retryAfter ? { until: Date.now() + error.retryAfter * 1000 } : {}),
+    ...(polledCodes.includes(error.code) && error.reservation
+      ? { reservation: error.reservation }
+      : {}),
+  };
+  return true;
 }
+function resumeSending() {
+  if (blockScope.value) delete blocks.value[blockScope.value];
+}
+watch(
+  [blockScope, composerBlock, selectedProvider],
+  ([scope, block, target], _old, onCleanup) => {
+    if (!scope || !block) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+    onCleanup(() => {
+      clearTimeout(timer);
+      controller.abort();
+    });
+    if (block.until !== undefined) {
+      const wait = () => {
+        const remaining = block.until! - Date.now();
+        if (remaining <= 0) delete blocks.value[scope];
+        else timer = setTimeout(wait, Math.min(remaining, 86_400_000));
+      };
+      wait();
+      return;
+    }
+    if (!block.reservation || !target) return;
+    const reservation = block.reservation;
+    const check = async () => {
+      try {
+        const status = await checkAssistantAvailability(
+          target.id,
+          target.model,
+          reservation,
+          AbortSignal.any([controller.signal, AbortSignal.timeout(4000)]),
+        );
+        if (controller.signal.aborted) return;
+        if (status.available) {
+          delete blocks.value[scope];
+          return;
+        }
+        if (status.code !== block.code || status.retryAfter) {
+          delete blocks.value[scope];
+          pauseSending(
+            new AssistantRequestError(status.code, status.retryAfter, reservation),
+            'ai',
+            target.id,
+          );
+          return;
+        }
+      } catch {
+        // 查询失败时留在暂停状态，后续只重查站内状态。
+      }
+      if (!controller.signal.aborted) timer = setTimeout(check, 5000);
+    };
+    timer = setTimeout(check, 5000);
+  },
+  { immediate: true },
+);
 const sourceLabels = {
   ai: 'AI 辅助回答',
   local: '本地知识',
@@ -104,14 +209,11 @@ function reset() {
   stop();
   pending.value = null;
   consent.value = false;
-  clearRetryTimers();
-  cooldowns.value.clear();
   following.value = true;
 }
 watch(() => auth.user?.id, reset, { flush: 'sync' });
 onBeforeUnmount(() => {
   statusController.abort();
-  clearRetryTimers();
   stop();
 });
 watch(
@@ -158,9 +260,8 @@ watch(
   { flush: 'sync' },
 );
 function useLocalKnowledge() {
-  const question = last.value?.question;
   assistantMode.value = 'local';
-  if (question) void send(question, true);
+  textarea.value?.focus({ preventScroll: true });
 }
 function handleComposerKeydown(event: KeyboardEvent) {
   if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey)
@@ -190,18 +291,69 @@ async function send(question: string, replace = false, event?: Event) {
     : undefined;
   const trimmed = question.trim();
   const submittedDraft = !replace && draft.value.trim() === trimmed ? draft.value : null;
-  conversation.addTurn(trimmed, replace, identity);
+  const { sentOn: latestSentOn } = conversation.addTurn(trimmed, replace, identity);
   const history: AssistantExchange[] = [];
+  let prefersChat = assistantPrefersChat(trimmed);
   if (target) {
-    for (const turn of turns.value.slice(-9, -1).reverse()) {
+    const candidates: AssistantExchange[] = [];
+    for (let index = turns.value.length - 2; index >= 0; index--) {
+      const turn = turns.value[index]!;
       if (turn.recipient !== identity) break;
+      if (!prefersChat) prefersChat = assistantPrefersChat(turn.question);
+      if (prefersChat && turns.value.length - 2 - index >= 16) break;
+      if (turns.value.length - 2 - index >= 16) continue;
       if (turn.source !== 'ai' || !turn.result || !turn.text.trim()) continue;
-      history.unshift({ user: turn.question, reply: turn.text.slice(0, 400).trim() });
-      if (history.length === assistantHistoryLimit) break;
+      const reply = turn.text
+        .slice(0, 400)
+        .replace(/[\uD800-\uDBFF]$/, '')
+        .trim();
+      candidates.push({ user: turn.question, reply, sentOn: turn.sentOn });
     }
+    const topics =
+      trimmed
+        .normalize('NFKC')
+        .toLowerCase()
+        .match(/[\p{Script=Han}]+|[a-z\d]+/gu) ?? [];
+    const terms = new Set(
+      topics.flatMap((topic) =>
+        /^[a-z\d]/.test(topic)
+          ? topic.length > 2
+            ? [topic]
+            : []
+          : Array.from({ length: Math.max(0, topic.length - 1) }, (_, index) =>
+              topic.slice(index, index + 2),
+            ),
+      ),
+    );
+    const relevant = candidates
+      .slice(assistantRecentHistory)
+      .map((turn, index) => {
+        const source = turn.user.normalize('NFKC').toLowerCase();
+        return {
+          index: index + assistantRecentHistory,
+          score: [...terms].filter((term) => source.includes(term)).length,
+        };
+      })
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score);
+    let bytes = assistantHistoryBytes;
+    const selected: number[] = [];
+    const order = [
+      ...candidates.slice(0, assistantRecentHistory).keys(),
+      ...relevant.map(({ index }) => index),
+    ];
+    for (const index of order) {
+      const turn = candidates[index]!;
+      if (selected.length === assistantHistoryLimit) break;
+      const size = assistantExchangeBytes(turn);
+      if (size > bytes) continue;
+      bytes -= size;
+      selected.push(index);
+    }
+    history.push(...selected.sort((a, b) => b - a).map((index) => candidates[index]!));
   }
-  const previousReply = history.at(-1)?.reply;
-  const earlierReply = history.at(-2)?.reply;
+  const previous = history.at(-1);
+  const earlier = history.at(-2);
   const olderHistory = history.slice(0, -2);
   const messages = target
     ? [...history.slice(-2).map((turn) => turn.user), trimmed]
@@ -210,6 +362,7 @@ async function send(question: string, replace = false, event?: Event) {
   request = controller;
   active.value = true;
   if (moveFocus) void nextTick(() => stopButton.value?.focus({ preventScroll: true }));
+  let inputRestricted = false;
   try {
     await readAssistant(
       messages,
@@ -217,56 +370,62 @@ async function send(question: string, replace = false, event?: Event) {
       AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
       (event) => {
         if (request !== controller || !last.value) return;
-        if (event.type === 'start')
+        if (event.type === 'start') {
+          inputRestricted = event.inputRestricted === true;
           last.value.source = event.source ?? (event.mode === 'model' ? 'ai' : 'local');
+          switch (event.fallbackCode) {
+            case 'provider_invalid_output':
+              last.value.note = '模型返回格式异常。';
+              break;
+            case 'invalid_structure':
+              last.value.note = '模型回复缺少可用内容。';
+              break;
+            case 'output_rejected':
+              last.value.note = '模型回复未通过检查。';
+              break;
+          }
+        }
         if (event.type === 'text') last.value.text += event.text;
         if (event.type === 'done') {
           last.value.result = event;
           if (event.source) last.value.source = event.source;
-          if (submittedDraft !== null && draft.value === submittedDraft) draft.value = '';
+          if (
+            last.value.source !== 'fallback' &&
+            !inputRestricted &&
+            submittedDraft !== null &&
+            draft.value === submittedDraft
+          )
+            draft.value = '';
         }
       },
       target
         ? {
             provider: target.id,
             ...(target.model ? { model: target.model } : {}),
-            ...(previousReply ? { previousReply } : {}),
-            ...(earlierReply ? { earlierReply } : {}),
+            latestSentOn,
+            ...(previous ? { previousReply: previous.reply } : {}),
+            ...(previous?.sentOn ? { previousSentOn: previous.sentOn } : {}),
+            ...(earlier ? { earlierReply: earlier.reply } : {}),
+            ...(earlier?.sentOn ? { earlierSentOn: earlier.sentOn } : {}),
             ...(olderHistory.length ? { olderHistory } : {}),
+            ...(prefersChat ? { prefersChat } : {}),
           }
         : {},
     );
   } catch (error) {
     if (request === controller && last.value) {
       last.value.source = 'error';
-      if (error instanceof AssistantRequestError && error.retryAfter) {
-        const shared = ['ASSISTANT_LIMIT', 'MODEL_LIMIT', 'MODEL_BUDGET'].includes(error.code);
-        const scope = shared ? 'ai' : (target?.id ?? mode);
-        clearTimeout(retryTimers.get(scope));
-        cooldowns.value.add(scope);
-        retryTimers.set(
-          scope,
-          setTimeout(
-            () => {
-              cooldowns.value.delete(scope);
-              retryTimers.delete(scope);
-            },
-            Math.min(86_400, error.retryAfter) * 1000,
-          ),
-        );
-      }
-      last.value.note =
-        error instanceof DOMException && error.name === 'TimeoutError'
+      const paused =
+        error instanceof AssistantRequestError && pauseSending(error, mode, target?.id);
+      last.value.note = paused
+        ? '这条消息暂未得到回复。'
+        : error instanceof DOMException && error.name === 'TimeoutError'
           ? '这次回复超过等待时间，可以重试或使用本地知识。'
           : error instanceof TypeError
             ? '网络连接中断，可以重试。'
             : error instanceof Error && error.name !== 'ZodError' && !(error instanceof SyntaxError)
               ? error.message
               : '回复格式异常，可以重试。';
-      if (error instanceof AssistantRequestError && error.retryAfter) {
-        const retryAt = new Date(Date.now() + error.retryAfter * 1000);
-        last.value.note += ` 可在 ${retryAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} 后重试。`;
-      }
     }
   } finally {
     if (request === controller) {
@@ -343,7 +502,8 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
         </p>
         <p>聊天只留在当前标签页内存。刷新、清空对话或切换账号后清除。</p>
         <p v-if="providerName">
-          开启 AI 模式后，本次输入和最多四轮同一供应商和模型已完成的 AI 对话可能发送给
+          开启 AI 模式后，本次输入和最多六轮同一供应商和模型已完成的 AI
+          对话（含各条发送日期）可能发送给
           {{ providerName
           }}{{
             selectedProvider?.model ? `（${selectedProvider.model}）` : ''
@@ -356,7 +516,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
             target="_blank"
             rel="noopener noreferrer"
             >查看 {{ providerName }} 数据说明</a
-          >
+          >。若你明确表示只想闲聊，模型也会收到这一偏好。较早的原话不会因此发送。
         </p>
         <RouterLink class="quiet-link" to="/relaxation-evidence">放松依据与边界</RouterLink>
       </div>
@@ -369,8 +529,11 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
       </p>
       <div v-if="configured">
         <p v-if="!consent" id="assistant-consent-scope" class="assistant-muted">
-          开启后，本次消息和最多四轮在 {{ providerName }} 的当前模型已完成的对话会发给
-          {{ providerName }}。日记不会自动发送。随时可关闭，继续用本地知识。
+          开启后，本次消息和最多六轮在
+          {{ providerName }} 的当前模型已完成的对话（含各条发送日期）会发给
+          {{
+            providerName
+          }}。你明确表达的闲聊偏好也会带上，日记不会自动发送。随时可关闭，继续用本地知识。
         </p>
         <label class="assistant-consent">
           <input
@@ -478,8 +641,16 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
           v-model="draft"
           rows="2"
           maxlength="400"
-          placeholder="随便聊聊，或者说说今天发生的事。"
-          aria-describedby="assistant-composer-hint"
+          :placeholder="
+            assistantMode === 'local'
+              ? '问问已审核的睡眠知识，或找个声音与练习。'
+              : '随便聊聊，或者说说今天发生的事。'
+          "
+          :aria-describedby="
+            composerBlock
+              ? 'assistant-composer-hint assistant-composer-status'
+              : 'assistant-composer-hint'
+          "
           @keydown="handleComposerKeydown"
           @compositionstart="composing = true"
           @compositionend="
@@ -487,6 +658,23 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
             compositionEndedAt = $event.timeStamp;
           "
         />
+        <div v-if="composerBlock" class="assistant-compose-notice">
+          <p id="assistant-composer-status" role="status">
+            {{ assistantErrors[composerBlock.code] ?? '发送暂时暂停。' }}
+            <span v-if="recoveryTime"> {{ recoveryTime }} 后可以再试。</span>
+            <span v-else-if="composerBlock.reservation"> 站内额度可用后，发送按钮会自动恢复。</span>
+            <span v-else> 服务未给出恢复时间。</span>
+            <span v-if="draft.trim()"> 草稿还在，可以继续编辑或复制。</span>
+          </p>
+          <button
+            v-if="!recoveryTime && !composerBlock.reservation"
+            class="quiet-link"
+            type="button"
+            @click="resumeSending"
+          >
+            允许再次尝试
+          </button>
+        </div>
         <p id="assistant-composer-hint" class="assistant-keyboard-hint">
           Enter 发送 · Shift + Enter 换行
         </p>
@@ -518,7 +706,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
             {{ last.note ? '重试回复' : '重新生成' }}
           </button>
           <button
-            v-if="last && consent && (last.note || active)"
+            v-if="consent && (composerBlock || last?.note || active)"
             class="button button-secondary"
             type="button"
             @click="useLocalKnowledge"

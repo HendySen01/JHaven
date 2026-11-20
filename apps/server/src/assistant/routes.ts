@@ -1,5 +1,15 @@
 import { Router, type Request } from 'express';
-import { assistantRequest, type AssistantEvent, type AssistantProviderId } from '@jhaven/shared';
+import {
+  assistantExchangeBytes,
+  assistantHistoryBytes,
+  assistantPrefersChat,
+  assistantProviderId,
+  assistantRequest,
+  type AssistantEvent,
+  type AssistantExchange,
+  type AssistantFallbackCode,
+  type AssistantProviderId,
+} from '@jhaven/shared';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
 import { assistantInjection, assistantPlan, privateAssistantText } from './rules.js';
@@ -21,6 +31,7 @@ export function createAssistantRouter({
   providerLimits,
   dailyLimit,
   dailyBudget = 0.1,
+  windowsLimits = { account: 60, guest: 30, network: 180 },
   timeoutMs,
   secure = false,
   accountId,
@@ -31,6 +42,7 @@ export function createAssistantRouter({
   providerLimits: Record<AssistantProviderId, Limits>;
   dailyLimit: number;
   dailyBudget?: number;
+  windowsLimits?: { account: number; guest: number; network: number };
   timeoutMs?: number;
   secure?: boolean;
   accountId?: (request: Request) => Promise<string | undefined>;
@@ -44,6 +56,36 @@ export function createAssistantRouter({
   const total: Usage = { calls: 0, cost: 0, inflight: 0 };
   let day = -1;
 
+  function resetDaily(timestamp: number) {
+    const currentDay = Math.floor(timestamp / dayMs);
+    if (day !== currentDay) {
+      day = currentDay;
+      for (const entry of [total, ...usage.values()]) {
+        entry.calls = 0;
+        entry.cost = 0;
+      }
+    }
+    return currentDay;
+  }
+
+  function providerQuota(name: AssistantProviderId) {
+    const ledger = usage.get(name) ?? { calls: 0, cost: 0, inflight: 0 };
+    usage.set(name, ledger);
+    return ledger;
+  }
+
+  function restriction(name: AssistantProviderId, reservation: number, timestamp: number) {
+    const ledger = providerQuota(name);
+    const limit = providerLimits[name];
+    const retryAfter = Math.ceil(((day + 1) * dayMs - timestamp) / 1000);
+    if (total.calls >= dailyLimit) return { code: 'MODEL_LIMIT', retryAfter };
+    if (ledger.calls >= limit.dailyLimit) return { code: 'MODEL_PROVIDER_LIMIT', retryAfter };
+    if (total.cost + reservation > dailyBudget + 1e-9) return { code: 'MODEL_BUDGET' };
+    if (ledger.cost + reservation > limit.dailyBudget + 1e-9)
+      return { code: 'MODEL_PROVIDER_BUDGET' };
+    if (total.inflight >= 8 || ledger.inflight >= 4) return { code: 'MODEL_CONCURRENCY' };
+  }
+
   router.get('/status', (request, response) => {
     if (!empty.safeParse(request.query).success)
       throw new AppError(400, 'INVALID_QUERY', '状态接口不接受查询参数。');
@@ -53,6 +95,27 @@ export function createAssistantRouter({
       knowledgeVersion,
     });
   });
+  const availabilityQuery = z.strictObject({
+    provider: assistantProviderId,
+    model: z
+      .string()
+      .regex(/^[\w.-]{1,80}$/)
+      .optional(),
+    reservation: z.string().max(32).transform(Number).pipe(z.number().positive().max(10)),
+  });
+  // 查询只检查站内账本，不读取草稿、会话或联系供应商。
+  router.get('/availability', (request, response) => {
+    const query = availabilityQuery.safeParse(request.query);
+    if (!query.success) throw new AppError(400, 'INVALID_QUERY', '无效的额度查询。');
+    const { provider, model, reservation } = query.data;
+    const selected = registry.get(provider);
+    if (!selected || selected.model !== model)
+      return response.json({ available: false, code: 'model_unavailable' });
+    const timestamp = now();
+    resetDaily(timestamp);
+    const blocked = restriction(provider, reservation, timestamp);
+    return response.json(blocked ? { available: false, ...blocked } : { available: true });
+  });
   router.post('/chat', async (request, response) => {
     if (request.get('Origin') !== origin || request.get('Sec-Fetch-Site') === 'cross-site')
       throw new AppError(403, 'INVALID_ORIGIN', '请从本站使用睡前助手。');
@@ -61,84 +124,80 @@ export function createAssistantRouter({
     const input = assistantRequest.safeParse(request.body);
     if (!input.success || !empty.safeParse(request.query).success)
       throw new AppError(400, 'INVALID_INPUT', '最多发送三条消息，每条不超过 400 字符。');
-    const { mode, provider, model, messages, previousReply, earlierReply, olderHistory } =
-      input.data;
-    const plan = assistantPlan(messages);
+    const {
+      mode,
+      provider,
+      model,
+      messages,
+      previousReply,
+      earlierReply,
+      olderHistory,
+      latestSentOn,
+      previousSentOn,
+      earlierSentOn,
+    } = input.data;
+    const latest = messages.at(-1)!;
+    const prefersChat = input.data.prefersChat === true || assistantPrefersChat(latest);
+    const plan = assistantPlan(messages, prefersChat);
     const chosen = mode === 'ai' && provider ? registry.get(provider) : undefined;
     const authorized = chosen && chosen.model === model ? chosen : undefined;
-    const selected = plan.model || ('grounded' in plan && plan.grounded) ? authorized : undefined;
+    const selected = plan.model ? authorized : undefined;
     const ip = request.ip ?? 'unknown';
     const arrival = now();
     if (selected) {
-      windows.take('network:' + ip, 60, arrival, response);
+      windows.take('network:' + ip, windowsLimits.network, arrival, response);
       const user = await accountId?.(request);
       if (response.destroyed) return;
       const actor = user ? 'account:' + user : 'guest:' + windows.guest(request, response);
-      windows.take(actor, user ? 24 : 12, now(), response);
+      windows.take(actor, user ? windowsLimits.account : windowsLimits.guest, now(), response);
     } else windows.take('local:' + ip, 120, arrival, response, true);
     const timestamp = now();
-    const currentDay = Math.floor(timestamp / dayMs);
-    if (day !== currentDay) {
-      day = currentDay;
-      for (const entry of [total, ...usage.values()]) {
-        entry.calls = 0;
-        entry.cost = 0;
-      }
-    }
-    const latest = messages.at(-1)!;
+    const currentDay = resetDaily(timestamp);
     const previous = messages.at(-2);
     const earlier = messages.at(-3);
     const safeHistory = (text: string) => !privateAssistantText(text) && !assistantInjection(text);
-    const prior =
-      previous && previousReply && safeHistory(previousReply)
-        ? { user: previous, reply: previousReply }
-        : undefined;
-    const older =
-      prior && earlier && earlierReply && safeHistory(earlierReply)
-        ? { user: earlier, reply: earlierReply }
-        : undefined;
+    let historyBytes = assistantHistoryBytes;
+    const keep = (turn: AssistantExchange) => {
+      const size = assistantExchangeBytes(turn);
+      if (size > historyBytes || !safeHistory(turn.user) || !safeHistory(turn.reply)) return false;
+      historyBytes -= size;
+      return true;
+    };
+    const exchange = (user?: string, reply?: string, sentOn?: string) => {
+      if (!user || !reply) return;
+      const turn = { user, reply, ...(sentOn ? { sentOn } : {}) };
+      if (keep(turn)) return turn;
+    };
+    const prior = exchange(previous, previousReply, previousSentOn);
+    const older = exchange(earlier, earlierReply, earlierSentOn);
+    const history =
+      earlier && earlierReply && previous && previousReply
+        ? (olderHistory ?? []).slice().reverse().filter(keep).reverse()
+        : [];
+    const contextual = !!(prior || older || history.length || latestSentOn);
     const detailed =
       latest.length >= 90 || (!!prior && latest.length >= 40) || plan.sources.length > 1;
-    const modelInput = prior
+    const modelInput = contextual
       ? JSON.stringify({
+          ...(history.length ? { history } : {}),
           ...(older ? { earlier: older } : {}),
-          ...(older && olderHistory?.length
-            ? {
-                history: olderHistory.filter(
-                  ({ user, reply }) => safeHistory(user) && safeHistory(reply),
-                ),
-              }
-            : {}),
-          previous: prior,
+          ...(prior ? { previous: prior } : {}),
+          ...(latestSentOn ? { latestSentOn } : {}),
           latest,
         })
       : latest;
-    const system = selected ? groundedPrompt(plan.sources, !!prior, latest, plan.factual) : '';
+    const system = selected
+      ? groundedPrompt(plan.sources, contextual, latest, plan.factual, prefersChat)
+      : '';
     const reservation = selected ? estimateCost(selected, system, modelInput, detailed) : 0;
     let ledger: Usage | undefined;
     if (selected) {
-      ledger = usage.get(selected.name) ?? { calls: 0, cost: 0, inflight: 0 };
-      usage.set(selected.name, ledger);
-      const limit = providerLimits[selected.name];
-      if (total.inflight >= 8 || ledger.inflight >= 4)
-        throw new AppError(429, 'MODEL_CONCURRENCY', '现在有些忙，等一会儿再试。');
-      const limitCode =
-        total.calls >= dailyLimit
-          ? 'MODEL_LIMIT'
-          : ledger.calls >= limit.dailyLimit
-            ? 'MODEL_PROVIDER_LIMIT'
-            : total.cost + reservation > dailyBudget + 1e-9
-              ? 'MODEL_BUDGET'
-              : ledger.cost + reservation > limit.dailyBudget + 1e-9
-                ? 'MODEL_PROVIDER_BUDGET'
-                : undefined;
-      if (limitCode) {
-        if (!limitCode.endsWith('BUDGET'))
-          response.setHeader(
-            'Retry-After',
-            Math.ceil(((currentDay + 1) * dayMs - timestamp) / 1000),
-          );
-        throw new AppError(429, limitCode, '这次 AI 请求达到站点的用量限制。');
+      ledger = providerQuota(selected.name);
+      const blocked = restriction(selected.name, reservation, timestamp);
+      if (blocked) {
+        if (blocked.retryAfter) response.setHeader('Retry-After', blocked.retryAfter);
+        else response.setHeader('X-JHaven-Reservation', reservation);
+        throw new AppError(429, blocked.code, '这次 AI 请求暂时达到站点的用量限制。');
       }
     }
     const controller = new AbortController();
@@ -149,21 +208,45 @@ export function createAssistantRouter({
     };
     response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
     response.setHeader('X-Accel-Buffering', 'no');
-    const sendLocal = (fallback = false, override?: string) => {
+    const diagnostic = (code: string) => {
+      console.info('助手路由', {
+        requestId: String(response.locals.requestId),
+        provider: selected?.name ?? provider,
+        attempted: Boolean(selected),
+        code,
+      });
+    };
+    const sendLocal = (fallbackCode?: AssistantFallbackCode, override?: string) => {
+      if (fallbackCode) diagnostic(fallbackCode);
       send(
-        fallback
-          ? { type: 'start', mode: 'local', source: 'fallback' }
-          : { type: 'start', mode: 'local' },
+        fallbackCode
+          ? { type: 'start', mode: 'local', source: 'fallback', fallbackCode }
+          : {
+              type: 'start',
+              mode: 'local',
+              ...('inputRestricted' in plan && plan.inputRestricted
+                ? { inputRestricted: true }
+                : {}),
+            },
       );
       send({ type: 'text', text: override ?? plan.text });
       send({
         type: 'done',
         sources: override ? [] : plan.sources,
-        actions: override ? [] : plan.actions,
+        actions: fallbackCode ? [] : plan.actions,
       });
     };
     if (!selected || !ledger) {
-      sendLocal(mode === 'ai' && !authorized);
+      if (mode === 'ai' && plan.model && !authorized) {
+        const unavailable = provider !== undefined && !chosen;
+        sendLocal(
+          unavailable ? 'provider_unavailable' : 'authorization_required',
+          unavailable ? '所选模型当前不可用。' : '请重新确认要使用的 AI 模型。',
+        );
+      } else {
+        if (mode === 'ai' && !plan.model) diagnostic('local_policy');
+        sendLocal();
+      }
       response.end();
       return;
     }
@@ -196,13 +279,14 @@ export function createAssistantRouter({
         latest,
         'intent' in plan ? plan.intent : undefined,
         plan.factual,
+        prefersChat,
       );
-      if (!reply) {
-        sendLocal(true);
-        return;
-      }
-      if ('fallback' in reply) {
-        sendLocal(true, reply.text);
+      if (!reply || 'fallbackCode' in reply) {
+        sendLocal(
+          reply?.fallbackCode ?? 'output_rejected',
+          (reply && 'text' in reply ? reply.text : undefined) ??
+            (!plan.factual ? '这次 AI 没能给出可用的回复。可以重试，或改用本地知识。' : undefined),
+        );
         return;
       }
       send({ type: 'start', mode: 'model' });
@@ -221,7 +305,10 @@ export function createAssistantRouter({
         ['authentication', 'balance', 'upstream_rate', 'model_unavailable'].includes(error.code);
       if (!controller.signal.aborted) {
         if (error instanceof ProviderError && error.code === 'invalid_output') {
-          sendLocal(true);
+          sendLocal(
+            'provider_invalid_output',
+            !plan.factual ? '模型回复格式异常。可以重试，或改用本地知识。' : undefined,
+          );
           return;
         }
         const code = timeout.aborted
@@ -230,10 +317,12 @@ export function createAssistantRouter({
             ? error.code
             : 'upstream';
         const statuses: Partial<Record<ProviderError['code'], number>> = {
+          provider_content_filtered: 422,
           upstream_rate: 429,
           balance: 402,
           timeout: 504,
         };
+        diagnostic(code);
         response.status(statuses[code] ?? 502);
         if (error instanceof ProviderError && error.retryAfter !== undefined)
           response.setHeader('Retry-After', error.retryAfter);

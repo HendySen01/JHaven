@@ -40,7 +40,7 @@ export const assistantInjection = (text: string) =>
     text.normalize('NFKC'),
   );
 
-export function assistantPlan(messages: string[]) {
+export function assistantPlan(messages: string[], prefersChat = false) {
   const latest = messages.at(-1)!.normalize('NFKC');
   const context = messages.join('\n').normalize('NFKC');
   const followUp =
@@ -55,12 +55,18 @@ export function assistantPlan(messages: string[]) {
     ) &&
     asksForFacts(priorQuestion);
   const factual = asksForFacts(latest) || factualFollowUp;
-  const fixed = (text: string, sources = findKnowledge(''), actions: AssistantAction[] = []) => ({
+  const fixed = (
+    text: string,
+    sources: ReturnType<typeof findKnowledge> = [],
+    actions: AssistantAction[] = [],
+    inputRestricted = false,
+  ) => ({
     text,
     sources,
     actions,
     model: false,
     factual,
+    inputRestricted,
   });
   if (
     /自杀|自残|伤害自己|不想活|呼吸困难|喘不过气|胸痛|suicid|self.harm|chest pain/i.test(relevant)
@@ -71,10 +77,16 @@ export function assistantPlan(messages: string[]) {
   if (privateAssistantText(context))
     return fixed(
       '请不要在对话中填写日记、联系方式或凭据。可以只说你现在想听声音、了解睡眠知识，还是做个放松练习。',
+      [],
+      [],
+      true,
     );
   if (assistantInjection(context))
     return fixed(
       '我可以帮你查找已审核的睡眠知识，或推荐已有的声音和练习。可以直接说说你今晚需要什么。',
+      [],
+      [],
+      true,
     );
   if (
     /牙(?:齿)?.{0,8}(?:松动|松了|掉了|脱落)/.test(latest) ||
@@ -103,13 +115,12 @@ export function assistantPlan(messages: string[]) {
   const currentRule = rules.find(({ match }) => match.test(latest));
   const rule =
     currentRule ?? (followUp ? rules.find(({ match }) => match.test(relevant)) : undefined);
-  const advice = asksForAdvice(latest);
+  const advice = asksForAdvice(latest, prefersChat);
   const sources = factual ? findKnowledge(factualFollowUp ? priorQuestion : relevant) : [];
-  if (!advice && !factual) return { ...fixed(conversationalReply(latest)), grounded: true };
-  if (!rule && !sources.length) {
+  if ((!advice && !factual) || (!rule && !sources.length)) {
     return {
       ...fixed(factual ? insufficientEvidence : conversationalReply(latest)),
-      grounded: true,
+      model: true,
     };
   }
   const actions = rule && advice && !factual ? [actionForIntent(rule.intent)] : [];

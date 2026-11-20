@@ -131,7 +131,7 @@ integration('真实 MySQL 账户集成', () => {
         .post('/api/assistant/chat')
         .set({ Cookie: cookie, Origin: origin })
         .send({ mode, ...(mode === 'ai' ? { provider: 'deepseek' } : {}), messages: ['你好呀'] });
-    for (let n = 0; n < 24; n++) await chat(cookieFrom(first)).expect(200);
+    for (let n = 0; n < 60; n++) await chat(cookieFrom(first)).expect(200);
     await chat(cookieFrom(first))
       .expect(429)
       .expect(({ body }) => expect(body.error.code).toBe('ASSISTANT_LIMIT'));

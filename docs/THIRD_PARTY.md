@@ -1,5 +1,11 @@
 # 第三方来源与许可登记
 
+Sprint 9.7 复用 Vue、Zod、Vitest、Playwright 与既有 Provider 适配器，参考 DeepSeek 官方流结束原因定义。无新增依赖或 Skills。 [DeepSeek Chat Completions](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/)
+
+Sprint 9.6 复用既有 Vue、Zod、Vitest、Playwright 及模型适配器。DeepSeek 上游使用 Mock，无新增第三方依赖、资源或 Skills。
+
+Sprint 9.5 复用既有 Vue、Pinia、Zod、Playwright 和 DeepSeek 适配器，参考 DeepSeek 定价及错误码。未引入新组件、依赖或 Skills。 [助手文档](ASSISTANT.md)
+
 Sprint 9.4 复用 Vue、SVG、Playwright 及现有模型适配器。新增牙科安全转介参考 NHS 公开指南，未引入图表依赖、组件或 Skills。 [助手边界](ASSISTANT.md)
 
 Sprint 9.3 沿用 Node Fetch、Zod 与 Playwright。维护者明确确认四条自选录音可公开分发。项目登记该确认，未收到具体许可证或作者信息。无新增 npm 依赖、组件或 Skills。 [音轨清单](AUDIO_ASSETS.md)

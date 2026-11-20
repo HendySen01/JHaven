@@ -70,14 +70,15 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
     'true',
   );
   await expect(page.getByRole('button', { name: '最近 30 天' })).toBeEnabled();
-  expect(await page.evaluate(() => scrollY)).toBe(trendScroll);
+  // 浏览器的滚动坐标可能在布局更新后发生亚像素取整。
+  expect(Math.abs((await page.evaluate(() => scrollY)) - trendScroll)).toBeLessThan(0.5);
   await page.getByRole('button', { name: '最近 7 天' }).click();
   await expect(page.getByRole('button', { name: '最近 7 天' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
   await expect(page.getByRole('button', { name: '最近 7 天' })).toBeEnabled();
-  expect(await page.evaluate(() => scrollY)).toBe(trendScroll);
+  expect(Math.abs((await page.evaluate(() => scrollY)) - trendScroll)).toBeLessThan(0.5);
   await expect(graph).toHaveAttribute('data-test-retained', 'true');
   await page.getByRole('button', { name: '新增日记' }).click();
   await expect(page.getByRole('heading', { name: '新建日记' })).toBeFocused();

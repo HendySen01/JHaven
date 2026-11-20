@@ -163,6 +163,19 @@
   width: 100%;
   resize: vertical;
 }
+
+.assistant-compose-notice {
+  padding: 0.65rem 0.8rem;
+  border-inline-start: 2px solid var(--accent);
+  background: rgb(199 177 243 / 0.08);
+  border-radius: 0.4rem;
+  color: var(--soft);
+  font-size: 0.85rem;
+}
+
+.assistant-compose-notice p {
+  margin: 0;
+}
 .assistant-compose .assistant-actions {
   gap: 0.5rem 0.8rem;
 }

@@ -49,6 +49,8 @@ export class ProviderError extends Error {
     readonly code:
       | 'upstream'
       | 'upstream_rate'
+      | 'stream_interrupted'
+      | 'provider_content_filtered'
       | 'invalid_output'
       | 'authentication'
       | 'balance'
@@ -68,6 +70,7 @@ function retryAfter(value: string | null) {
   if (Number.isSafeInteger(seconds)) return Math.max(0, seconds);
 }
 const chunkSchema = z.object({
+  usage: z.unknown().optional(),
   choices: z
     .array(
       z.object({
@@ -136,6 +139,7 @@ function chatProvider(
         !response.headers.get('content-type')?.includes('text/event-stream')
       ) {
         await response.body?.cancel().catch(() => undefined);
+        if (response.ok) throw new ProviderError('invalid_output');
         const codes: Record<number, ProviderError['code']> = {
           401: 'authentication',
           402: 'balance',
@@ -156,7 +160,8 @@ function chatProvider(
       let buffer = '',
         output = '',
         size = 0,
-        finished = false;
+        finished = false,
+        filtered = false;
       try {
         while (true) {
           const { value, done } = await reader.read();
@@ -172,29 +177,31 @@ function chatProvider(
             if (!line.startsWith('data:')) continue;
             const data = line.slice(5).trim();
             if (data === '[DONE]') {
+              if (filtered) throw new ProviderError('provider_content_filtered');
               if (!finished) throw new ProviderError('invalid_output');
               return JSON.parse(output) as unknown;
             }
-            const frame = JSON.parse(data) as { usage?: unknown };
+            const frame = chunkSchema.parse(JSON.parse(data));
             const usage = tokenUsage.safeParse(frame.usage);
             if (usage.success) reportUsage?.(usage.data);
-            const part = chunkSchema.parse(frame).choices[0];
+            const part = frame.choices[0];
             if (!part) continue;
             output += part.delta.content ?? '';
             if (output.length > 4096) throw new ProviderError('invalid_output');
-            if (part.finish_reason && part.finish_reason !== 'stop')
+            if (part.finish_reason === 'content_filter') filtered = true;
+            else if (part.finish_reason && part.finish_reason !== 'stop')
               throw new ProviderError('invalid_output');
             finished ||= part.finish_reason === 'stop';
           }
         }
-        throw new ProviderError('upstream');
+        throw new ProviderError(filtered ? 'provider_content_filtered' : 'stream_interrupted');
       } catch (error) {
         if (signal.aborted) throw error;
         if (error instanceof ProviderError) throw error;
         throw new ProviderError(
           error instanceof SyntaxError || error instanceof z.ZodError
             ? 'invalid_output'
-            : 'upstream',
+            : 'stream_interrupted',
         );
       } finally {
         await reader.cancel().catch(() => undefined);

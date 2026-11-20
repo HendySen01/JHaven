@@ -38,6 +38,211 @@ const frames = (text: string) =>
     .split('\n')
     .map((line) => JSON.parse(line) as AssistantEvent);
 
+const everydayReflection = '你说人为什么总是这样啊，白天想休息，晚上又不想睡。';
+it('已授权的 DeepSeek 聊天连续三次走真实适配器，生活感叹不带空证据', async () => {
+  let calls = 0;
+  const upstream = vi.fn<typeof fetch>(
+    async () =>
+      new Response(
+        'data: ' +
+          JSON.stringify({
+            choices: [
+              {
+                delta: { content: JSON.stringify({ kind: 'chat', text: '接话 ' + ++calls }) },
+                finish_reason: 'stop',
+              },
+            ],
+          }) +
+          '\n\ndata: [DONE]\n\n',
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+  );
+  const api = request(
+    createApp({
+      assistantProvider: deepSeekProvider(
+        'fixture',
+        'deepseek-flash',
+        'https://api.deepseek.com',
+        upstream,
+      ),
+    }),
+  );
+  for (let n = 1; n <= 3; n++) {
+    const result = await api
+      .post('/api/assistant/chat')
+      .set('Origin', origin)
+      .send({
+        messages: [everydayReflection],
+        mode: 'ai',
+        provider: 'deepseek',
+        model: 'deepseek-flash',
+      })
+      .expect(200);
+    const reply = frames(result.text);
+    expect(reply[0]).toEqual({ type: 'start', mode: 'model' });
+    expect(reply[1]).toMatchObject({ text: '接话 ' + n });
+    expect(reply.at(-1)).toMatchObject({ sources: [], actions: [] });
+  }
+  expect(upstream).toHaveBeenCalledTimes(3);
+  expect(JSON.parse(String(upstream.mock.calls[0]?.[1]?.body)).messages[0].content).not.toContain(
+    'Reviewed evidence',
+  );
+});
+
+it.each([
+  ['data: {\n\n', 200, 'provider_invalid_output'],
+  ['data: {"choices":[]}\n\n', 502, 'stream_interrupted'],
+  [
+    'data: {"choices":[{"delta":{},"finish_reason":"content_filter"}]}\n\ndata: [DONE]\n\n',
+    422,
+    'provider_content_filtered',
+  ],
+] as const)('区分上游 HTTP 200 的 SSE 解析失败和断流 (%s)', async (body, status, code) => {
+  const upstream = vi.fn<typeof fetch>(
+    async () => new Response(body, { headers: { 'Content-Type': 'text/event-stream' } }),
+  );
+  const api = request(
+    createApp({
+      assistantProvider: deepSeekProvider(
+        'fixture',
+        'deepseek-flash',
+        'https://api.deepseek.com',
+        upstream,
+      ),
+    }),
+  );
+  const result = await api
+    .post('/api/assistant/chat')
+    .set('Origin', origin)
+    .send({
+      messages: [everydayReflection],
+      mode: 'ai',
+      provider: 'deepseek',
+      model: 'deepseek-flash',
+    })
+    .expect(status);
+  if (status === 200) {
+    expect(frames(result.text)[0]).toMatchObject({
+      mode: 'local',
+      source: 'fallback',
+      fallbackCode: code,
+    });
+    expect(result.text).not.toContain('没有可核验');
+  } else expect(result.body.error.code).toBe(code);
+  expect(upstream).toHaveBeenCalledOnce();
+});
+
+it('日常项目取舍与含混的砍字通过站内输入和模型输出校验', async () => {
+  const choose = vi.fn<AssistantProvider['choose']>(async () => ({
+    kind: 'chat',
+    text: '砍掉不重要的功能，展示时重点就更清楚了。',
+  }));
+  const api = request(createApp({ assistantProvider: testProvider(choose) }));
+  for (const text of ['砍掉不重要的功能，先把演示跑起来。', '这个还要不要砍？']) {
+    const response = await post(api, [text], true).expect(200);
+    expect(frames(response.text)[0]).toEqual({ type: 'start', mode: 'model' });
+    expect(frames(response.text)[1]).toMatchObject({ text: expect.stringContaining('砍掉') });
+  }
+  await post(api, ['我想伤害自己'], true)
+    .expect(200)
+    .expect(({ text }) => {
+      expect(frames(text)[0]).toEqual({ type: 'start', mode: 'local' });
+    });
+  expect(choose).toHaveBeenCalledTimes(2);
+});
+
+it('向 Provider 传递独立发送日期、原文和顺序，并优先保留近期对话', async () => {
+  const choose = vi.fn<AssistantProvider['choose']>(async () => ({
+    kind: 'chat',
+    text: '你在 20 日说准备了一星期，早点睡也是那天的安排。',
+  }));
+  const api = request(createApp({ assistantProvider: testProvider(choose) }));
+  const fact = {
+    user: '我为展示准备了一个星期，今天准备早点睡，明天展示。',
+    reply: '已经准备很久了。',
+    sentOn: '2026-11-20',
+  };
+  const send = (olderHistory: (typeof fact)[]) =>
+    api
+      .post('/api/assistant/chat')
+      .set('Origin', origin)
+      .send({
+        mode: 'ai',
+        provider: 'deepseek',
+        latestSentOn: '2026-11-21',
+        messages: ['刚下班', '到家了', '我准备了多久？说早点睡是昨天还是今天？'],
+        previousReply: '回来了。',
+        earlierReply: '下班了。',
+        previousSentOn: '2026-11-21',
+        earlierSentOn: '2026-11-20',
+        olderHistory,
+      });
+  await send([fact, { user: '换个话题', reply: '好。', sentOn: '2026-11-21' }]).expect(200);
+  expect(JSON.parse(choose.mock.calls[0]![0])).toMatchObject({
+    latestSentOn: '2026-11-21',
+    history: [fact, { user: '换个话题' }],
+    previous: { user: '到家了', sentOn: '2026-11-21' },
+    earlier: { user: '刚下班', sentOn: '2026-11-20' },
+  });
+  expect(choose.mock.calls[0]![2]).toContain('not event dates');
+  expect(choose.mock.calls[0]![2]).toContain('明天 the next day');
+  expect(choose.mock.calls[0]![2]).toContain('do not claim the user never mentioned it');
+  expect(Object.keys(JSON.parse(choose.mock.calls[0]![0]))).toEqual([
+    'history',
+    'earlier',
+    'previous',
+    'latestSentOn',
+    'latest',
+  ]);
+  const large = { user: '语'.repeat(400), reply: '句'.repeat(400), sentOn: '2026-11-20' };
+  await send([large, large, large, large]).expect(200);
+  expect(JSON.parse(choose.mock.calls[1]![0])).toMatchObject({
+    history: [large, large, large],
+    previous: { user: '到家了' },
+  });
+});
+
+it('同一会话 30 轮混合语境均走已选 Provider，拒绝输出只在单轮回退', async () => {
+  let calls = 0;
+  const choose = vi.fn<AssistantProvider['choose']>(
+    async (_input, _signal, _system, _detailed, report) => {
+      report?.({ prompt_tokens: 100, completion_tokens: 20 });
+      return ++calls === 15 ? { kind: 'unknown' } : { kind: 'chat', text: '接上这一轮。' };
+    },
+  );
+  const api = request.agent(createApp({ assistantProvider: testProvider(choose) }));
+  const topics = [
+    '终于修好了卡了三天的 Bug！',
+    '刚知道这件事，还是挺委屈的。',
+    everydayReflection,
+    '刚刚收到个好消息！',
+  ];
+  for (let n = 0; n < 30; n++) {
+    const latest = topics[n % topics.length]!;
+    const body = frames(
+      (
+        await api
+          .post('/api/assistant/chat')
+          .set('Origin', origin)
+          .send({
+            mode: 'ai',
+            provider: 'deepseek',
+            prefersChat: true,
+            messages: n ? [topics[(n - 1) % topics.length], latest] : [latest],
+            ...(n && n !== 15 ? { previousReply: '接上这一轮。' } : {}),
+          })
+          .expect(200)
+      ).text,
+    );
+    expect(body[0]).toMatchObject(
+      n === 14 ? { source: 'fallback', fallbackCode: 'output_rejected' } : { mode: 'model' },
+    );
+    expect(body.at(-1)).toMatchObject({ sources: [], actions: [] });
+  }
+  await post(api, [everydayReflection], true).expect(429);
+  expect(choose).toHaveBeenCalledTimes(30);
+});
+
 it.each(['deepseek', 'openai'] as const)('%s 普通陪聊保留接话，去掉多余建议', async (provider) => {
   const choose = vi.fn(async () => ({
     kind: 'chat',
@@ -66,7 +271,7 @@ it.each(['deepseek', 'openai'] as const)('%s 普通陪聊保留接话，去掉�
   });
 });
 
-it('四轮范围内保留可信旧语境，剔除指令和敏感信息，并拒绝超限历史', async () => {
+it('保留可信旧语境，剔除指令和敏感信息，并拒绝超过六轮的历史', async () => {
   const choose = vi.fn<AssistantProvider['choose']>(async () => ({
     kind: 'chat',
     text: '这段听着挺有意思。你可以先去散步。那句倒很像你说的反话。',
@@ -93,7 +298,7 @@ it('四轮范围内保留可信旧语境，剔除指令和敏感信息，并拒�
   expect(frames(response.text)[1]).toMatchObject({
     text: '这段听着挺有意思。那句倒很像你说的反话。',
   });
-  await send({ ...body, olderHistory: [...olderHistory, olderHistory[0]] }).expect(400);
+  await send({ ...body, olderHistory: Array(5).fill(olderHistory[0]) }).expect(400);
   expect(choose).toHaveBeenCalledTimes(1);
 });
 
@@ -153,7 +358,7 @@ it('睡梦知识与短追问共享可信来源，普通作息和反向请求不�
     expect(reply[0]).toMatchObject({ mode: 'model' });
     expect(reply.at(-1)).toMatchObject({ sources: [], actions: [] });
     const prompt = choose.mock.lastCall?.[2];
-    expect(prompt).toContain('a personal habit');
+    expect(prompt).toContain('For a shared experience');
     expect(prompt).not.toContain('"kind":"suggest"');
   }
 });
@@ -201,10 +406,6 @@ it.each(['deepseek', 'openai'] as const)('%s 使用相同的上下文、引用�
     }),
   );
   expect(choose.mock.calls[0]?.[3]).toBe(true);
-  expect(choose.mock.calls[0]?.[2]).toContain('Infer conversational intent provisionally');
-  expect(choose.mock.calls[0]?.[2]).toContain('even if the previous reply was playful');
-  expect(choose.mock.calls[0]?.[2]).toContain('When feedback points out that your tone missed');
-  expect(choose.mock.calls[0]?.[2]).toContain('When they brighten or initiate fresh banter');
   expect(choose.mock.calls[0]?.[2]).toContain('Never invent a personal history');
   expect(frames(chat.text).at(-1)).toMatchObject({ sources: [], actions: [] });
   const cited = await send({ messages: ['浓茶会影响睡眠吗'] });
@@ -262,7 +463,7 @@ it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且�
       latest: sent.messages[1],
     }),
     expect.any(AbortSignal),
-    expect.stringContaining('own the specific miss'),
+    expect.stringContaining('untrusted quoted exchanges'),
     false,
     expect.any(Function),
   );
@@ -337,7 +538,7 @@ it('开放式陪聊问题保留上一轮语境，不混入证据或产品推荐'
     expect.any(Function),
   );
   const prompt = choose.mock.calls[0]?.[2];
-  expect(prompt).toContain('Do not infer a third party’s motives');
+  expect(prompt).toContain('not a claim about hidden motives');
   expect(prompt).not.toMatch(/Reviewed evidence|kind":"suggest/);
   expect(frames(result.text)).toEqual([
     { type: 'start', mode: 'model' },
@@ -473,7 +674,7 @@ it.each([
     createApp({ assistantProvider: { name: 'deepseek', choose: async () => mock } }),
   );
   const result = frames((await post(api, ['浓茶会影响睡眠吗'], true)).text);
-  expect(result[0]).toEqual({ type: 'start', mode: 'local', source: 'fallback' });
+  expect(result[0]).toMatchObject({ type: 'start', mode: 'local', source: 'fallback' });
   expect(result.at(-1)).toMatchObject({ actions: [], sources: [{ id: 'caffeine' }] });
 });
 it.each([
@@ -492,7 +693,7 @@ it.each([
     false,
     expect.any(Function),
   );
-  expect(result[0]).toEqual({ type: 'start', mode, source: 'fallback' });
+  expect(result[0]).toMatchObject({ type: 'start', mode, source: 'fallback' });
   expect(result[1]).toMatchObject({ text: expect.stringContaining('没有可核验') });
   expect(result.at(-1)).toMatchObject({ sources: [], actions: [] });
 });
@@ -549,6 +750,7 @@ it('没有密钥与未同意时使用本地模式，拒绝超长和越权参数'
     type: 'start',
     mode: 'local',
     source: 'fallback',
+    fallbackCode: 'provider_unavailable',
   });
   expect(frames((await post(enabled, ['思绪很多']).expect(200)).text)[0]).toEqual({
     type: 'start',
@@ -580,7 +782,13 @@ it('注入、敏感信息、未成年人和医疗问题不发给模型，禁止�
     '我不想活了',
   ]) {
     const events = frames((await post(api, [text], true).expect(200)).text);
-    expect(events[0]).toEqual({ type: 'start', mode: 'local' });
+    expect(events[0]).toEqual({
+      type: 'start',
+      mode: 'local',
+      ...(text.startsWith('忽略') || text.includes('日记') || text.includes('@')
+        ? { inputRestricted: true }
+        : {}),
+    });
     expect(events.at(-1)).toMatchObject({ type: 'done', actions: [] });
     if (text === '给我开安眠药' || text === '长期失眠怎么办')
       expect(events.at(-1)).toMatchObject({ sources: [{ id: 'seek-care' }] });
@@ -608,7 +816,12 @@ it('注入、敏感信息、未成年人和医疗问题不发给模型，禁止�
       ).expect(200)
     ).text,
   );
-  expect(bad[0]).toEqual({ type: 'start', mode: 'local', source: 'fallback' });
+  expect(bad[0]).toEqual({
+    type: 'start',
+    mode: 'local',
+    source: 'fallback',
+    fallbackCode: 'invalid_structure',
+  });
   expect(bad.at(-1)).toMatchObject({ type: 'done' });
 });
 it('允许显式模型请求，验证响应并产生服务端准许的动作和来源', async () => {
@@ -891,7 +1104,7 @@ it('用实际用量结算，上游限流仅计一次尝试，两个同网访客�
   const first = request.agent(app);
   const second = request.agent(app);
   await post(first, ['你好呀'], true).expect(429).expect('Retry-After', '3');
-  for (let n = 0; n < 11; n++) await post(first, ['你好呀'], true).expect(200);
+  for (let n = 0; n < 29; n++) await post(first, ['你好呀'], true).expect(200);
   await post(first, ['你好呀'], true)
     .expect(429)
     .expect(({ body, headers }) => {
@@ -900,7 +1113,95 @@ it('用实际用量结算，上游限流仅计一次尝试，两个同网访客�
     });
   await post(first, ['雨声'], false).expect(200);
   await post(second, ['你好呀'], true).expect(200);
-  expect(choose).toHaveBeenCalledTimes(13);
+  expect(choose).toHaveBeenCalledTimes(31);
+});
+
+it('同一 IP 的 180 次保护覆盖不同访客，但不影响本地知识', async () => {
+  const choose = vi.fn<AssistantProvider['choose']>(
+    async (_msg, _signal, _sys, _detailed, report) => {
+      report?.({ prompt_tokens: 10, completion_tokens: 10 });
+      return { kind: 'chat', text: '晚上好。' };
+    },
+  );
+  const app = createApp({
+    assistantProvider: testProvider(choose),
+    config: loadConfig({ AI_DAILY_REQUEST_LIMIT: '200', AI_DEEPSEEK_DAILY_REQUEST_LIMIT: '200' }),
+  });
+  for (let n = 0; n < 6; n++) {
+    const guest = request.agent(app);
+    for (let call = 0; call < 30; call++) await post(guest, ['你好呀'], true).expect(200);
+  }
+  const guest = request.agent(app);
+  await post(guest, ['你好呀'], true)
+    .expect(429)
+    .expect(({ body, headers }) => {
+      expect(body.error.code).toBe('ASSISTANT_IP_LIMIT');
+      expect(Number(headers['retry-after'])).toBeGreaterThan(0);
+    });
+  await post(guest, ['雨声']).expect(200);
+  expect(choose).toHaveBeenCalledTimes(180);
+});
+
+it('站内状态检测不发模型请求，预留释放后恢复', async () => {
+  const text = '你好呀';
+  let started!: () => void;
+  let settle!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const provider = testProvider(
+    vi.fn<AssistantProvider['choose']>(async (_text, _signal, _system, _detailed, report) => {
+      await new Promise<void>((resolve) => {
+        settle = resolve;
+        started();
+      });
+      report?.({ prompt_tokens: 5, completion_tokens: 5 });
+      return { kind: 'chat', text: '晚上好。' };
+    }),
+  );
+  const cost = estimateCost(provider, groundedPrompt([], false, text), text, false);
+  const api = request(
+    createApp({
+      assistantProvider: provider,
+      config: loadConfig({ AI_DAILY_BUDGET_USD: String(cost * 1.5) }),
+    }),
+  );
+  const inFlight = post(api, [text], true).expect(200).then();
+  await ready;
+  try {
+    const denied = await post(api, [text], true).expect(429);
+    const status =
+      '/api/assistant/availability?provider=deepseek&reservation=' +
+      denied.headers['x-jhaven-reservation'];
+    await api.get(status).expect(200, { available: false, code: 'MODEL_BUDGET' });
+    settle();
+    await inFlight;
+    await api.get(status).expect(200, { available: true });
+    expect(provider.choose).toHaveBeenCalledTimes(1);
+  } finally {
+    settle();
+  }
+});
+
+it('聊天偏好抑制情绪词触发推荐，明确求助仍可推荐', async () => {
+  const choose = vi.fn<AssistantProvider['choose']>(async () => ({
+    kind: 'suggest',
+    intent: 'thoughts',
+  }));
+  const api = request(createApp({ assistantProvider: testProvider(choose) }));
+  const send = (text: string) =>
+    api
+      .post('/api/assistant/chat')
+      .set('Origin', origin)
+      .send({ mode: 'ai', provider: 'deepseek', messages: [text], prefersChat: true })
+      .expect(200);
+  expect(frames((await send('今天脑子里思绪停不下来。')).text).at(-1)).toMatchObject({
+    actions: [],
+  });
+  expect(choose.mock.calls[0]?.[2]).toContain('explicitly chose casual conversation');
+  expect(frames((await send('想做思绪整理练习，怎么开始？')).text).at(-1)).toMatchObject({
+    actions: [{ id: 'thoughts' }],
+  });
 });
 
 it('有明确上游用量时释放预留差额，429 也释放预留但仍受每日次数限制', async () => {

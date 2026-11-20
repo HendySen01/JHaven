@@ -8,12 +8,21 @@ export const assistantAction = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('scene'), id: assistantScene, mood: assistantMood }),
 ]);
 const messages = z.array(z.string().trim().min(1).max(400)).min(1).max(3);
-export const assistantHistoryLimit = 4;
+export const assistantHistoryLimit = 6;
+export const assistantRecentHistory = 4;
+export const assistantHistoryBytes = 9_600;
 const exchange = z.strictObject({
   user: z.string().trim().min(1).max(400),
   reply: z.string().trim().min(1).max(400),
+  sentOn: z.iso.date().optional(),
 });
 export type AssistantExchange = z.infer<typeof exchange>;
+export const assistantExchangeBytes = (turn: AssistantExchange) =>
+  new TextEncoder().encode(JSON.stringify(turn)).length;
+export const assistantPrefersChat = (text: string) =>
+  /(?:^|[，。！？、；,.;!?\s])(?:我(?:又|现在)?)?(?:(?:只想|就是想|就想|只是想).{0,8}(?:闲聊|聊(?:天|两句)?)(?=[，。！？、,.!?;\s]|$)|(?:不用|不想听|不要|别再?|不需要).{0,6}(?:建议|说教|上课)|不是来.{0,8}(?:上课|听课|听建议))/.test(
+    text.normalize('NFKC'),
+  );
 export const assistantMode = z.enum(['ai', 'local']);
 export type AssistantMode = z.infer<typeof assistantMode>;
 export const assistantProviderId = z.enum(['openai', 'deepseek']);
@@ -25,8 +34,12 @@ export const assistantRequest = z.union([
     mode: assistantMode,
     provider: assistantProviderId.optional(),
     model: modelName.optional(),
+    prefersChat: z.boolean().optional(),
     previousReply: z.string().trim().min(1).max(400).optional(),
     earlierReply: z.string().trim().min(1).max(400).optional(),
+    latestSentOn: z.iso.date().optional(),
+    previousSentOn: z.iso.date().optional(),
+    earlierSentOn: z.iso.date().optional(),
     olderHistory: z
       .array(exchange)
       .max(assistantHistoryLimit - 2)
@@ -37,8 +50,12 @@ export const assistantRequest = z.union([
     mode: useModel ? ('ai' as const) : ('local' as const),
     provider: undefined,
     model: undefined,
+    prefersChat: undefined,
     previousReply: undefined,
     earlierReply: undefined,
+    latestSentOn: undefined,
+    previousSentOn: undefined,
+    earlierSentOn: undefined,
     olderHistory: undefined,
   })),
 ]);
@@ -60,11 +77,22 @@ export const assistantStatus = z.strictObject({
     .optional(),
   knowledgeVersion: z.string(),
 });
+export const assistantFallbackCode = z.enum([
+  'authorization_required',
+  'provider_unavailable',
+  'provider_invalid_output',
+  'invalid_structure',
+  'output_rejected',
+  'evidence_unavailable',
+]);
+export type AssistantFallbackCode = z.infer<typeof assistantFallbackCode>;
 export const assistantEvent = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('start'),
     mode: z.enum(['local', 'model']),
     source: z.enum(['fallback', 'local']).optional(),
+    fallbackCode: assistantFallbackCode.optional(),
+    inputRestricted: z.literal(true).optional(),
   }),
   z.strictObject({ type: z.literal('text'), text: z.string().min(1).max(400) }),
   z.strictObject({
@@ -80,6 +108,8 @@ export const assistantEvent = z.discriminatedUnion('type', [
       'timeout',
       'upstream',
       'upstream_rate',
+      'stream_interrupted',
+      'provider_content_filtered',
       'invalid_output',
       'authentication',
       'balance',

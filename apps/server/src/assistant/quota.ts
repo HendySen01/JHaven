@@ -51,7 +51,11 @@ export function createAssistantWindows(secure: boolean) {
           response.setHeader('Retry-After', Math.ceil((bucket.until - timestamp) / 1000));
         throw new AppError(
           429,
-          local ? 'LOCAL_MODE_LIMIT' : 'ASSISTANT_LIMIT',
+          local
+            ? 'LOCAL_MODE_LIMIT'
+            : key.startsWith('network:')
+              ? 'ASSISTANT_IP_LIMIT'
+              : 'ASSISTANT_LIMIT',
           '消息发得有点快，请稍后再试。',
         );
       }
