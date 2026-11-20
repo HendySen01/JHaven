@@ -7,10 +7,21 @@ export const assistantAction = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('practice'), id: practiceId, mood: assistantMood }),
   z.strictObject({ kind: z.literal('scene'), id: assistantScene, mood: assistantMood }),
 ]);
-export const assistantRequest = z.strictObject({
-  messages: z.array(z.string().trim().min(1).max(400)).min(1).max(3),
-  useModel: z.boolean(),
-});
+const messages = z.array(z.string().trim().min(1).max(400)).min(1).max(3);
+export const assistantMode = z.enum(['ai', 'local']);
+export type AssistantMode = z.infer<typeof assistantMode>;
+export const assistantRequest = z.union([
+  z.strictObject({
+    messages,
+    mode: assistantMode,
+    previousReply: z.string().trim().min(1).max(400).optional(),
+  }),
+  z.strictObject({ messages, useModel: z.boolean() }).transform(({ messages, useModel }) => ({
+    messages,
+    mode: useModel ? ('ai' as const) : ('local' as const),
+    previousReply: undefined,
+  })),
+]);
 export const assistantSource = z.strictObject({
   id: z.string().regex(/^[a-z-]+$/),
   title: z.string().min(1).max(120),
@@ -26,10 +37,15 @@ export const assistantStatus = z.strictObject({
   knowledgeVersion: z.string(),
 });
 export const assistantEvent = z.discriminatedUnion('type', [
-  z.strictObject({ type: z.literal('start'), mode: z.enum(['local', 'model']) }),
+  z.strictObject({
+    type: z.literal('start'),
+    mode: z.enum(['local', 'model']),
+    source: z.enum(['fallback', 'local']).optional(),
+  }),
   z.strictObject({ type: z.literal('text'), text: z.string().min(1).max(400) }),
   z.strictObject({
     type: z.literal('done'),
+    source: z.literal('ai').optional(),
     sources: z.array(assistantSource).max(3),
     actions: z.array(assistantAction).max(2),
     reason: z.string().min(1).max(100).optional(),
@@ -44,7 +60,9 @@ export const assistantEvent = z.discriminatedUnion('type', [
       'authentication',
       'balance',
       'model_unavailable',
+      'unknown_provider_error',
     ]),
+    retryAfter: z.number().int().nonnegative().optional(),
   }),
 ]);
 export type AssistantEvent = z.infer<typeof assistantEvent>;

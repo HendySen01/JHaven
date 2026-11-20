@@ -1,5 +1,11 @@
 # 第三方来源与许可登记
 
+2026-11-20 使用 LeiBox Skill 查询 Vue 播放和聊天交互，检索到带工具与附件流程的聊天输入组件及强调动效的筛选组件。当前界面继续复用已有 Vue 控件、Lucide 和设计 token。未安装组件、依赖或额外 Skills。Freesound 原页面用于逐轨授权复核和候选试听。本轮无外部素材集成。 [音轨审计](AUDIO_AUDIT.md)
+
+本轮用 LeiBox Skill 评估日期选择交互，目录匹配项面向日程卡片拖动。也评估了 `vue-scroll-picker` 的公开 Vue 3 接口和手势支持。为复用现有对话框并控制键盘、焦点和减少动态效果，采用项目内 Vue 与 CSS Scroll Snap 实现，未引入依赖或组件代码。 [vue-scroll-picker](https://github.com/wan2land/vue-scroll-picker)
+
+限流分类参照 [DeepSeek 官方错误码](https://api-docs.deepseek.com/quick_start/error_codes/)。两条新拟音均为项目原创。
+
 Sprint 6B 直接使用 DeepSeek 官方服务，复用 Node Fetch/SSE 代码，无新增 SDK、组件或 Skills。参考官方模型、流式接口与思考模式文档，接口服务的使用按供应商条款执行。 [官方文档](https://api-docs.deepseek.com/api/create-chat-completion/)
 
 核查日期：2026-11-18。依赖版本以根锁文件为准；本文件不代替原许可。仓库公开、可下载、可署名不等于获得产品化授权。

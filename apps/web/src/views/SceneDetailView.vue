@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, ArrowRight, Play } from '@lucide/vue';
+import { ArrowLeft, ArrowRight, Play, Pause, LoaderCircle, Square } from '@lucide/vue';
 import SceneArtwork from '../components/SceneArtwork.vue';
 import { findScene } from '../domain/evening';
 import { useEveningStore } from '../stores/evening';
@@ -19,12 +19,41 @@ watch(
   },
   { immediate: true },
 );
+const isCurrentMix = computed(
+  () => audio.currentId === null || audio.currentId === scene.value?.id,
+);
+const status = computed(() => audio.snapshot.status);
+const busy = computed(
+  () => status.value === 'loading' || status.value === 'stopping' || !!audio.auditionId,
+);
+const pause = computed(() => isCurrentMix.value && status.value === 'playing' && !audio.auditionId);
+const icon = computed(() =>
+  status.value === 'loading'
+    ? LoaderCircle
+    : status.value === 'stopping' || audio.auditionId
+      ? Square
+      : pause.value
+        ? Pause
+        : Play,
+);
+const buttonText = computed(() => {
+  if (audio.auditionId) return '正在单独试听';
+  if (status.value === 'loading') return '正在准备声音…';
+  if (status.value === 'stopping') return '正在收声…';
+  if (!isCurrentMix.value) return '切换并播放此场景';
+  if (status.value === 'error') return '重试播放';
+  if (status.value === 'paused') return '继续播放';
+  if (audio.currentId === null) return pause.value ? '暂停当前混音' : '播放当前混音';
+  return pause.value ? '暂停此场景' : '播放此场景';
+});
 function playScene() {
-  if (!scene.value) return;
-  const same = audio.currentId === scene.value.id;
-  if (!same) audio.applyBuiltin(scene.value.id);
-  if (same && audio.snapshot.status === 'playing') audio.pause();
-  else void audio.play();
+  if (!scene.value || busy.value) return;
+  if (pause.value) {
+    audio.pause();
+    return;
+  }
+  if (!isCurrentMix.value) audio.applyBuiltin(scene.value.id);
+  void audio.play();
 }
 </script>
 <template>
@@ -46,19 +75,15 @@ function playScene() {
           <p class="page-lead">{{ scene.description }}</p>
           <p class="scene-texture">{{ scene.texture }}</p>
           <p class="audio-hint">
-            点击播放此场景会应用它的起始配比。仅浏览不会改变当前混音；下方可独立调节、另存和设置定时。配比无医学含义。
+            手动调过的混音会继续保留。可在下方选择预设、调节音量、另存或设置定时。
           </p>
           <button
             class="button button-primary detail-play"
             type="button"
-            :disabled="audio.snapshot.status === 'loading' || audio.snapshot.status === 'stopping'"
+            :disabled="busy"
             @click="playScene"
           >
-            <Play :size="17" aria-hidden="true" />{{
-              audio.snapshot.status === 'playing' && audio.currentId === scene.id
-                ? '暂停此场景'
-                : '播放此场景'
-            }}
+            <component :is="icon" :size="17" aria-hidden="true" />{{ buttonText }}
           </button>
           <RouterLink class="button button-secondary" to="/relax"
             >再看看其他场景<ArrowRight :size="16" aria-hidden="true"

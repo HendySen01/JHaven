@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Play, Pause, Square } from '@lucide/vue';
+import { Play, Pause, Square, LoaderCircle } from '@lucide/vue';
 import { computed } from 'vue';
 import { useAudioEngine } from '../../composables/useAudioEngine';
 const audio = useAudioEngine();
@@ -44,8 +44,20 @@ const labels = {
         "
         @click="audio.play"
       >
-        <Play :size="17" aria-hidden="true" />{{
-          status === 'paused' ? '继续播放' : status === 'error' ? '重试播放' : '播放混音'
+        <component
+          :is="status === 'loading' ? LoaderCircle : status === 'stopping' ? Square : Play"
+          :size="17"
+          aria-hidden="true"
+        />{{
+          status === 'loading'
+            ? '正在准备'
+            : status === 'stopping'
+              ? '正在收声'
+              : status === 'paused'
+                ? '继续播放'
+                : status === 'error'
+                  ? '重试播放'
+                  : '播放混音'
         }}
       </button>
       <button

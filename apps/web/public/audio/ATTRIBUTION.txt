@@ -71,3 +71,17 @@ fan.wav — 柔和风扇声
 许可：LicenseRef-JHaven-Original
 处理：确定性合成；去直流、等功率交叉渐变、RMS 及峰值整形。
 SHA-256: cacd6e96d87d52215f27f8aa5bc5d2aa5ac8273ad854518637f5f41f829b6276
+
+soft-chew.wav — 轻柔咀嚼拟音
+作者：JHaven
+来源：scripts/prepare-textures.mjs
+许可：LicenseRef-JHaven-Original
+处理：原创确定性拟音，带限噪声、渐入渐出短包络、去直流、循环交叉淡化和峰值整形。
+SHA-256: a91da96de24e35b20e60c1a13eae4478607c648de4b649388b1c300ccb86eed1
+
+gentle-crinkle.wav — 轻脆捏捏声
+作者：JHaven
+来源：scripts/prepare-textures.mjs
+许可：LicenseRef-JHaven-Original
+处理：原创确定性拟音，带限噪声、渐入渐出短包络、去直流、循环交叉淡化和峰值整形。
+SHA-256: c444a223d44935b42dd6c823568278ed0ba88fe5ae5d245af361cd028118115d

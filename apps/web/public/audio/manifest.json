@@ -179,5 +179,35 @@
     "bytes": 768044,
     "sha256": "cacd6e96d87d52215f27f8aa5bc5d2aa5ac8273ad854518637f5f41f829b6276",
     "verifiedOn": "2026-11-18"
+  },
+  {
+    "id": "soft-chew",
+    "name": "轻柔咀嚼拟音",
+    "author": "JHaven",
+    "source": "scripts/prepare-textures.mjs",
+    "changes": "原创确定性拟音，带限噪声、渐入渐出短包络、去直流、循环交叉淡化和峰值整形。",
+    "license": "LicenseRef-JHaven-Original",
+    "file": "soft-chew.wav",
+    "format": "PCM WAV 16-bit mono",
+    "sampleRate": 32000,
+    "seconds": 12,
+    "bytes": 768044,
+    "sha256": "a91da96de24e35b20e60c1a13eae4478607c648de4b649388b1c300ccb86eed1",
+    "verifiedOn": "2026-11-19"
+  },
+  {
+    "id": "gentle-crinkle",
+    "name": "轻脆捏捏声",
+    "author": "JHaven",
+    "source": "scripts/prepare-textures.mjs",
+    "changes": "原创确定性拟音，带限噪声、渐入渐出短包络、去直流、循环交叉淡化和峰值整形。",
+    "license": "LicenseRef-JHaven-Original",
+    "file": "gentle-crinkle.wav",
+    "format": "PCM WAV 16-bit mono",
+    "sampleRate": 32000,
+    "seconds": 12,
+    "bytes": 768044,
+    "sha256": "c444a223d44935b42dd6c823568278ed0ba88fe5ae5d245af361cd028118115d",
+    "verifiedOn": "2026-11-19"
   }
 ]

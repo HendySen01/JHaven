@@ -10,6 +10,7 @@ import {
 } from '@jhaven/shared';
 import PrimaryButton from '../components/PrimaryButton.vue';
 import JournalTrend from '../components/JournalTrend.vue';
+import JournalDateTime from '../components/JournalDateTime.vue';
 import { useAuthStore } from '../stores/auth';
 import { useSpaceRequests } from '../lib/space';
 import { dateInZone, shiftDate, wallTime, wallTimeCandidates } from '../domain/journal';
@@ -46,6 +47,9 @@ const listed = ref<JournalEntry[]>([]);
 const trend = ref<JournalEntry[]>([]);
 const trendDays = ref(7);
 const trendTo = ref(today);
+const appliedRange = ref<{ from: string; to: string }>();
+const querying = ref(false);
+const pendingDays = ref<number>();
 const rangeStart = (end: string, span: number) =>
   shiftDate(end, 1 - span) < '1900-01-01' ? '1900-01-01' : shiftDate(end, 1 - span);
 const trendFrom = computed(() => rangeStart(trendTo.value, trendDays.value));
@@ -66,6 +70,9 @@ const { busy, error, run } = useSpaceRequests(() => {
   trendTo.value = today;
   trendDays.value = 7;
   ready.value = false;
+  appliedRange.value = undefined;
+  querying.value = false;
+  pendingDays.value = undefined;
   message.value = '';
 });
 async function list(
@@ -86,15 +93,43 @@ async function load(request: (path?: string) => Promise<unknown>, period = trend
     list(request, { from: rangeStart(end, period), to: end }),
   ]);
   listed.value = records;
+  appliedRange.value = range.data;
   trend.value = series;
   trendDays.value = period;
   trendTo.value = end;
   ready.value = true;
 }
+async function query() {
+  if (busy.value) return;
+  message.value = '';
+  await run(async (request) => {
+    querying.value = true;
+    try {
+      await load(request);
+    } finally {
+      querying.value = false;
+    }
+  });
+}
+function changeTrend(period: number) {
+  if (busy.value || period === trendDays.value) return;
+  void run(async (request) => {
+    pendingDays.value = period;
+    try {
+      trend.value = await list(request, {
+        from: rangeStart(trendTo.value, period),
+        to: trendTo.value,
+      });
+      trendDays.value = period;
+    } finally {
+      pendingDays.value = undefined;
+    }
+  });
+}
 watch(
   () => auth.user?.id,
   (id) => {
-    if (id) void run(load);
+    if (id) void query();
   },
   { immediate: true },
 );
@@ -216,94 +251,105 @@ const showTime = (value: string | null, timezone: string) =>
     <template v-else>
       <h1 tabindex="-1">我的睡眠日记</h1>
       <p class="page-lead">随时记录，也可以留空。选择夜晚所属日期，跨午夜的时间请填写实际日期。</p>
-      <p v-if="error" class="field-error" role="alert">{{ error }}</p>
-      <p v-if="message" class="auth-hint" role="status">{{ message }}</p>
-      <p v-if="busy" class="auth-hint" role="status">正在处理…</p>
-      <button
-        v-if="!ready && !busy"
-        class="button button-secondary"
-        type="button"
-        @click="run(load)"
-      >
-        重试读取日记
-      </button>
-      <template v-if="ready">
-        <section class="space-section" aria-labelledby="diary-title">
+      <div class="diary-feedback">
+        <p v-show="error" class="field-error" role="alert">{{ error }}</p>
+        <p v-show="!error" class="auth-hint" role="status">{{ message }}</p>
+      </div>
+      <section class="space-section" aria-labelledby="diary-title">
+        <div class="space-actions">
+          <h2 id="diary-title">记录</h2>
+          <button
+            type="button"
+            class="button button-primary"
+            :disabled="busy"
+            @click="edit(undefined, $event)"
+          >
+            新增日记
+          </button>
+        </div>
+        <form class="space-form" @submit.prevent="query">
+          <div class="space-fields">
+            <label>查询开始日期 <input v-model="filter.from" type="date" required /></label>
+            <label>查询结束日期 <input v-model="filter.to" type="date" required /></label>
+          </div>
+          <button class="button button-secondary diary-query-button" type="submit" :disabled="busy">
+            {{ querying ? '查询中…' : '查询日期' }}
+          </button>
+        </form>
+        <p class="diary-query-status auth-hint" role="status">
+          {{
+            appliedRange
+              ? appliedRange.from + ' 至 ' + appliedRange.to + ' · ' + listed.length + ' 条记录'
+              : querying
+                ? '正在读取日记…'
+                : '选择日期后查询。'
+          }}
+        </p>
+        <form
+          v-if="editing"
+          class="space-form diary-editor"
+          aria-label="日记表单"
+          @submit.prevent="save"
+        >
+          <h3 ref="editorHeading" tabindex="-1">{{ editId ? '编辑日记' : '新建日记' }}</h3>
+          <div class="space-fields">
+            <label>日记日期 <input v-model="form.date" type="date" required /></label>
+            <label
+              >记录时区
+              <input v-model="form.timezone" maxlength="64" placeholder="Asia/Macau" required
+            /></label>
+          </div>
+          <div class="space-fields">
+            <div v-for="{ key, label } in fields" :key="key">
+              <JournalDateTime
+                :model-value="form[key]"
+                :label="label"
+                :base-date="form.date"
+                @update:model-value="
+                  (value) => {
+                    form[key] = value;
+                    fold[key] = 0;
+                  }
+                "
+              />
+              <label v-if="options[key].length > 1"
+                >{{ label }}的夏令时重叠
+                <select v-model.number="fold[key]">
+                  <option :value="0">第一次出现</option>
+                  <option :value="1">第二次出现</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <label
+            >主观休息感
+            <select v-model="form.rest">
+              <option value="">不记录</option>
+              <option v-for="(value, i) in restLabels" :key="value" :value="String(i + 1)">
+                {{ value }}
+              </option>
+            </select>
+          </label>
+          <label>备注（可选） <textarea v-model="form.note" rows="3" maxlength="2000" /></label>
           <div class="space-actions">
-            <h2 id="diary-title">记录</h2>
+            <button type="submit" class="button button-primary" :disabled="busy">保存日记</button>
             <button
               type="button"
-              class="button button-primary"
+              class="button button-secondary"
               :disabled="busy"
-              @click="edit(undefined, $event)"
+              @click="cancelEditor"
             >
-              新增日记
+              取消
             </button>
           </div>
-          <form
-            class="space-form"
-            @submit.prevent="
-              message = '';
-              run(load);
-            "
-          >
-            <div class="space-fields">
-              <label>查询开始日期 <input v-model="filter.from" type="date" required /></label>
-              <label>查询结束日期 <input v-model="filter.to" type="date" required /></label>
-            </div>
-            <button class="button button-secondary" type="submit" :disabled="busy">查询日期</button>
-          </form>
-          <form
-            v-if="editing"
-            class="space-form diary-editor"
-            aria-label="日记表单"
-            @submit.prevent="save"
-          >
-            <h3 ref="editorHeading" tabindex="-1">{{ editId ? '编辑日记' : '新建日记' }}</h3>
-            <div class="space-fields">
-              <label>日记日期 <input v-model="form.date" type="date" required /></label>
-              <label
-                >记录时区
-                <input v-model="form.timezone" maxlength="64" placeholder="Asia/Macau" required
-              /></label>
-            </div>
-            <div class="space-fields">
-              <div v-for="{ key, label } in fields" :key="key">
-                <label
-                  >{{ label }}
-                  <input v-model="form[key]" type="datetime-local" step="1" @change="fold[key] = 0"
-                /></label>
-                <label v-if="options[key].length > 1"
-                  >{{ label }}的夏令时重叠
-                  <select v-model.number="fold[key]">
-                    <option :value="0">第一次出现</option>
-                    <option :value="1">第二次出现</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-            <label
-              >主观休息感
-              <select v-model="form.rest">
-                <option value="">不记录</option>
-                <option v-for="(value, i) in restLabels" :key="value" :value="String(i + 1)">
-                  {{ value }}
-                </option>
-              </select>
-            </label>
-            <label>备注（可选） <textarea v-model="form.note" rows="3" maxlength="2000" /></label>
-            <div class="space-actions">
-              <button type="submit" class="button button-primary" :disabled="busy">保存日记</button>
-              <button
-                type="button"
-                class="button button-secondary"
-                :disabled="busy"
-                @click="cancelEditor"
-              >
-                取消
-              </button>
-            </div>
-          </form>
+        </form>
+        <div
+          class="diary-results"
+          role="region"
+          aria-label="日记查询结果"
+          tabindex="0"
+          :aria-busy="querying"
+        >
           <ul v-if="listed.length" class="space-list">
             <li v-for="entry in listed" :key="entry.id">
               <div>
@@ -335,32 +381,37 @@ const showTime = (value: string | null, timezone: string) =>
               </div>
             </li>
           </ul>
-          <p v-else class="auth-hint">所选日期范围内没有日记。</p>
-        </section>
-        <section class="space-section" aria-labelledby="trends-title">
-          <h2 id="trends-title">睡眠趋势</h2>
-          <div class="space-actions">
-            <button
-              v-for="period in [7, 30]"
-              :key="period"
-              type="button"
-              class="sound-action"
-              :aria-pressed="trendDays === period"
-              :disabled="busy"
-              @click="
-                message = '';
-                run((request) => load(request, period));
-              "
-            >
-              最近 {{ period }} 天
-            </button>
-          </div>
-          <p class="auth-hint">
-            趋势截至所查询的结束日期。每项时间使用记录时区，空缺日期保留空白。
+          <p v-else class="auth-hint">
+            {{ ready ? '所选日期范围内没有日记。' : '日记记录将在这里显示。' }}
           </p>
-          <JournalTrend :entries="trend" :from="trendFrom" :to="trendTo" />
-        </section>
-      </template>
+        </div>
+      </section>
+      <section class="space-section" aria-labelledby="trends-title">
+        <h2 id="trends-title">睡眠趋势</h2>
+        <div class="space-actions">
+          <button
+            v-for="period in [7, 30]"
+            :key="period"
+            type="button"
+            class="sound-action"
+            :aria-pressed="(pendingDays ?? trendDays) === period"
+            :disabled="busy"
+            @click="changeTrend(period)"
+          >
+            最近 {{ period }} 天
+          </button>
+        </div>
+        <p class="auth-hint">趋势截至所查询的结束日期。每项时间使用记录时区，空缺日期保留空白。</p>
+        <p class="diary-query-status auth-hint" role="status">
+          {{ pendingDays ? '正在更新趋势…' : '' }}
+        </p>
+        <JournalTrend
+          :entries="trend"
+          :from="trendFrom"
+          :to="trendTo"
+          :loading="!ready && querying"
+        />
+      </section>
     </template>
   </div>
 </template>

@@ -1,7 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 
-test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势', async ({ page }) => {
+test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势', async ({
+  page,
+  browserName,
+  hasTouch,
+}) => {
   test.skip(process.env.JHAVEN_TEST_MYSQL !== '1', '需要已迁移的隔离 MySQL。');
   expect(process.env.DB_NAME).toMatch(/^jhaven_test_/);
   test.setTimeout(60_000);
@@ -53,6 +57,28 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   await expect(page.getByRole('combobox', { name: '停止时间' })).toHaveValue('10');
   await expect(page.getByRole('button', { name: '播放混音' })).toBeEnabled();
   await page.getByRole('link', { name: '睡眠日记', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: /0 条记录/ })).toBeVisible();
+  const journal = page.getByRole('region', { name: '日记查询结果' });
+  const graph = page.locator('.journal-trend .trend-svg').first();
+  await graph.evaluate((node) => node.setAttribute('data-test-retained', 'true'));
+  const initialHeight = await graph.evaluate((node) => node.clientHeight);
+  await page.getByRole('button', { name: '最近 30 天' }).scrollIntoViewIfNeeded();
+  const trendScroll = await page.evaluate(() => scrollY);
+  await page.getByRole('button', { name: '最近 30 天' }).click();
+  await expect(page.getByRole('button', { name: '最近 30 天' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: '最近 30 天' })).toBeEnabled();
+  expect(await page.evaluate(() => scrollY)).toBe(trendScroll);
+  await page.getByRole('button', { name: '最近 7 天' }).click();
+  await expect(page.getByRole('button', { name: '最近 7 天' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: '最近 7 天' })).toBeEnabled();
+  expect(await page.evaluate(() => scrollY)).toBe(trendScroll);
+  await expect(graph).toHaveAttribute('data-test-retained', 'true');
   await page.getByRole('button', { name: '新增日记' }).click();
   await expect(page.getByRole('heading', { name: '新建日记' })).toBeFocused();
   await page.getByRole('button', { name: '取消', exact: true }).click();
@@ -60,23 +86,108 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
   await page.getByRole('button', { name: '新增日记' }).click();
   await page.getByLabel('日记日期').fill('2026-11-12');
   await page.getByLabel('记录时区').fill('Asia/Macau');
-  await page.getByLabel('上床时间', { exact: true }).fill('2026-11-12T23:30');
-  await page.getByLabel('醒来时间', { exact: true }).fill('2026-11-13T07:00');
-  await page.getByLabel('主观休息感').selectOption({ label: '较好' });
+  await page.getByRole('button', { name: /^上床时间：/ }).click();
+  let picker = page.getByRole('dialog', { name: '上床时间' });
+  await picker.getByRole('listbox', { name: '小时' }).press('End');
+  const minutes = picker.getByRole('listbox', { name: '分钟' });
+  await minutes.scrollIntoViewIfNeeded();
+  const wheel = (await minutes.boundingBox())!;
+  const x = Math.round(wheel.x + wheel.width / 2);
+  const y = Math.round(wheel.y + wheel.height / 2);
+  if (!hasTouch) {
+    await page.mouse.move(x, y);
+    await page.mouse.wheel(0, 110);
+    await expect.poll(() => minutes.evaluate((node) => node.scrollTop)).toBe(120);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y - 64, { steps: 5 });
+    await expect(minutes).toHaveClass(/dragging/);
+    await page.mouse.up();
+    await expect.poll(() => minutes.evaluate((node) => node.scrollTop)).toBeGreaterThan(120);
+  } else if (browserName === 'chromium') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (const offset of [12, 26, 45, 65])
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: y - offset }],
+      });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await cdp.detach();
+    await expect.poll(() => minutes.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+  }
+  await minutes.press('Home');
+  for (let i = 0; i < 6; i++) await minutes.press('PageDown');
+  await picker.getByRole('button', { name: '应用日期和时间' }).click();
+  await expect(page.getByRole('button', { name: '上床时间：2026-11-12 23:30' })).toBeFocused();
+  await page.getByRole('button', { name: /^醒来时间：/ }).click();
+  picker = page.getByRole('dialog', { name: '醒来时间' });
+  await picker.getByRole('button', { name: '2026-11-13' }).click();
+  const hours = picker.getByRole('listbox', { name: '小时' });
+  await hours.press('Home');
+  await hours.press('PageDown');
+  await hours.press('ArrowDown');
+  await hours.press('ArrowDown');
+  await picker.getByRole('button', { name: '应用日期和时间' }).click();
+  await page.getByRole('combobox', { name: '主观休息感' }).selectOption({ label: '较好' });
   await page.getByLabel('备注（可选）').fill('隔离库的跨午夜记录');
   await page.getByRole('button', { name: '保存日记' }).click();
   await expect(page.getByText('日记已保存。')).toBeVisible();
   const range = async () => {
     await page.getByLabel('查询开始日期').fill('2026-11-10');
     await page.getByLabel('查询结束日期').fill('2026-11-14');
-    await page.getByRole('button', { name: '查询日期' }).click();
+    const submit = page.getByRole('button', { name: '查询日期' });
+    await submit.scrollIntoViewIfNeeded();
+    const scroll = await page.evaluate(() => scrollY);
+    let finishQuery: () => void = () => {};
+    let markRouteReady: () => void = () => {};
+    const routeReady = new Promise<void>((resolve) => {
+      markRouteReady = resolve;
+    });
+    const path = /\/api\/space\/diary\?from=2026-11-10&to=2026-11-14$/;
+    await page.route(
+      path,
+      async (route) => {
+        await new Promise<void>((resolve) => {
+          finishQuery = resolve;
+          markRouteReady();
+        });
+        await route.continue();
+      },
+      { times: 1 },
+    );
+    await submit.click();
+    await routeReady;
+    try {
+      await expect(page.getByRole('button', { name: '查询中…' })).toBeDisabled();
+      await expect(journal).toHaveAttribute('aria-busy', 'true');
+      expect(await page.evaluate(() => scrollY)).toBe(scroll);
+    } finally {
+      finishQuery();
+    }
     await expect(page.getByRole('region', { name: '趋势数据表' })).toContainText(
       '2026-11-13 07:00',
     );
+    await expect(submit).toBeEnabled();
+    expect(await page.evaluate(() => scrollY)).toBe(scroll);
   };
   await range();
+  await expect(
+    page.getByRole('status').filter({ hasText: '2026-11-10 至 2026-11-14 · 1 条记录' }),
+  ).toBeVisible();
+  await expect(graph).toHaveAttribute('data-test-retained', 'true');
+  expect(await graph.evaluate((node) => node.clientHeight)).toBe(initialHeight);
+  await page.getByRole('button', { name: '新增日记' }).click();
+  await page.getByLabel('日记日期').fill('2026-11-11');
+  await page.getByLabel('备注（可选）').fill('第二条隔离记录');
+  await page.getByRole('button', { name: '保存日记' }).click();
+  await expect(page.getByRole('status').filter({ hasText: /2 条记录/ })).toBeVisible();
+  await expect(journal.getByRole('listitem')).toHaveCount(2);
+  await page.getByRole('button', { name: '删除 2026-11-11' }).click();
+  await expect(page.getByRole('status').filter({ hasText: /1 条记录/ })).toBeVisible();
   const series = page.getByRole('img', { name: /作息时间/ });
   await expect(series.locator('circle')).toHaveCount(2);
+  await expect(series.getByText('00:00', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '最近 30 天' }).click();
   await expect(page.getByRole('button', { name: '最近 30 天' })).toHaveAttribute(
     'aria-pressed',

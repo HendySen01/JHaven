@@ -139,3 +139,42 @@
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
+
+.diary-feedback,
+.diary-query-status {
+  min-block-size: 2.75rem;
+}
+.diary-query-button:active,
+.diary-query-button:disabled {
+  opacity: 0.76;
+}
+.diary-results {
+  block-size: clamp(12rem, 34vh, 21rem);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.journal-trend {
+  display: grid;
+  gap: 0.6rem;
+}
+.trend-plot {
+  position: relative;
+}
+.trend-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.trend-hidden {
+  visibility: hidden;
+}
+.journal-trend .space-table {
+  block-size: 8rem;
+  overflow: auto;
+}
+[aria-pressed='true'].sound-action {
+  background: var(--accent);
+  color: var(--page);
+}

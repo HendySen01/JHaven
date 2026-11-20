@@ -1,6 +1,12 @@
 import type { AssistantAction } from '@jhaven/shared';
 import { findKnowledge } from './knowledge.js';
-import { actionForIntent, insufficientEvidence, clarification } from './grounded.js';
+import {
+  actionForIntent,
+  insufficientEvidence,
+  conversationalReply,
+  asksForAdvice,
+  asksForFacts,
+} from './grounded.js';
 
 const rules = [
   {
@@ -24,6 +30,11 @@ const rules = [
   },
 ] as const;
 
+export const privateAssistantText = (text: string) =>
+  /私人|日记|密码|密钥|令牌|身份证|手机号|\d{9,}|[\w.+-]+@[\w.-]+\.[a-z]{2,}|sk-[\w-]{8,}|\btoken\b|password|api.?key|diary/i.test(
+    text.normalize('NFKC'),
+  );
+
 export function assistantPlan(messages: string[]) {
   const latest = messages.at(-1)!.normalize('NFKC');
   const context = messages.join('\n').normalize('NFKC');
@@ -42,11 +53,7 @@ export function assistantPlan(messages: string[]) {
     return fixed(
       '如果你有立即的危险或感到呼吸困难、胸痛，请联系当地紧急服务，或请身边可信的人陪你寻求帮助。',
     );
-  if (
-    /私人|日记|密码|密钥|令牌|身份证|手机号|\d{9,}|[\w.+-]+@[\w.-]+\.[a-z]{2,}|sk-[\w-]{8,}|\btoken\b|password|api.?key|diary/i.test(
-      context,
-    )
-  )
+  if (privateAssistantText(context))
     return fixed(
       '请不要在对话中填写日记、联系方式或凭据。可以只说你现在想听声音、了解睡眠知识，还是做个放松练习。',
     );
@@ -78,17 +85,22 @@ export function assistantPlan(messages: string[]) {
   const currentRule = rules.find(({ match }) => match.test(latest));
   const rule =
     currentRule ?? (followUp ? rules.find(({ match }) => match.test(relevant)) : undefined);
-  const sources = findKnowledge(relevant);
+  const sources = asksForFacts(latest) ? findKnowledge(relevant) : [];
+  if (!asksForAdvice(latest) && !asksForFacts(latest))
+    return { ...fixed(conversationalReply(latest)), grounded: true };
   if (!rule && !sources.length) {
-    const vague = /不知道|不确定|建议一下|帮帮我|做点什么|说不清/.test(latest);
-    return { ...fixed(vague ? clarification : insufficientEvidence), grounded: true };
+    return {
+      ...fixed(asksForFacts(latest) ? insufficientEvidence : conversationalReply(latest)),
+      grounded: true,
+    };
   }
-  const actions = rule ? [actionForIntent(rule.intent)] : [];
+  const actions =
+    rule && asksForAdvice(latest) && !asksForFacts(latest) ? [actionForIntent(rule.intent)] : [];
   return {
     text: sources[0]?.summary ?? '如果你愿意，可以先打开下面的选项，按自己的节奏决定是否开始。',
     sources,
     actions,
     model: true,
-    intent: rule?.intent,
+    intent: actions.length ? rule?.intent : undefined,
   };
 }

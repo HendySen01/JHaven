@@ -1,6 +1,43 @@
 import { expect, test } from '@playwright/test';
 import { installAudioProbe, readAudioProbe } from './audio-probe.js';
 
+test('场景按钮播放手调混音，暂停图标与音量跨页保持一致', async ({ page }) => {
+  await installAudioProbe(page);
+  await page.goto('/relax/rain');
+  const section = page.locator('.detail-copy');
+  await section.getByRole('button', { name: '播放此场景', exact: true }).click();
+  await expect(section.getByRole('button', { name: '暂停此场景' }).locator('svg')).toHaveClass(
+    /lucide-pause/,
+  );
+  await page.locator('.player-buttons').getByRole('button', { name: '停止' }).click();
+  const chew = page.getByRole('slider', { name: '柔和颗粒声（合成）音量' });
+  const crinkle = page.getByRole('slider', { name: '轻脆碎响（合成）音量' });
+  await chew.fill('55');
+  await crinkle.fill('40');
+  await page.getByRole('switch', { name: '开启柔和颗粒声（合成）' }).check();
+  await page.getByRole('switch', { name: '开启轻脆碎响（合成）' }).check();
+  await section.getByRole('button', { name: '播放当前混音' }).click();
+  const pause = section.getByRole('button', { name: '暂停当前混音' });
+  await expect(pause.locator('svg')).toHaveClass(/lucide-pause/);
+  await expect(chew).toHaveValue('55');
+  await expect(crinkle).toHaveValue('40');
+  await pause.click();
+  await section.getByRole('button', { name: '继续播放' }).click();
+  await expect(pause).toBeVisible();
+  await page.getByRole('link', { name: '睡前助手', exact: true }).click();
+  await expect(page.getByRole('button', { name: '暂停声音' })).toBeVisible();
+  await page.getByRole('button', { name: '停止声音' }).click();
+  await page.goto('/relax/rain');
+  await expect(chew).toHaveValue('55');
+  await page.getByRole('switch', { name: '开启柔和颗粒声（合成）' }).uncheck();
+  await page.getByRole('button', { name: '试听柔和颗粒声（合成）', exact: true }).click();
+  await expect(page.getByRole('switch', { name: '开启柔和颗粒声（合成）' })).not.toBeChecked();
+  await expect(chew).toHaveValue('55');
+  await expect(
+    page.getByRole('button', { name: '停止试听柔和颗粒声（合成）' }).locator('svg'),
+  ).toHaveClass(/lucide-square/);
+});
+
 test('没有 Web Audio 时解释播放失败，仍可访问声音库', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'AudioContext', { value: undefined });
@@ -44,16 +81,16 @@ test('声音库筛选、收藏、单独试听、默认收声选项及静音', as
   await expect(page.getByRole('heading', { name: '声音用途与研究依据' })).toBeVisible();
 });
 
-test('完整目录的十条 WAV 在同一原生音频图解码和混合', async ({ page }) => {
+test('完整目录的十二条 WAV 在同一原生音频图解码和混合', async ({ page }) => {
   await page.goto('/relax');
   const player = page.locator('#ambient-player');
   const switches = await player.getByRole('switch').all();
-  expect(switches).toHaveLength(10);
+  expect(switches).toHaveLength(12);
   for (const track of switches) await track.check();
   await player.getByRole('button', { name: '播放混音', exact: true }).click();
   await expect(player.locator('.player-status')).toContainText('正在播放');
   await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0.00001);
-  expect(await readAudioProbe(page)).toMatchObject({ contexts: 1, active: 10, decoded: 10 });
+  expect(await readAudioProbe(page)).toMatchObject({ contexts: 1, active: 12, decoded: 12 });
   expect(
     await page.evaluate(() =>
       [...window.__jhavenAudioProbe.voices].every(

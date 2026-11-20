@@ -33,7 +33,10 @@ for (const id of ids) {
         !asset.source.startsWith('https://freesound.org/people/') ||
         !/^[a-f0-9]{64}$/.test(asset.sourceSha256)
       : asset.license !== 'LicenseRef-JHaven-Original' ||
-        asset.source !== 'scripts/prepare-audio.mjs')
+        asset.source !==
+          (catalog[id].category === 'texture'
+            ? 'scripts/prepare-textures.mjs'
+            : 'scripts/prepare-audio.mjs'))
   )
     throw new Error(`授权清单无效：${id}`);
   const data = await readFile(new URL(asset.file, base));

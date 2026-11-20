@@ -119,8 +119,24 @@
   border-radius: 0.8rem;
   color: inherit;
   padding: 0.7rem;
+  min-height: 5rem;
+  line-height: 1.65;
+  font-size: max(1rem, 16px);
   width: 100%;
   resize: vertical;
+}
+.assistant-compose .assistant-actions {
+  gap: 0.5rem 0.8rem;
+}
+.assistant-compose .assistant-actions > .button {
+  min-width: 5.5rem;
+}
+.assistant-reply-mode {
+  width: fit-content;
+  border-radius: 999px;
+  padding-inline: 0.5rem;
+  background: rgb(197 181 249 / 10%);
+  margin-bottom: 0.45rem;
 }
 .assistant-compose textarea::placeholder {
   color: #aba5bb;

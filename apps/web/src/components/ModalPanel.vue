@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, useId } from 'vue';
 import { X } from '@lucide/vue';
-defineProps<{ title: string }>();
+defineProps<{ title: string; closeLabel?: string; eyebrow?: string }>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement>();
 const titleId = useId();
@@ -61,14 +61,14 @@ function keepFocusInside(event: KeyboardEvent) {
     >
       <div class="modal-header">
         <div>
-          <p class="eyebrow">YOUR LITTLE PREFERENCES</p>
+          <p v-if="eyebrow !== ''" class="eyebrow">{{ eyebrow ?? 'YOUR LITTLE PREFERENCES' }}</p>
           <h2 :id="titleId">{{ title }}</h2>
         </div>
         <button
           class="icon-button"
           type="button"
           autofocus
-          aria-label="关闭设置"
+          :aria-label="closeLabel ?? '关闭设置'"
           @click="emit('close')"
         >
           <X :size="20" aria-hidden="true" />

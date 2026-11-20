@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { AudioLines, CloudRain, Heart, Play, Waves, Wind } from '@lucide/vue';
-import { TRACKS, type TrackId, type TrackSnapshot } from '../../types/audio';
+import { AudioLines, CloudRain, Heart, Play, Square, Waves, Wind } from '@lucide/vue';
+import { TRACKS, type AudioMix, type TrackId, type TrackSnapshot } from '../../types/audio';
 import VolumeSlider from './VolumeSlider.vue';
 defineProps<{
   id: TrackId;
   track: TrackSnapshot;
+  mix: AudioMix[TrackId];
   favorite: boolean;
   canAudition: boolean;
   auditioning: boolean;
@@ -14,7 +15,7 @@ const icons = { rain: CloudRain, ocean: Waves, wind: Wind } as const;
 const loadLabels = { idle: '待播放', loading: '正在加载…', ready: '已就绪', error: '加载失败' };
 </script>
 <template>
-  <div class="audio-track" :class="{ 'track-enabled': track.enabled }">
+  <div class="audio-track" :class="{ 'track-enabled': mix.enabled }">
     <div class="track-heading">
       <span
         ><component
@@ -27,19 +28,23 @@ const loadLabels = { idle: '待播放', loading: '正在加载…', ready: '已�
         ><input
           type="checkbox"
           role="switch"
-          :checked="track.enabled"
+          :checked="mix.enabled"
           :aria-label="`开启${TRACKS[id].name}`"
           @change="$emit('toggle')"
       /></label>
     </div>
     <VolumeSlider
       :label="`${TRACKS[id].name}音量`"
-      :value="track.volume"
-      :disabled="!track.enabled"
+      :value="mix.volume"
       @change="$emit('volume', $event)"
     />
     <p class="track-load" :class="{ 'track-error': track.error }">
-      {{ track.enabled ? loadLabels[track.loadStatus] : '已关闭'
+      {{
+        auditioning || mix.enabled
+          ? track.active
+            ? '正在发声'
+            : loadLabels[track.loadStatus]
+          : '已关闭'
       }}<span v-if="track.error"> · {{ track.error }}</span>
     </p>
     <div class="sound-actions">
@@ -50,7 +55,9 @@ const loadLabels = { idle: '待播放', loading: '正在加载…', ready: '已�
         :aria-label="`${auditioning ? '停止试听' : '试听'}${TRACKS[id].name}`"
         @click="$emit('audition')"
       >
-        <Play :size="14" aria-hidden="true" />{{ auditioning ? '停止试听' : '试听' }}
+        <component :is="auditioning ? Square : Play" :size="16" aria-hidden="true" />{{
+          auditioning ? '停止试听' : '试听'
+        }}
       </button>
       <button
         class="sound-action"

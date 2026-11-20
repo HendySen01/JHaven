@@ -1,4 +1,4 @@
-import { assistantEvent, type AssistantEvent } from '@jhaven/shared';
+import { assistantEvent, type AssistantEvent, type AssistantMode } from '@jhaven/shared';
 
 export const assistantErrors: Record<string, string> = {
   authentication: '模型认证失败，请联系站点维护者。可改用本地知识。',
@@ -8,15 +8,28 @@ export const assistantErrors: Record<string, string> = {
   upstream: '模型暂时不可用，可以重试或使用本地知识。',
   upstream_rate: '模型服务暂时限流，可以稍后重试或使用本地知识。',
   invalid_output: '这次模型回复未能通过检查，可以重试或使用本地知识。',
-  MODEL_LIMIT: '模型额度暂不可用，可以改用本地知识。',
-  ASSISTANT_LIMIT: '请求有点多，稍后再试。',
+  MODEL_CONCURRENCY: 'JHaven 的 AI 请求正在排队，可以稍后再试。',
+  unknown_provider_error: 'AI 供应商未能完成请求，可以改用本地知识。',
+  proxy_rate: '连接暂时受到限流，服务未返回原因。请稍后再试。',
+  MODEL_LIMIT: 'JHaven 的 AI 用量已达到今日上限，可以改用本地知识。',
+  ASSISTANT_LIMIT: 'JHaven 请求过于频繁，请稍后再试。',
 };
+
+export class AssistantRequestError extends Error {
+  constructor(
+    readonly code: string,
+    readonly retryAfter?: number,
+  ) {
+    super(assistantErrors[code] ?? '暂时无法连接睡前助手。');
+  }
+}
 
 export async function readAssistant(
   messages: string[],
-  useModel: boolean,
+  mode: AssistantMode,
   signal: AbortSignal,
   accept: (event: AssistantEvent) => void,
+  previousReply?: string,
 ) {
   const response = await fetch('/api/assistant/chat', {
     method: 'POST',
@@ -24,11 +37,24 @@ export async function readAssistant(
     cache: 'no-store',
     signal,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, useModel }),
+    body: JSON.stringify({ messages, mode, previousReply }),
   });
   if (!response.ok) {
     const value = await response.json().catch(() => null);
-    throw new Error(assistantErrors[value?.error?.code] ?? '暂时无法连接睡前助手。');
+    const header = response.headers.get('Retry-After');
+    const seconds =
+      header &&
+      (/^\d+$/.test(header) ? Number(header) : Math.ceil((Date.parse(header) - Date.now()) / 1000));
+    throw new AssistantRequestError(
+      typeof value?.error?.code === 'string'
+        ? value.error.code
+        : response.status === 429
+          ? 'proxy_rate'
+          : 'unknown',
+      typeof seconds === 'number' && Number.isSafeInteger(seconds)
+        ? Math.max(0, seconds)
+        : undefined,
+    );
   }
   if (!response.body || !response.headers.get('content-type')?.includes('application/x-ndjson'))
     throw new Error('未收到可读取的回复。');
@@ -54,7 +80,7 @@ export async function readAssistant(
           if (started) throw new Error('回复格式异常。');
           started = true;
         } else if (!started) throw new Error('回复格式异常。');
-        if (event.type === 'error') throw new Error(assistantErrors[event.code]);
+        if (event.type === 'error') throw new AssistantRequestError(event.code, event.retryAfter);
         accept(event);
         if (event.type === 'done') return;
       }

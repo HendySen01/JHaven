@@ -17,10 +17,20 @@ export class ProviderError extends Error {
       | 'invalid_output'
       | 'authentication'
       | 'balance'
-      | 'model_unavailable',
+      | 'model_unavailable'
+      | 'timeout'
+      | 'unknown_provider_error',
+    readonly retryAfter?: number,
   ) {
     super(code);
   }
+}
+function retryAfter(value: string | null) {
+  if (!value) return;
+  const seconds = /^\d+$/.test(value)
+    ? Number(value)
+    : Math.ceil((Date.parse(value) - Date.now()) / 1000);
+  if (Number.isSafeInteger(seconds)) return Math.max(0, seconds);
 }
 const chunkSchema = z.object({
   choices: z
@@ -93,8 +103,14 @@ function chatProvider(
           404: 'model_unavailable',
           422: 'model_unavailable',
           429: 'upstream_rate',
+          408: 'timeout',
+          504: 'timeout',
         };
-        throw new ProviderError(codes[response.status] ?? 'upstream');
+        throw new ProviderError(
+          codes[response.status] ??
+            (response.status >= 500 ? 'upstream' : 'unknown_provider_error'),
+          retryAfter(response.headers.get('retry-after')),
+        );
       }
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
       let buffer = '',

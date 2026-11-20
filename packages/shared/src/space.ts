@@ -5,10 +5,21 @@ export const TRACKS = catalog;
 export type TrackId = keyof typeof catalog;
 export const TRACK_IDS = Object.keys(catalog) as TrackId[];
 const volume = z.number().min(0).max(100);
+const mixSchema = z.record(z.enum(TRACK_IDS), z.strictObject({ enabled: z.boolean(), volume }));
 export const presetInput = z.strictObject({
   name: z.string().trim().min(1).max(40),
   mix: z
-    .record(z.enum(TRACK_IDS), z.strictObject({ enabled: z.boolean(), volume }))
+    .preprocess(
+      (value) =>
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? {
+              'soft-chew': { enabled: false, volume: 40 },
+              'gentle-crinkle': { enabled: false, volume: 40 },
+              ...value,
+            }
+          : value,
+      mixSchema,
+    )
     .refine((mix) => TRACK_IDS.some((key) => mix[key].enabled), '请至少启用一条音轨。'),
 });
 export const accountPreset = presetInput.extend({ id: z.uuid() });

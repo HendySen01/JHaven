@@ -21,6 +21,43 @@ const frames = (text: string) =>
     .split('\n')
     .map((line) => JSON.parse(line) as AssistantEvent);
 
+it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且不附证据或推荐', async () => {
+  const reply = '我刚才给建议给得太快了。你是来聊天的，我先听你说。';
+  const choose = vi.fn(async () => ({ kind: 'chat', text: reply }));
+  const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
+  const sent = {
+    mode: 'ai',
+    messages: ['今天挨了批评', '我是在吐槽，不想听道理'],
+    previousReply: '要不要先休息一会儿？',
+  };
+  const result = await api.post('/api/assistant/chat').set('Origin', origin).send(sent).expect(200);
+  expect(choose).toHaveBeenNthCalledWith(
+    1,
+    JSON.stringify({
+      previous: { user: sent.messages[0], reply: sent.previousReply },
+      latest: sent.messages[1],
+    }),
+    expect.any(AbortSignal),
+    expect.stringContaining('own the specific miss'),
+  );
+  expect(frames(result.text)).toEqual([
+    { type: 'start', mode: 'model' },
+    { type: 'text', text: reply },
+    { type: 'done', sources: [], actions: [] },
+  ]);
+  await api
+    .post('/api/assistant/chat')
+    .set('Origin', origin)
+    .send({ ...sent, previousReply: '联系方式 test@example.org' })
+    .expect(200);
+  expect(choose).toHaveBeenNthCalledWith(
+    2,
+    sent.messages[1],
+    expect.any(AbortSignal),
+    expect.any(String),
+  );
+});
+
 it('DeepSeek 理解无关键词的需求，动作仍由服务端清单决定', async () => {
   const choose = vi.fn(async () => ({ kind: 'suggest', intent: 'coast' }));
   const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
@@ -34,12 +71,17 @@ it('DeepSeek 理解无关键词的需求，动作仍由服务端清单决定', a
   });
   const ambiguous = request(
     createApp({
-      assistantProvider: { name: 'deepseek', choose: async () => ({ kind: 'clarify' }) },
+      assistantProvider: {
+        name: 'deepseek',
+        choose: async () => ({ kind: 'clarify', text: '哪一件事最让你拿不定主意？' }),
+      },
     }),
   );
   const clarification = frames((await post(ambiguous, ['说不清该做什么'], true)).text);
   expect(clarification[0]).toEqual({ type: 'start', mode: 'model' });
-  expect(clarification[1]).toMatchObject({ text: expect.stringContaining('还是做个短练习') });
+  expect(clarification[1]).toMatchObject({
+    text: expect.stringContaining('哪一件事最让你拿不定主意'),
+  });
   expect(clarification.at(-1)).toMatchObject({ actions: [], sources: [] });
 });
 
@@ -79,6 +121,56 @@ it('引用仅来自本次检索，审核原文保留在模型组织的回答中'
   });
 });
 
+it('寒暄、含混表达和本地回退均保留真实来源，且不附加睡眠建议', async () => {
+  const choose = vi
+    .fn()
+    .mockResolvedValueOnce({ kind: 'chat', text: '嗯，我听着。' })
+    .mockResolvedValueOnce({ kind: 'clarify' })
+    .mockResolvedValueOnce({ kind: 'suggest', intent: 'rain' });
+  const api = request(createApp({ assistantProvider: { name: 'deepseek', choose } }));
+  const chat = frames((await post(api, ['呃呃呃'], true).expect(200)).text);
+  expect(chat).toEqual([
+    { type: 'start', mode: 'model' },
+    { type: 'text', text: '嗯，我听着。' },
+    { type: 'done', sources: [], actions: [] },
+  ]);
+  const clarify = frames((await post(api, ['是多少'], true).expect(200)).text);
+  expect(clarify[0]).toMatchObject({ source: 'fallback' });
+  expect(clarify[1]).toMatchObject({ text: expect.stringContaining('哪一件事') });
+  const reaction = frames((await post(api, ['有呀有呀'], true).expect(200)).text);
+  expect(reaction[0]).toMatchObject({ source: 'fallback' });
+  expect(reaction[1]).not.toEqual(clarify[1]);
+  expect(reaction.at(-1)).toMatchObject({ actions: [], sources: [] });
+  const local = await api
+    .post('/api/assistant/chat')
+    .set('Origin', origin)
+    .send({ messages: ['嗨'], mode: 'local' })
+    .expect(200);
+  expect(frames(local.text)[0]).toEqual({ type: 'start', mode: 'local' });
+  expect(choose).toHaveBeenCalledTimes(3);
+});
+
+it.each([
+  [429, 'upstream_rate'],
+  [402, 'balance'],
+] as const)('DeepSeek 上游 HTTP %s 保留安全错误分类和 Retry-After', async (status, code) => {
+  const upstream = vi.fn<typeof fetch>(
+    async () =>
+      new Response('private upstream content', { status, headers: { 'Retry-After': '18' } }),
+  );
+  const provider = deepSeekProvider(
+    'mock-key',
+    'deepseek-flash',
+    'https://api.deepseek.com',
+    upstream,
+  );
+  const api = request(createApp({ assistantProvider: provider }));
+  const result = await post(api, ['想听雨声'], true).expect(status).expect('Retry-After', '18');
+  expect(result.body).toMatchObject({ error: { code, requestId: expect.any(String) } });
+  expect(result.text).not.toContain('private upstream content');
+  expect(upstream).toHaveBeenCalledTimes(1);
+});
+
 it.each([
   { kind: 'answer', sourceId: 'invented', answer: '可以换个思路看看。{evidence}', intent: null },
   { kind: 'answer', sourceId: 'caffeine', answer: '保证马上入睡。{evidence}', intent: null },
@@ -95,11 +187,11 @@ it.each([
     createApp({ assistantProvider: { name: 'deepseek', choose: async () => mock } }),
   );
   const result = frames((await post(api, ['浓茶会影响睡眠吗'], true)).text);
-  expect(result[0]).toEqual({ type: 'start', mode: 'local' });
+  expect(result[0]).toEqual({ type: 'start', mode: 'local', source: 'fallback' });
   expect(result.at(-1)).toMatchObject({ actions: [], sources: [{ id: 'caffeine' }] });
 });
 it.each([
-  [{ kind: 'unknown' }, 'model'],
+  [{ kind: 'unknown' }, 'local'],
   [{ kind: 'suggest', intent: 'rain' }, 'local'],
 ] as const)('缺乏睡眠证据时返回资料不足，并拒绝无关推荐 (%j)', async (reply, mode) => {
   const question = '睡前看蓝色圆点能改善睡眠吗？';
@@ -112,7 +204,7 @@ it.each([
     expect.any(AbortSignal),
     expect.stringContaining('Reviewed evidence: []'),
   );
-  expect(result[0]).toEqual({ type: 'start', mode });
+  expect(result[0]).toEqual({ type: 'start', mode, source: 'fallback' });
   expect(result[1]).toMatchObject({ text: expect.stringContaining('没有可核验') });
   expect(result.at(-1)).toMatchObject({ sources: [], actions: [] });
 });
@@ -126,7 +218,7 @@ it('检索审核来源、证据局限和未知问题', async () => {
   expect(findKnowledge('咖啡因对睡眠有什么影响')[0]?.id).toBe('caffeine');
   expect(findKnowledge('brain science')).toEqual([]);
   const api = request(createApp());
-  const result = await post(api, ['量子穿越']).expect(200);
+  const result = await post(api, ['量子穿越有科学证据吗']).expect(200);
   expect(frames(result.text)).toEqual([
     { type: 'start', mode: 'local' },
     { type: 'text', text: expect.stringContaining('没有可核验') },
@@ -134,7 +226,7 @@ it('检索审核来源、证据局限和未知问题', async () => {
   ]);
   const sound = frames((await post(api, ['雨声可以助眠吗？']).expect(200)).text);
   expect(sound.at(-1)).toMatchObject({
-    actions: [{ kind: 'scene', id: 'rain' }],
+    actions: [],
     sources: [{ id: 'auditory-review' }],
   });
 });
@@ -155,6 +247,7 @@ it('没有密钥与未同意时使用本地模式，拒绝超长和越权参数'
   expect(frames((await post(dark, ['思绪很多'], true).expect(200)).text)[0]).toEqual({
     type: 'start',
     mode: 'local',
+    source: 'fallback',
   });
   expect(frames((await post(enabled, ['思绪很多']).expect(200)).text)[0]).toEqual({
     type: 'start',
@@ -206,9 +299,11 @@ it('注入、敏感信息、未成年人和医疗问题不发给模型，禁止�
   }));
   const bad = frames(
     (
-      await post(request(createApp({ assistantProvider: attacker })), ['思绪很多'], true).expect(
-        200,
-      )
+      await post(
+        request(createApp({ assistantProvider: attacker })),
+        ['思绪停不下来'],
+        true,
+      ).expect(200)
     ).text,
   );
   expect(bad.at(-1)).toEqual({ type: 'error', code: 'invalid_output' });
@@ -216,18 +311,21 @@ it('注入、敏感信息、未成年人和医疗问题不发给模型，禁止�
 it('允许显式模型请求，验证响应并产生服务端准许的动作和来源', async () => {
   const provider = testProvider();
   const api = request(createApp({ assistantProvider: provider }));
-  const result = await post(api, ['思绪很多', '那怎么开始'], true).expect(200);
+  const result = await post(api, ['思绪很多', '想做思绪整理练习，怎么开始'], true).expect(200);
   expect(result.headers['content-type']).toContain('application/x-ndjson');
   expect(result.headers['cache-control']).toBe('no-store');
   const output = frames(result.text);
-  expect(output[0]).toEqual({ type: 'start', mode: 'model' });
+  expect(output[0]).toEqual({ type: 'start', mode: 'model', source: 'local' });
   expect(output.filter((event) => event.type === 'text')).toHaveLength(3);
   expect(output.at(-1)).toMatchObject({
     type: 'done',
     actions: [{ kind: 'practice', id: 'thoughts', mood: 'busy' }],
-    sources: [{ id: 'bedtime-writing' }],
+    sources: [],
   });
-  expect(provider.choose).toHaveBeenCalledWith('那怎么开始', expect.any(AbortSignal));
+  expect(provider.choose).toHaveBeenCalledWith(
+    '想做思绪整理练习，怎么开始',
+    expect.any(AbortSignal),
+  );
 });
 it('超时取消上游，错误后可切本地模式', async () => {
   const choose = vi.fn(
@@ -252,7 +350,7 @@ it('超时取消上游，错误后可切本地模式', async () => {
       }),
     }),
   );
-  const failed = await post(fails, ['雨声'], true).expect(200);
+  const failed = await post(fails, ['想听雨声'], true).expect(200);
   expect(failed.text).not.toContain('secret');
   expect(frames(failed.text).at(-1)).toEqual({ type: 'error', code: 'upstream' });
 });
@@ -261,8 +359,8 @@ it('访客与模型预算分别限流且不会额外调用供应商', async () =
   const api = request(
     createApp({ assistantProvider: provider, config: loadConfig({ AI_DAILY_REQUEST_LIMIT: '1' }) }),
   );
-  await post(api, ['雨声'], true).expect(200);
-  await post(api, ['雨声'], true)
+  await post(api, ['想听雨声'], true).expect(200);
+  await post(api, ['想听雨声'], true)
     .expect(429)
     .expect(({ body }) => expect(body.error.code).toBe('MODEL_LIMIT'));
   for (let n = 0; n < 6; n++) await post(api, ['雨声']).expect(200);
@@ -309,7 +407,7 @@ it('模型未完成时已流出知识摘要，客户端断线会取消上游', a
     signal: controller.signal,
     method: 'POST',
     headers: { Origin: origin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: ['睡前习惯'], useModel: true }),
+    body: JSON.stringify({ messages: ['睡前习惯是什么？'], useModel: true }),
   });
   const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
   let initial = '';
@@ -413,8 +511,8 @@ it('预算不足时阻止调用且本地仍可用', async () => {
   const api = request(
     createApp({ assistantProvider: provider, config: loadConfig({ AI_DAILY_BUDGET_USD: '0.01' }) }),
   );
-  await post(api, ['雨声'], true).expect(200);
-  await post(api, ['雨声'], true).expect(429);
+  await post(api, ['想听雨声'], true).expect(200);
+  await post(api, ['想听雨声'], true).expect(429);
   await post(api, ['雨声'], false).expect(200);
   expect(provider.choose).toHaveBeenCalledTimes(1);
 });

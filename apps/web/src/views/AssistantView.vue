@@ -6,19 +6,20 @@ import {
   assistantStatus,
   type AssistantAction,
   type AssistantEvent,
+  type AssistantMode,
 } from '@jhaven/shared';
 import { useRouter } from 'vue-router';
 import { findScene } from '../domain/evening';
 import { practices } from '../domain/relaxation';
 import { useEveningStore } from '../stores/evening';
 import { useAuthStore } from '../stores/auth';
-import { readAssistant } from '../lib/assistant';
+import { AssistantRequestError, readAssistant } from '../lib/assistant';
 
 type Result = Extract<AssistantEvent, { type: 'done' }>;
 type Turn = {
   question: string;
   text: string;
-  mode?: 'local' | 'model';
+  source?: 'ai' | 'local' | 'fallback' | 'error';
   result?: Result;
   note?: string;
 };
@@ -28,7 +29,29 @@ const auth = useAuthStore();
 const draft = ref('');
 const turns = ref<Turn[]>([]);
 const active = ref(false);
-const consent = ref(false);
+const assistantMode = ref<AssistantMode>('local');
+const consent = computed({
+  get: () => assistantMode.value === 'ai',
+  set: (on) => {
+    assistantMode.value = on ? 'ai' : 'local';
+  },
+});
+const modelRetryBlocked = ref(false);
+const allRetryBlocked = ref(false);
+const retryBlocked = computed(
+  () => allRetryBlocked.value || (assistantMode.value === 'ai' && modelRetryBlocked.value),
+);
+const retryTimers = new Map<'all' | 'ai', ReturnType<typeof setTimeout>>();
+function clearRetryTimers() {
+  for (const timer of retryTimers.values()) clearTimeout(timer);
+  retryTimers.clear();
+}
+const sourceLabels = {
+  ai: 'AI 辅助回答',
+  local: '本地知识',
+  fallback: '本地回退',
+  error: '请求未完成',
+};
 const configured = ref(false);
 const providerName = ref('OpenAI');
 const checking = ref(true);
@@ -77,17 +100,31 @@ function reset() {
   draft.value = '';
   pending.value = null;
   consent.value = false;
+  clearRetryTimers();
+  allRetryBlocked.value = false;
+  modelRetryBlocked.value = false;
 }
 watch(() => auth.user?.id, reset);
 onBeforeUnmount(() => {
   statusController.abort();
+  clearRetryTimers();
   stop();
 });
-watch(consent, (value) => {
-  if (!value && active.value) stop('已停止本次请求，后续将使用本地知识。');
-});
-async function send(question: string, replace = false, localOnly = false, event?: Event) {
-  if (active.value || !question.trim()) return;
+watch(
+  assistantMode,
+  (value) => {
+    if (value === 'local' && active.value) stop('已停止本次请求，后续将使用本地知识。');
+  },
+  { flush: 'sync' },
+);
+function useLocalKnowledge() {
+  const question = last.value?.question;
+  assistantMode.value = 'local';
+  if (question) void send(question, true);
+}
+async function send(question: string, replace = false, event?: Event) {
+  const mode = assistantMode.value;
+  if (active.value || retryBlocked.value || !question.trim()) return;
   const control =
     event instanceof SubmitEvent && event.submitter ? event.submitter : event?.currentTarget;
   const moveFocus = control === document.activeElement;
@@ -95,6 +132,11 @@ async function send(question: string, replace = false, localOnly = false, event?
   const current: Turn = { question: question.trim(), text: '' };
   turns.value = [...(replace ? turns.value.slice(0, -1) : turns.value).slice(-3), current];
   const messages = turns.value.slice(-3).map((turn) => turn.question);
+  const previous = turns.value.at(-2);
+  const previousReply =
+    mode === 'ai' && previous?.source === 'ai' && previous.result
+      ? previous.text.slice(0, 400).trim() || undefined
+      : undefined;
   const controller = new AbortController();
   request = controller;
   active.value = true;
@@ -103,17 +145,39 @@ async function send(question: string, replace = false, localOnly = false, event?
   try {
     await readAssistant(
       messages,
-      configured.value && consent.value && !localOnly,
+      mode,
       AbortSignal.any([controller.signal, AbortSignal.timeout(16_000)]),
       (event) => {
         if (request !== controller || !last.value) return;
-        if (event.type === 'start') last.value.mode = event.mode;
+        if (event.type === 'start')
+          last.value.source = event.source ?? (event.mode === 'model' ? 'ai' : 'local');
         if (event.type === 'text') last.value.text += event.text;
-        if (event.type === 'done') last.value.result = event;
+        if (event.type === 'done') {
+          last.value.result = event;
+          if (event.source) last.value.source = event.source;
+        }
       },
+      previousReply,
     );
   } catch (error) {
-    if (request === controller && last.value)
+    if (request === controller && last.value) {
+      last.value.source = 'error';
+      if (error instanceof AssistantRequestError && error.retryAfter) {
+        const scope = error.code === 'ASSISTANT_LIMIT' || mode === 'local' ? 'all' : 'ai';
+        const cooldown = scope === 'all' ? allRetryBlocked : modelRetryBlocked;
+        clearTimeout(retryTimers.get(scope));
+        cooldown.value = true;
+        retryTimers.set(
+          scope,
+          setTimeout(
+            () => {
+              cooldown.value = false;
+              retryTimers.delete(scope);
+            },
+            Math.min(86_400, error.retryAfter) * 1000,
+          ),
+        );
+      }
       last.value.note =
         error instanceof DOMException && error.name === 'TimeoutError'
           ? '这次回复超过等待时间，可以重试或使用本地知识。'
@@ -122,6 +186,7 @@ async function send(question: string, replace = false, localOnly = false, event?
             : error instanceof Error && error.name !== 'ZodError' && !(error instanceof SyntaxError)
               ? error.message
               : '回复格式异常，可以重试。';
+    }
   } finally {
     if (request === controller) {
       restoreComposerFocus();
@@ -165,7 +230,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
         ><MoonStar :size="24" :stroke-width="1.4"
       /></span>
       <h1 tabindex="-1">睡前助手</h1>
-      <p class="page-lead">今晚需要什么？可以说一句，也可以让对话停在这里。</p>
+      <p class="page-lead">今晚想说点什么？从小事聊起也可以。</p>
     </header>
     <section class="assistant-panel" aria-labelledby="chat-title">
       <h2 id="chat-title" class="assistant-sr">聊天</h2>
@@ -184,8 +249,8 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
       </div>
       <div v-if="privacy" class="assistant-privacy">
         <p>
-          消息通过 JHaven 服务处理。开启 AI 模式后，本次输入可能发送给
-          {{ providerName }}；请勿粘贴私人日记或凭据。助手不会读取账户里的睡眠日记。
+          消息通过 JHaven 服务处理。开启 AI 模式后，本次输入和上一轮 AI 对话可能发送给
+          {{ providerName }}。助手不会读取账户里的睡眠日记，请勿在输入框粘贴私人内容或凭据。
         </p>
         <p>本站不长期保存聊天。离开页面或清空对话会清除浏览器内存记录。</p>
         <p>
@@ -210,15 +275,16 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
         }}
       </p>
       <label v-if="configured" class="assistant-consent">
-        <input v-model="consent" type="checkbox" /> 可将本次输入发送给 {{ providerName }}，启用 AI
-        措辞
+        <input v-model="consent" type="checkbox" /> 同意将本次输入和上一轮 AI 对话发送给
+        {{ providerName }}
       </label>
       <ul v-if="!turns.length" class="assistant-quick">
         <li v-for="question in quick" :key="question">
           <button
             class="button button-secondary"
             type="button"
-            @click="send(question, false, false, $event)"
+            @click="send(question, false, $event)"
+            :disabled="active || retryBlocked"
           >
             {{ question }}
           </button>
@@ -228,8 +294,8 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
         <li v-for="(turn, index) in turns" :key="index" class="assistant-turn">
           <p class="assistant-question">{{ turn.question }}</p>
           <div class="assistant-reply">
-            <p v-if="turn.mode" class="assistant-reply-mode">
-              {{ turn.mode === 'model' ? 'AI 辅助回答' : '本地知识' }}
+            <p v-if="turn.source" class="assistant-reply-mode">
+              {{ sourceLabels[turn.source] }}
             </p>
             <p v-if="turn.text" class="assistant-text">{{ turn.text }}</p>
             <p v-if="turn.note" class="assistant-muted" role="status">{{ turn.note }}</p>
@@ -279,7 +345,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
       <p class="assistant-sr" aria-live="polite">
         {{ active ? '正在生成回复' : last?.result ? last.text : '' }}
       </p>
-      <form class="assistant-compose" @submit.prevent="send(draft, false, false, $event)">
+      <form class="assistant-compose" @submit.prevent="send(draft, false, $event)">
         <label for="assistant-message">今晚想聊什么</label>
         <textarea
           id="assistant-message"
@@ -287,7 +353,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
           v-model="draft"
           rows="2"
           maxlength="400"
-          placeholder="例如，我想安静地待一会儿。"
+          placeholder="随便聊聊，或者说说今天发生的事。"
         />
         <div class="assistant-actions">
           <button
@@ -299,22 +365,28 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '现在没�
           >
             停止生成
           </button>
-          <button v-else class="button button-primary" type="submit" :disabled="!draft.trim()">
+          <button
+            v-else
+            class="button button-primary"
+            type="submit"
+            :disabled="!draft.trim() || retryBlocked"
+          >
             发送
           </button>
           <button
             v-if="last && !active"
             class="quiet-link"
             type="button"
-            @click="send(last.question, true, false, $event)"
+            @click="send(last.question, true, $event)"
+            :disabled="retryBlocked"
           >
             {{ last.note ? '重试回复' : '重新生成' }}
           </button>
           <button
-            v-if="last?.note && consent && !active"
+            v-if="last && consent && (last.note || active)"
             class="quiet-link"
             type="button"
-            @click="send(last.question, true, true, $event)"
+            @click="useLocalKnowledge"
           >
             改用本地知识
           </button>

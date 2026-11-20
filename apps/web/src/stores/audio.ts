@@ -214,7 +214,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (snapshot.value.status !== 'idle') return;
     const player = ensureEngine();
     normalTimer = { duration: snapshot.value.timer.duration, fade: snapshot.value.fadeSeconds };
-    player.applyMix(singleTrackMix(id, 55));
+    player.applyMix(singleTrackMix(id, mix.value[id].volume));
     player.setTimer(12, 5);
     auditionId.value = id;
     void player.play();

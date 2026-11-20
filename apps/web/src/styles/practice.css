@@ -112,6 +112,17 @@
   padding: 0;
   list-style: none;
 }
+.practice-recommendation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.85rem;
+  margin-block-start: 0.75rem;
+}
+.recommendation-banner .practice-recommendation-actions .quiet-link {
+  min-height: 44px;
+  margin-top: 0;
+}
 
 .practice-options li {
   display: grid;

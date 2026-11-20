@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { assistantRequest, type AssistantEvent } from '@jhaven/shared';
 import { z } from 'zod';
 import { AppError } from '../middleware/error-handler.js';
-import { assistantPlan } from './rules.js';
+import { assistantPlan, privateAssistantText } from './rules.js';
 import { knowledgeVersion } from './knowledge.js';
 import { modelChoice, ProviderError, type AssistantProvider } from './provider.js';
 import { groundedPrompt, groundedResult } from './grounded.js';
@@ -66,13 +66,13 @@ export function createAssistantRouter({
       previous && previous.until > timestamp ? previous : { until: timestamp + ipWindow, count: 0 };
     if (bucket.count >= 8 || (!previous && clients.size >= 4096)) {
       response.setHeader('Retry-After', Math.ceil((bucket.until - timestamp) / 1000));
-      throw new AppError(429, 'ASSISTANT_LIMIT', '休息一下，稍后可以继续使用助手。');
+      throw new AppError(429, 'ASSISTANT_LIMIT', 'JHaven 请求过于频繁，请稍后再试。');
     }
     bucket.count++;
     clients.set(ip, bucket);
 
     const plan = assistantPlan(input.data.messages);
-    const chosen = input.data.useModel ? provider : undefined;
+    const chosen = input.data.mode === 'ai' ? provider : undefined;
     const grounded =
       chosen?.name === 'deepseek' && (plan.model || ('grounded' in plan && plan.grounded));
     const selected = plan.model || grounded ? chosen : undefined;
@@ -92,7 +92,11 @@ export function createAssistantRouter({
         'Retry-After',
         inflight >= 3 ? 15 : Math.ceil(((day + 1) * 86_400_000 - timestamp) / 1000),
       );
-      throw new AppError(429, 'MODEL_LIMIT', '模型额度暂不可用。你可以使用本地知识模式。');
+      throw new AppError(
+        429,
+        inflight >= 3 ? 'MODEL_CONCURRENCY' : 'MODEL_LIMIT',
+        inflight >= 3 ? 'JHaven 的 AI 请求正在排队。' : 'JHaven 的 AI 用量到达今日上限。',
+      );
     }
     const controller = new AbortController();
     response.on('close', () => controller.abort());
@@ -102,22 +106,29 @@ export function createAssistantRouter({
     };
     response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
     response.setHeader('X-Accel-Buffering', 'no');
-    const sendLocal = () => {
-      send({ type: 'start', mode: 'local' });
-      send({ type: 'text', text: plan.text });
-      send({ type: 'done', sources: plan.sources, actions: plan.actions });
+    const sendLocal = (fallback = false, override?: string) => {
+      send(
+        fallback
+          ? { type: 'start', mode: 'local', source: 'fallback' }
+          : { type: 'start', mode: 'local' },
+      );
+      send({ type: 'text', text: override ?? plan.text });
+      send({
+        type: 'done',
+        sources: override ? [] : plan.sources,
+        actions: override ? [] : plan.actions,
+      });
     };
     if (!selected) {
-      sendLocal();
+      sendLocal(input.data.mode === 'ai' && !chosen);
       response.end();
       return;
     }
     modelCalls++;
     reservedCost += 0.01;
     inflight++;
-    if (grounded) response.flushHeaders();
-    else {
-      send({ type: 'start', mode: 'model' });
+    if (!grounded) {
+      send({ type: 'start', mode: 'model', source: 'local' });
       send({ type: 'text', text: plan.text + '\n\n' });
     }
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -131,9 +142,19 @@ export function createAssistantRouter({
         signal.addEventListener('abort', abort, { once: true });
       });
       const latest = input.data.messages.at(-1)!;
+      const previous = input.data.messages.at(-2);
+      const previousReply = input.data.previousReply;
+      const modelInput =
+        previous && previousReply && !privateAssistantText(previousReply)
+          ? JSON.stringify({ previous: { user: previous, reply: previousReply }, latest })
+          : latest;
       const raw = await Promise.race([
         grounded
-          ? selected.choose(latest, signal, groundedPrompt(plan.sources))
+          ? selected.choose(
+              modelInput,
+              signal,
+              groundedPrompt(plan.sources, modelInput !== latest, latest),
+            )
           : selected.choose(latest, signal),
         aborted,
       ]);
@@ -145,7 +166,11 @@ export function createAssistantRouter({
           'intent' in plan ? plan.intent : undefined,
         );
         if (!reply) {
-          sendLocal();
+          sendLocal(true);
+          return;
+        }
+        if ('fallback' in reply) {
+          sendLocal(true, reply.text);
           return;
         }
         send({ type: 'start', mode: 'model' });
@@ -162,21 +187,42 @@ export function createAssistantRouter({
       if (!choice.success) throw new ProviderError('invalid_output');
       send({ type: 'text', text: opening[choice.data.opening] + '\n\n' });
       send({ type: 'text', text: ending[choice.data.ending] });
-      send({ type: 'done', sources: plan.sources, actions: plan.actions });
+      send({ type: 'done', source: 'ai', sources: plan.sources, actions: plan.actions });
     } catch (error) {
       if (!controller.signal.aborted) {
         if (grounded && error instanceof ProviderError && error.code === 'invalid_output') {
-          sendLocal();
+          sendLocal(true);
           return;
         }
-        if (grounded) send({ type: 'start', mode: 'model' });
+        const code = timeout.aborted
+          ? 'timeout'
+          : error instanceof ProviderError
+            ? error.code
+            : 'upstream';
+        if (grounded) {
+          const statuses: Partial<Record<ProviderError['code'], number>> = {
+            upstream_rate: 429,
+            balance: 402,
+            timeout: 504,
+          };
+          response.status(statuses[code] ?? 502);
+          if (error instanceof ProviderError && error.retryAfter !== undefined)
+            response.setHeader('Retry-After', error.retryAfter);
+          response.type('json').json({
+            error: {
+              code,
+              message: 'AI 供应商未完成本次回复。',
+              requestId: String(response.locals.requestId),
+            },
+          });
+          return;
+        }
         send({
           type: 'error',
-          code: timeout.aborted
-            ? 'timeout'
-            : error instanceof ProviderError
-              ? error.code
-              : 'upstream',
+          code,
+          ...(error instanceof ProviderError && error.retryAfter !== undefined
+            ? { retryAfter: error.retryAfter }
+            : {}),
         });
       }
     } finally {

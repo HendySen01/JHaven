@@ -75,12 +75,13 @@ function save() {
           <option value="all">全部声音</option>
           <option value="nature">自然实录</option>
           <option value="steady">稳定背景音</option>
+          <option value="texture">轻柔拟音</option>
           <option value="favorites">我的收藏</option>
         </select></label
       >
     </div>
     <p class="audio-hint">试听仅播放所选声音，12 秒后收声，原混音保留。先停止混音即可单独试听。</p>
-    <p v-if="audio.auditionId" class="audio-hint">试听中：{{ TRACKS[audio.auditionId].name }}</p>
+    <p v-if="audio.auditionId" class="audio-hint">单轨试听 · {{ TRACKS[audio.auditionId].name }}</p>
     <p v-if="!visibleTracks.length" class="audio-hint" role="status">没有匹配的声音。</p>
     <div class="audio-track-grid sound-grid">
       <AudioTrackControl
@@ -88,6 +89,7 @@ function save() {
         :id="id"
         :key="id"
         :track="audio.snapshot.tracks[id]"
+        :mix="audio.mix[id]"
         :favorite="audio.favorites.includes(id)"
         :can-audition="audio.snapshot.status === 'idle'"
         :auditioning="audio.auditionId === id"
