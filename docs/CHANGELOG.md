@@ -3,7 +3,7 @@
 ## Sprint 10.2 PostgreSQL 适配
 
 - 账户及私人业务使用 PostgreSQL，保留 Express 认证、API 契约和 MySQL 历史迁移。新增 PostgreSQL 001–006、事务迁移与受限运行角色授权。
-- Vercel 继续使用现有同源双服务配置，数据库连接使用严格 TLS 和每实例单连接池。
+- Vercel 继续使用现有同源双服务配置，数据库连接使用严格 TLS 和每实例单连接池。Express 入口改为 `apps/server/app.ts`，服务构建只编译共享包，避免运行时把 `dist/app.js` 当作 CommonJS。
 
 ## Sprint 9.7 对话上下文与校验反馈
 

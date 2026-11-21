@@ -28,7 +28,7 @@
 
 ## 3. 未完成功能
 
-- Vercel 单项目双服务仍适用。尚未绑定 Supabase 目标项目，云端迁移、真实 Supavisor TLS、Vercel Preview 与正式环境待验。 [部署说明](DEPLOYMENT.md)
+- Vercel 单项目双服务仍适用。后端入口改为 `apps/server/app.ts`，避免构建器把没有 `package.json` 的 `dist/app.js` 当成 CommonJS 函数。尚未绑定 Supabase 目标项目，云端迁移、真实 Supavisor TLS、Vercel Preview 与正式环境待验。 [部署说明](DEPLOYMENT.md)
 - 公开构建已就绪，生产部署与六条成品的实际夜间听感仍待验收。蜡壳脆皮捏捏实录仍待寻找，现有合成碎响保留。 [音轨审计](AUDIO_AUDIT.md)
 - Gemini 与其他兼容接口尚未接入或开放。DeepSeek 已补测混合情绪、短数字、转话题和纠正。模型仍会把个别粗口解读为玩笑或复述审核摘要。复杂推理、供应商耗时及真实 OpenAI 待验。
 
@@ -39,7 +39,7 @@
 
 ## 4. 重要技术决策
 
-- Vercel Services 在同域将 `/api` 路由到 Express，其余路由进 Vite 静态服务。浏览器沿用相对路径与现有 Origin 校验，通过独立入口复用应用和数据库连接池。 [部署说明](DEPLOYMENT.md)
+- Vercel Services 在同域将 `/api` 路由到 Express，其余路由进 Vite 静态服务。浏览器沿用相对路径与现有 Origin 校验。Express 入口是 `apps/server/app.ts`，只预先构建共享包，由 Vercel 按 `"type": "module"` 编译为 ESM。 [部署说明](DEPLOYMENT.md)
 - 原件与本地优化版本保留，正式 16 条 WAV 由 Vite 静态构建打包，旧试听入口已移除。四条新增的许可记录仅写维护者确认及未提供的字段。
 - 聊天使用内存 Pinia store，从最近 16 条同接收方记录优先取四轮近期对话和两轮主题相关历史，合计限 9,600 字节。允许附发言日期。其余内容仍可在界面查看，无持久化或摘要上传。 [助手说明](ASSISTANT.md)
 - Sprint 9 使用固定 HTTPS 白名单、禁止重定向、模型绑定授权和独立供应商额度，保留总量上限。Sprint 9.3 分开账户、访客、网络和本地模式的计数，并按供应商上报用量结算预留。继续复用 Node Fetch 和 Vue 原生交互，LeiBox Skill 已查询，远程索引不可达。无新增 npm 依赖。 [助手架构](ASSISTANT.md)
@@ -73,6 +73,13 @@
 | 模型证据答复可能重复       | 自由释义可能复述审核摘要     | 已省略占位符后的追加说明，Mock 通过              |
 
 ## 6. 最近一次测试结果
+
+### Vercel Express ESM 入口（2026-11-21）
+
+- 根因已用 `@vercel/backends@27` 的构建逻辑和本机 Node 24 复现：服务构建若先运行 `tsc`，`dist/app.js` 会被选为函数入口并放到 `/var/task/app.js`。该目录没有 `"type": "module"`。关闭模块语法探测或显式 `type: commonjs` 时，首行 `import { randomUUID }` 报 `Cannot use import statement outside a module`。
+- `npm run check` 通过格式、ESLint、类型检查、生产构建和 16 条音轨校验。Vitest 140 项通过，8 项 PostgreSQL 集成因未设置 `JHAVEN_TEST_POSTGRES=1` 跳过。
+- 用与 Vercel 相同的 rolldown 设置把 `apps/server/app.ts` 编译为 `.mjs` 后，本地加载默认导出。`/api/health` 与 `/api/assistant/status` 为 200，未配置数据库时 `/api/auth/status` 为 503 `DATABASE_UNAVAILABLE`。
+- `vercel build` 因本机登录过期没有执行，云端部署和线上接口尚未验收。
 
 ### Sprint 10.2（2026-11-21）
 
@@ -278,6 +285,7 @@
 
 ## 8. 最近一次开发记录
 
+- 修复 Vercel Express 入口：删除会抢占入口的 `app.mjs` 和未接入的 `vercel.ts`，改为 `apps/server/app.ts`。服务构建只编译共享包，避免 `dist/app.js` 被当成 CommonJS 函数。
 - Sprint 10.2 以 PostgreSQL 替换运行时 MySQL 驱动，移植认证、会话、预设、日记、偏好和练习 SQL。增加 PostgreSQL 迁移、私有 schema 及角色授权和本机 TLS 回归。
 - 添加 Vercel 单项目 Services 配置与 Express 入口，补充正式域名、Preview、数据库和可选模型变量。无数据库迁移。
 - Sprint 9.7 增加近期与相关原文窗口，附本地发送日期以澄清相对时间，保持现有核心语气。区分上游内容过滤、站内输入限制和普通失败。无新增依赖或 Skills。

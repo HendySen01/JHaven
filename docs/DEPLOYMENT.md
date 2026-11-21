@@ -4,7 +4,7 @@
 
 当前可构建为 Vue 静态资源与 Express API。账户和私人数据功能需要可达、已迁移的 PostgreSQL。Vercel 单项目配置保留，目标 Supabase 项目通过 Preview 后再上线。
 
-静态部署保留 `apps/web/dist/audio` 内 16 条 WAV、清单与署名。音轨文件名沿用稳定 ID，部署示例允许浏览器重新验证缓存。若入口或 CDN 缓存过此前缺失资源的 404，发布时需清除这四条旧缓存。根构建校验哈希和数字质量。生产 Nginx 与 HTTPS 尚未实测。
+静态部署保留 `apps/web/dist/audio` 内 16 条 WAV、清单与署名。音轨文件名沿用稳定 ID，部署示例允许浏览器重新验证缓存。若入口或 CDN 缓存过此前缺失资源的 404，发布时需清除这四条旧缓存。根构建校验哈希和数字质量。生产 Nginx 与 HTTPS 尚未实测。Vercel 后端入口已改为由平台按 ESM 编译 `apps/server/app.ts`；云端重新部署和线上接口尚未验收。
 
 ## 安装与本地验证
 
@@ -29,9 +29,11 @@ npm run preview
 
 ## Vercel 单项目
 
-在导入页将 Framework Preset 设为 **Services**，Root Directory 保持仓库根目录，Node.js 选择 **24.x**。构建和输出沿用仓库根的 `vercel.json`，保持 npm workspace 的根锁文件和 `packages/shared` 可用。Vite 服务构建 `apps/web/dist`，Express 服务构建共享包和后端并导出应用实例。 [Vercel Services 指南](https://vercel.com/kb/guide/vercel-services)
+在导入页将 Framework Preset 设为 **Services**，Root Directory 保持仓库根目录，Node.js 选择 **24.x**。构建和输出沿用仓库根的 `vercel.json`，保持 npm workspace 的根锁文件和 `packages/shared` 可用。Vite 服务构建 `apps/web/dist`。Express 服务编译共享包，并以 `apps/server/app.ts` 作为 ESM 入口导出应用实例。 [Vercel Services 指南](https://vercel.com/kb/guide/vercel-services)
 
 `/api` 与 `/api/*` 优先转给 Express，保留原路径。浏览器继续用相对路径访问 API，Cookie 与 Origin 校验保持同源。其余路径进入 Vite 服务，先匹配真实文件，页面路径回退到 `index.html`，缺失的音频或资源返回 404。静态前端无需内部 binding、额外 API 地址或 CORS 配置。 [服务路由](https://vercel.com/docs/services/routing)
+
+Express 服务的构建命令只编译 `@jhaven/shared`，并删除服务目录下的 `dist`。入口是 `apps/server/app.ts`，它默认导出已配置的应用。Vercel 根据 `apps/server/package.json` 的 `"type": "module"` 把这个 TypeScript 入口编译为 `.mjs`。构建器会把含有 `express` 导入的 `dist/app.js` 当成函数根目录里的 `/var/task/app.js`；`dist` 没有 `package.json`，运行时会按 CommonJS 解析其中的 `import`。自托管仍使用 `npm run build` 后的 `dist/index.js`，不受该删除步骤影响。
 
 ### 环境变量
 

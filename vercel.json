@@ -18,8 +18,8 @@
     "server": {
       "root": "apps/server",
       "framework": "express",
-      "entrypoint": "app.mjs",
-      "buildCommand": "npm run build -w @jhaven/shared && npm run build"
+      "entrypoint": "app.ts",
+      "buildCommand": "npm run build -w @jhaven/shared && node --input-type=module -e \"import { rm } from 'node:fs/promises'; await rm('dist', { recursive: true, force: true })\""
     }
   },
   "rewrites": [
