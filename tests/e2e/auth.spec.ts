@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';
+import { removeUnsupportedSafariApis } from './safari-api-probe.js';
 
 test('访客可用声音库，账户页需由服务端确认会话', async ({ page }) => {
   await page.goto('/relax');
@@ -16,6 +17,7 @@ test('真实注册、登录失败、登录成功、刷新恢复和退出', async
   test.skip(process.env.JHAVEN_TEST_POSTGRES !== '1', '需要已迁移的独立 PostgreSQL 测试库。');
   const username = `browser_${randomBytes(8).toString('hex')}`;
   const password = '仅用于浏览器测试的临时密码 932';
+  await removeUnsupportedSafariApis(page);
   await page.goto('/register');
   const form = page.locator('.auth-form');
   await expect(form.getByLabel('密码', { exact: true })).toHaveAttribute(

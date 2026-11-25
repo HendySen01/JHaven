@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { accountSchema, type Account } from '@jhaven/shared';
+import { withRequestDeadline } from '../lib/requestDeadline';
 
 class AccountError extends Error {
   constructor(
@@ -22,12 +23,11 @@ const messages: Record<string, string> = {
 };
 
 async function request(path: string, body?: Record<string, string>): Promise<unknown> {
-  let response: Response;
-  try {
-    response = await fetch(path, {
+  return withRequestDeadline(10_000, async (signal) => {
+    const response = await fetch(path, {
       credentials: 'same-origin',
       cache: 'no-store',
-      signal: AbortSignal.timeout(10_000),
+      signal,
       ...(body
         ? {
             method: 'POST',
@@ -35,22 +35,22 @@ async function request(path: string, body?: Record<string, string>): Promise<unk
             body: JSON.stringify(body),
           }
         : {}),
+    }).catch(() => {
+      throw new AccountError(0, '无法连接账户服务，请检查网络后重试。');
     });
-  } catch {
-    throw new AccountError(0, '无法连接账户服务，请检查网络后重试。');
-  }
-  if (response.status === 204) return null;
-  const value = await response.json().catch(() => null);
-  if (!response.ok) {
-    const code = value?.error?.code;
-    throw new AccountError(
-      response.status,
-      typeof code === 'string' && Object.hasOwn(messages, code)
-        ? messages[code]!
-        : '账户服务暂不可用，请稍后重试。',
-    );
-  }
-  return value;
+    if (response.status === 204) return null;
+    const value = await response.json().catch(() => null);
+    if (!response.ok) {
+      const code = value?.error?.code;
+      throw new AccountError(
+        response.status,
+        typeof code === 'string' && Object.hasOwn(messages, code)
+          ? messages[code]!
+          : '账户服务暂不可用，请稍后重试。',
+      );
+    }
+    return value;
+  });
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -102,7 +102,12 @@ export const useAuthStore = defineStore('auth', () => {
       initialized.value = true;
       return true;
     } catch (issue) {
-      error.value = issue instanceof AccountError ? issue.message : '账户服务响应异常，请重试。';
+      error.value =
+        issue instanceof AccountError
+          ? issue.message
+          : issue instanceof DOMException && issue.name === 'TimeoutError'
+            ? '账户服务等待超时，请重试。'
+            : '账户服务响应异常，请重试。';
       return false;
     } finally {
       pending.value = false;

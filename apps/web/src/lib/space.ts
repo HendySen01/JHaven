@@ -1,5 +1,6 @@
 import { ref, watch, onScopeDispose } from 'vue';
 import { useAuthStore } from '../stores/auth';
+import { withRequestDeadline } from './requestDeadline';
 
 const messages: Record<string, string> = {
   INVALID_INPUT: '请检查输入和日期范围。',
@@ -22,34 +23,38 @@ export async function spaceRequest(
   path = '',
   method = 'GET',
   body?: unknown,
-  signal?: AbortSignal,
+  parent?: AbortSignal,
 ) {
-  const response = await fetch(`/api/space${path}`, {
-    method,
-    credentials: 'same-origin',
-    cache: 'no-store',
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
-      : AbortSignal.timeout(10000),
-    headers: {
-      'X-JHaven-Account': account,
-      ...(method === 'GET' ? {} : { 'Content-Type': 'application/json' }),
+  return withRequestDeadline(
+    10_000,
+    async (signal) => {
+      const response = await fetch(`/api/space${path}`, {
+        method,
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal,
+        headers: {
+          'X-JHaven-Account': account,
+          ...(method === 'GET' ? {} : { 'Content-Type': 'application/json' }),
+        },
+        ...(method === 'GET' ? {} : { body: JSON.stringify(body ?? {}) }),
+      });
+      const result = response.status === 204 ? null : await response.json().catch(() => null);
+      if (!response.ok) {
+        const code = result?.error?.code;
+        throw new SpaceError(
+          code,
+          code === 'ENTRY_CONFLICT'
+            ? result.error.message
+            : Object.hasOwn(messages, code)
+              ? messages[code]!
+              : '个人空间暂不可用，请稍后重试。',
+        );
+      }
+      return result as unknown;
     },
-    ...(method === 'GET' ? {} : { body: JSON.stringify(body ?? {}) }),
-  });
-  const result = response.status === 204 ? null : await response.json().catch(() => null);
-  if (!response.ok) {
-    const code = result?.error?.code;
-    throw new SpaceError(
-      code,
-      code === 'ENTRY_CONFLICT'
-        ? result.error.message
-        : Object.hasOwn(messages, code)
-          ? messages[code]!
-          : '个人空间暂不可用，请稍后重试。',
-    );
-  }
-  return result as unknown;
+    parent,
+  );
 }
 
 // 每个视图的账户数据只保存在内存；账号变更会终止进行中的读取和丢弃响应。

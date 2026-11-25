@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { installAudioProbe, readAudioProbe } from './audio-probe.js';
+import { removeUnsupportedSafariApis } from './safari-api-probe.js';
 
 test('有来源的 AI 回答保留推荐理由与确认步骤', async ({ page }) => {
+  await removeUnsupportedSafariApis(page);
   await page.route('**/api/assistant/status', (route) =>
     route.fulfill({ json: { provider: 'deepseek', knowledgeVersion: '2026-11-18.1' } }),
   );
@@ -123,6 +125,7 @@ test('切到新供应商须重新授权，历史回复不会跟过去', async ({
 });
 
 test('本地知识显示来源，站内操作需确认且无自动播放', async ({ page }) => {
+  await removeUnsupportedSafariApis(page);
   await installAudioProbe(page, false);
   await page.goto('/');
   await page.getByRole('link', { name: '睡前助手' }).click();

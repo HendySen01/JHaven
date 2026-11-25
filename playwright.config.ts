@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { testDatabaseUrl } from './apps/server/src/db/test-target.js';
 
 const apiPort = process.env.PLAYWRIGHT_API_PORT ?? '3001';
+const development = process.env.PLAYWRIGHT_WEB_DEV === '1';
 const database = process.env.JHAVEN_TEST_POSTGRES === '1' ? process.env.DATABASE_URL : '';
 if (process.env.JHAVEN_TEST_POSTGRES === '1') testDatabaseUrl(database);
 const compat = process.env.PLAYWRIGHT_COMPAT_BROWSER;
@@ -68,7 +69,9 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: 'npm run preview -w @jhaven/web',
+      command: development
+        ? 'npm run dev -w @jhaven/web -- --port 4173'
+        : 'npm run preview -w @jhaven/web',
       url: 'http://127.0.0.1:4173',
       env: { JHAVEN_PROXY_PORT: apiPort },
       reuseExistingServer: false,

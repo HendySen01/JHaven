@@ -11,6 +11,10 @@ const proxy = {
 
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
+  build: {
+    target: ['chrome111', 'edge111', 'firefox114', 'safari15.6', 'ios15.6'],
+    cssTarget: ['chrome111', 'edge111', 'firefox114', 'safari15.6', 'ios15.6'],
+  },
   server: {
     proxy,
     fs: {

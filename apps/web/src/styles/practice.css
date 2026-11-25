@@ -4,6 +4,7 @@
 }
 
 .practice-page {
+  min-height: 100vh;
   min-height: 100svh;
   padding: clamp(1.5rem, 6vw, 4.5rem) 1.25rem 3rem;
   background: #121629;

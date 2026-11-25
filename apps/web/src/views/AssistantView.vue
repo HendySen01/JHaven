@@ -27,6 +27,7 @@ import {
   checkAssistantAvailability,
   readAssistant,
 } from '../lib/assistant';
+import { withRequestDeadline } from '../lib/requestDeadline';
 
 const router = useRouter();
 const evening = useEveningStore();
@@ -127,11 +128,10 @@ watch(
     const reservation = block.reservation;
     const check = async () => {
       try {
-        const status = await checkAssistantAvailability(
-          target.id,
-          target.model,
-          reservation,
-          AbortSignal.any([controller.signal, AbortSignal.timeout(4000)]),
+        const status = await withRequestDeadline(
+          4000,
+          (signal) => checkAssistantAvailability(target.id, target.model, reservation, signal),
+          controller.signal,
         );
         if (controller.signal.aborted) return;
         if (status.available) {
@@ -179,13 +179,19 @@ const statusController = new AbortController();
 
 onMounted(async () => {
   try {
-    const res = await fetch('/api/assistant/status', {
-      cache: 'no-store',
-      credentials: 'omit',
-      signal: AbortSignal.any([statusController.signal, AbortSignal.timeout(4000)]),
-    });
-    if (!res.ok) throw new Error('无法检查助手服务。');
-    const status = assistantStatus.parse(await res.json());
+    const status = await withRequestDeadline(
+      4000,
+      async (signal) => {
+        const res = await fetch('/api/assistant/status', {
+          cache: 'no-store',
+          credentials: 'omit',
+          signal,
+        });
+        if (!res.ok) throw new Error('无法检查助手服务。');
+        return assistantStatus.parse(await res.json());
+      },
+      statusController.signal,
+    );
     providers.value = status.providers ?? (status.provider ? [{ id: status.provider }] : []);
     recipient.value = providers.value[0]?.id;
   } catch {
@@ -364,53 +370,58 @@ async function send(question: string, replace = false, event?: Event) {
   if (moveFocus) void nextTick(() => stopButton.value?.focus({ preventScroll: true }));
   let inputRestricted = false;
   try {
-    await readAssistant(
-      messages,
-      mode,
-      AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
-      (event) => {
-        if (request !== controller || !last.value) return;
-        if (event.type === 'start') {
-          inputRestricted = event.inputRestricted === true;
-          last.value.source = event.source ?? (event.mode === 'model' ? 'ai' : 'local');
-          switch (event.fallbackCode) {
-            case 'provider_invalid_output':
-              last.value.note = '模型返回格式异常。';
-              break;
-            case 'invalid_structure':
-              last.value.note = '模型回复缺少可用内容。';
-              break;
-            case 'output_rejected':
-              last.value.note = '模型回复未通过检查。';
-              break;
-          }
-        }
-        if (event.type === 'text') last.value.text += event.text;
-        if (event.type === 'done') {
-          last.value.result = event;
-          if (event.source) last.value.source = event.source;
-          if (
-            last.value.source !== 'fallback' &&
-            !inputRestricted &&
-            submittedDraft !== null &&
-            draft.value === submittedDraft
-          )
-            draft.value = '';
-        }
-      },
-      target
-        ? {
-            provider: target.id,
-            ...(target.model ? { model: target.model } : {}),
-            latestSentOn,
-            ...(previous ? { previousReply: previous.reply } : {}),
-            ...(previous?.sentOn ? { previousSentOn: previous.sentOn } : {}),
-            ...(earlier ? { earlierReply: earlier.reply } : {}),
-            ...(earlier?.sentOn ? { earlierSentOn: earlier.sentOn } : {}),
-            ...(olderHistory.length ? { olderHistory } : {}),
-            ...(prefersChat ? { prefersChat } : {}),
-          }
-        : {},
+    await withRequestDeadline(
+      30_000,
+      (signal) =>
+        readAssistant(
+          messages,
+          mode,
+          signal,
+          (event) => {
+            if (request !== controller || !last.value) return;
+            if (event.type === 'start') {
+              inputRestricted = event.inputRestricted === true;
+              last.value.source = event.source ?? (event.mode === 'model' ? 'ai' : 'local');
+              switch (event.fallbackCode) {
+                case 'provider_invalid_output':
+                  last.value.note = '模型返回格式异常。';
+                  break;
+                case 'invalid_structure':
+                  last.value.note = '模型回复缺少可用内容。';
+                  break;
+                case 'output_rejected':
+                  last.value.note = '模型回复未通过检查。';
+                  break;
+              }
+            }
+            if (event.type === 'text') last.value.text += event.text;
+            if (event.type === 'done') {
+              last.value.result = event;
+              if (event.source) last.value.source = event.source;
+              if (
+                last.value.source !== 'fallback' &&
+                !inputRestricted &&
+                submittedDraft !== null &&
+                draft.value === submittedDraft
+              )
+                draft.value = '';
+            }
+          },
+          target
+            ? {
+                provider: target.id,
+                ...(target.model ? { model: target.model } : {}),
+                latestSentOn,
+                ...(previous ? { previousReply: previous.reply } : {}),
+                ...(previous?.sentOn ? { previousSentOn: previous.sentOn } : {}),
+                ...(earlier ? { earlierReply: earlier.reply } : {}),
+                ...(earlier?.sentOn ? { earlierSentOn: earlier.sentOn } : {}),
+                ...(olderHistory.length ? { olderHistory } : {}),
+                ...(prefersChat ? { prefersChat } : {}),
+              }
+            : {},
+        ),
+      controller.signal,
     );
   } catch (error) {
     if (request === controller && last.value) {

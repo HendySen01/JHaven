@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test } from '@playwright/test';
+import { removeUnsupportedSafariApis } from './safari-api-probe.js';
 
 test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势', async ({
   page,
@@ -8,6 +9,7 @@ test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势',
 }) => {
   test.skip(process.env.JHAVEN_TEST_POSTGRES !== '1', '需要已迁移的隔离 PostgreSQL。');
   test.setTimeout(60_000);
+  await removeUnsupportedSafariApis(page);
   page.on('dialog', (dialog) => void dialog.accept());
   const user = `space_${randomBytes(7).toString('hex')}`;
   const password = '仅用于隔离测试的临时账户口令 13';

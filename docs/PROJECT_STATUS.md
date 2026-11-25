@@ -4,7 +4,7 @@
 
 - JHaven，Your Quiet Haven, Every Night.
 - 当前版本 0.1.0-alpha.7，Sprint 10.2 切换 PostgreSQL 运行层。Supabase 须先应用 PostgreSQL 001–006 并授权运行角色。
-- 最近更新时间 2026-11-21（Asia/Macau）。当前分支 main 跟踪 origin/main。
+- 最近更新时间 2026-11-25（Asia/Macau）。当前分支 main 跟踪 origin/main。
 
 ## 2. 已完成功能
 
@@ -73,6 +73,13 @@
 | 模型证据答复可能重复       | 自由释义可能复述审核摘要     | 已省略占位符后的追加说明，Mock 通过              |
 
 ## 6. 最近一次测试结果
+
+### iOS 15.6 Safari 兼容性（2026-11-25）
+
+- 旧构建将导航及页面断点压缩成 Safari 16.4 才支持的宽度范围语法。账户、健康、私人空间及助手也会在发出请求前调用旧 Safari 缺少的 AbortSignal 静态方法。
+- 修复将 Safari/iOS 15.6 纳入前端构建目标，保留传统断点，并统一请求超时及取消。生产 CORS、Cookie、TLS 与 AI 授权规则保持原样。真实设备和线上代理行为待验。
+- 隔离 PostgreSQL 上 `npm run check` 通过 150 项测试、格式、ESLint、类型检查和生产构建。Chrome 三档生产预览 144 项通过，专项布局覆盖 320、375、390 和 768 px。 [测试记录](TESTING.md)
+- Firefox 48 项通过，Windows WebKit 32 项通过并跳过 16 项原生 Web Audio 测试。Chrome 375 px 开发环境专项 17 项通过，跳过仅适用于生产的 CSS 产物检查。
 
 ### Vercel Express ESM 入口（2026-11-21）
 
@@ -267,6 +274,8 @@
 - 本轮无真实 .env、凭据或测试数据库纳入 Git。Git 检查包括新增文件及许可证。测试凭据和浏览器报告均在忽略目录。
 
 ## 7. 下一阶段任务
+
+在获准的预览环境用 iOS 15.6 Safari 验收普通与无痕窗口，覆盖认证、助手、音频和日记，记录实际请求及响应情况。当前改动未部署。
 
 创建 JHaven 独立 Supabase 项目，按部署手册配置角色、证书、迁移权限和 Vercel Preview 变量，验证真实连接、Cookie 和私人资源隔离。 [部署说明](DEPLOYMENT.md)
 
