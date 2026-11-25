@@ -314,8 +314,15 @@ async function send(question: string, replace = false, event?: Event) {
     ? providerNames[target.id] + (target.model ? ` · ${target.model}` : '')
     : undefined;
   const trimmed = question.trim();
-  const submittedDraft = !replace && draft.value.trim() === trimmed ? draft.value : null;
-  const { sentOn: latestSentOn } = conversation.addTurn(trimmed, replace, identity);
+  const submittedDraft = draft.value.trim() === trimmed ? draft.value : null;
+  const retrySameDraft =
+    last.value?.question === trimmed &&
+    (last.value.source === 'fallback' || last.value.source === 'error');
+  const { sentOn: latestSentOn } = conversation.addTurn(
+    trimmed,
+    replace || retrySameDraft,
+    identity,
+  );
   const history: AssistantExchange[] = [];
   let prefersChat = assistantPrefersChat(trimmed);
   if (target) {
@@ -658,7 +665,16 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
                   {{ sourceLabels[turn.source] }}
                 </p>
                 <p v-if="turn.text" class="assistant-text">{{ turn.text }}</p>
-                <p v-if="turn.note" class="assistant-muted" role="status">{{ turn.note }}</p>
+                <p
+                  v-if="
+                    turn.note &&
+                    !(turn.source === 'fallback' && turn.text.startsWith('模型回复格式异常。'))
+                  "
+                  class="assistant-muted"
+                  role="status"
+                >
+                  {{ turn.note }}
+                </p>
                 <p v-if="!turn.text && !turn.note" class="assistant-muted">正在回复…</p>
                 <span v-if="turn.source === 'ai' && turn.recipient" class="assistant-sr">
                   由 {{ turn.recipient }} 回复。

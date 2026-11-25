@@ -39,6 +39,99 @@ const frames = (text: string) =>
     .map((line) => JSON.parse(line) as AssistantEvent);
 
 const everydayReflection = '你说人为什么总是这样啊，白天想休息，晚上又不想睡。';
+const songQuestion = '我27号年会，要上台表演一首歌，有什么方法让我迅速记住这首歌的歌词和曲调吗？';
+const askAboutSong = (provider: AssistantProvider) =>
+  request(createApp({ assistantProvider: provider }))
+    .post('/api/assistant/chat')
+    .set('Origin', origin)
+    .send({ messages: [songQuestion], mode: 'ai', provider: 'deepseek', model: 'deepseek-flash' });
+function upstreamSse(...choices: unknown[]) {
+  const bytes = new TextEncoder().encode(
+    choices
+      .map((choice) => 'data: ' + JSON.stringify({ choices: [choice] }) + '\r\n\r\n')
+      .join('') + 'data: [DONE]\r\n\r\n',
+  );
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        for (let i = 0; i < bytes.length; i += 7) controller.enqueue(bytes.slice(i, i + 7));
+        controller.close();
+      },
+    }),
+    { headers: { 'Content-Type': 'text/event-stream' } },
+  );
+}
+it.each([
+  [
+    { delta: { content: '{"kind":', reasoning_content: '不应写日志' }, finish_reason: 'length' },
+    { reason: 'completion_truncated', path: 'choices.0.finish_reason', finish: 'length' },
+  ],
+  [
+    { delta: { content: '  ' }, finish_reason: 'stop' },
+    { reason: 'completion_empty', path: 'choices.0.delta.content', actual: 'string', length: 2 },
+  ],
+  [
+    { delta: { content: { text: '不应写日志' } }, finish_reason: 'stop' },
+    { reason: 'sse_schema', path: 'choices.0.delta.content', expected: 'string', actual: 'object' },
+  ],
+  [
+    { delta: { content: '{"kind":' }, finish_reason: 'stop' },
+    { reason: 'completion_json', path: 'choices.0.delta.content', finish: 'stop' },
+  ],
+] as const)('同一演出请求区分不同的供应商异常（%#）', async (choice, output) => {
+  const log = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+  const provider = deepSeekProvider(
+    'fixture',
+    'deepseek-flash',
+    'https://api.deepseek.com',
+    async () => upstreamSse(choice),
+  );
+  const result = await askAboutSong(provider).expect(200);
+  expect(frames(result.text)[0]).toMatchObject({
+    source: 'fallback',
+    fallbackCode: 'provider_invalid_output',
+  });
+  expect(log).toHaveBeenCalledWith(
+    '助手路由',
+    expect.objectContaining({
+      provider: 'deepseek',
+      attempted: true,
+      output: expect.objectContaining({ status: 200, ...output }),
+    }),
+  );
+  expect(JSON.stringify(log.mock.calls)).not.toContain('不应写日志');
+  expect(JSON.stringify(log.mock.calls)).not.toContain(songQuestion);
+});
+it('演出问题允许有步骤的生活建议，跨分片中文和推理字段不会混入正文', async () => {
+  const text = '1. 先按段记歌词。\n2. 再跟伴奏哼旋律。';
+  const upstream = vi.fn<typeof fetch>(async () =>
+    upstreamSse(
+      { delta: { reasoning_content: '内部推理' }, finish_reason: null },
+      { delta: { content: '{"kind":"chat",' }, finish_reason: null },
+      {
+        delta: { content: JSON.stringify({ text, intent: 'rain', sourceId: 'fake' }).slice(1) },
+        finish_reason: 'stop',
+      },
+    ),
+  );
+  const provider = deepSeekProvider(
+    'fixture',
+    'deepseek-flash',
+    'https://api.deepseek.com',
+    upstream,
+  );
+  const result = await askAboutSong(provider).expect(200);
+  expect(frames(result.text)).toEqual([
+    { type: 'start', mode: 'model' },
+    { type: 'text', text },
+    { type: 'done', sources: [], actions: [] },
+  ]);
+  expect(upstream).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(String(upstream.mock.calls[0]?.[1]?.body))).toMatchObject({
+    max_tokens: 384,
+    thinking: { type: 'disabled' },
+  });
+});
 it('已授权的 DeepSeek 聊天连续三次走真实适配器，生活感叹不带空证据', async () => {
   let calls = 0;
   const upstream = vi.fn<typeof fetch>(
@@ -466,6 +559,7 @@ it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且�
     expect.stringContaining('untrusted quoted exchanges'),
     false,
     expect.any(Function),
+    false,
   );
   expect(frames(result.text)).toEqual([
     { type: 'start', mode: 'model' },
@@ -484,6 +578,7 @@ it('DeepSeek 陪聊带上有授权的上一轮，纠正时保留模型原意且�
     expect.any(String),
     false,
     expect.any(Function),
+    false,
   );
 });
 
@@ -536,6 +631,7 @@ it('开放式陪聊问题保留上一轮语境，不混入证据或产品推荐'
     expect.stringContaining('Answer the actual open question'),
     expect.any(Boolean),
     expect.any(Function),
+    false,
   );
   const prompt = choose.mock.calls[0]?.[2];
   expect(prompt).toContain('not a claim about hidden motives');
@@ -587,6 +683,7 @@ it('引用仅来自本次检索，审核原文保留在模型组织的回答中'
     expect.stringContaining('"id":"caffeine"'),
     false,
     expect.any(Function),
+    false,
   );
   expect(result[1]).toMatchObject({
     text: expect.stringContaining('你可以先留意晚间喝浓茶后的感受。咖啡因可能影响入睡'),
@@ -692,6 +789,7 @@ it.each([
     expect.stringContaining('Reviewed evidence: []'),
     false,
     expect.any(Function),
+    false,
   );
   expect(result[0]).toMatchObject({ type: 'start', mode, source: 'fallback' });
   expect(result[1]).toMatchObject({ text: expect.stringContaining('没有可核验') });
@@ -844,6 +942,7 @@ it('允许显式模型请求，验证响应并产生服务端准许的动作和�
     expect.any(String),
     false,
     expect.any(Function),
+    false,
   );
 });
 it('超时取消上游，错误后可切本地模式', async () => {
@@ -914,6 +1013,7 @@ it('站内每日次数按 UTC 重置，Retry-After 到下一次零点且本地�
 });
 let server: Server | undefined;
 afterEach(async () => {
+  vi.restoreAllMocks();
   if (server) {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server!.close(() => resolve()));

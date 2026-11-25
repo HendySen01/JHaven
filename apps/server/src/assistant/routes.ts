@@ -21,7 +21,7 @@ import {
   type TokenUsage,
 } from './provider.js';
 import { createAssistantWindows, dayMs } from './quota.js';
-import { groundedPrompt, groundedResult } from './grounded.js';
+import { asksForPracticalHelp, groundedPrompt, groundedResult } from './grounded.js';
 
 type Usage = { calls: number; cost: number; inflight: number };
 type Limits = { dailyLimit: number; dailyBudget: number };
@@ -189,7 +189,11 @@ export function createAssistantRouter({
     const system = selected
       ? groundedPrompt(plan.sources, contextual, latest, plan.factual, prefersChat)
       : '';
-    const reservation = selected ? estimateCost(selected, system, modelInput, detailed) : 0;
+    const practical =
+      !plan.factual && !plan.actions.length && asksForPracticalHelp(latest, prefersChat);
+    const reservation = selected
+      ? estimateCost(selected, system, modelInput, detailed, undefined, practical)
+      : 0;
     let ledger: Usage | undefined;
     if (selected) {
       ledger = providerQuota(selected.name);
@@ -208,16 +212,21 @@ export function createAssistantRouter({
     };
     response.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
     response.setHeader('X-Accel-Buffering', 'no');
-    const diagnostic = (code: string) => {
+    const diagnostic = (code: string, output?: ProviderError['diagnostic']) => {
       console.info('助手路由', {
         requestId: String(response.locals.requestId),
         provider: selected?.name ?? provider,
         attempted: Boolean(selected),
         code,
+        ...(output ? { output } : {}),
       });
     };
-    const sendLocal = (fallbackCode?: AssistantFallbackCode, override?: string) => {
-      if (fallbackCode) diagnostic(fallbackCode);
+    const sendLocal = (
+      fallbackCode?: AssistantFallbackCode,
+      override?: string,
+      output?: ProviderError['diagnostic'],
+    ) => {
+      if (fallbackCode) diagnostic(fallbackCode, output);
       send(
         fallbackCode
           ? { type: 'start', mode: 'local', source: 'fallback', fallbackCode }
@@ -268,9 +277,16 @@ export function createAssistantRouter({
         signal.addEventListener('abort', abort, { once: true });
       });
       const raw = await Promise.race([
-        selected.choose(modelInput, signal, system, detailed, (usage) => {
-          reported = usage;
-        }),
+        selected.choose(
+          modelInput,
+          signal,
+          system,
+          detailed,
+          (usage) => {
+            reported = usage;
+          },
+          practical,
+        ),
         aborted,
       ]);
       const reply = groundedResult(
@@ -308,6 +324,7 @@ export function createAssistantRouter({
           sendLocal(
             'provider_invalid_output',
             !plan.factual ? '模型回复格式异常。可以重试，或改用本地知识。' : undefined,
+            error.diagnostic,
           );
           return;
         }
@@ -322,7 +339,7 @@ export function createAssistantRouter({
           balance: 402,
           timeout: 504,
         };
-        diagnostic(code);
+        diagnostic(code, error instanceof ProviderError ? error.diagnostic : undefined);
         response.status(statuses[code] ?? 502);
         if (error instanceof ProviderError && error.retryAfter !== undefined)
           response.setHeader('Retry-After', error.retryAfter);

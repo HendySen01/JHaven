@@ -633,7 +633,7 @@ test('DeepSeek 回退展示原因并保留草稿，手动重试可收到模型�
           {
             type: 'text',
             text: fallback
-              ? '暂时没有可用的模型回复。'
+              ? '模型回复格式异常。可以重试，或改用本地知识。'
               : '白天盼着休息，晚上又舍不得把今天交出去。',
           },
           { type: 'done', sources: [], actions: [] },
@@ -648,7 +648,9 @@ test('DeepSeek 回退展示原因并保留草稿，手动重试可收到模型�
   await draft.fill(question);
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('本地回退', { exact: true })).toBeVisible();
-  await expect(page.getByText('模型返回格式异常。', { exact: true })).toBeVisible();
+  const thread = page.getByRole('region', { name: '完整对话' });
+  await expect(thread.getByText(/模型回复格式异常/)).toHaveCount(1);
+  await expect(thread.getByText('模型返回格式异常。', { exact: true })).toHaveCount(0);
   await expect(draft).toHaveValue(question);
   await page.getByRole('button', { name: '重试回复' }).click();
   await expect(
@@ -657,6 +659,8 @@ test('DeepSeek 回退展示原因并保留草稿，手动重试可收到模型�
       .getByText('白天盼着休息，晚上又舍不得把今天交出去。'),
   ).toBeVisible();
   await expect(page.getByText('本地回退', { exact: true })).toHaveCount(0);
+  await expect(draft).toHaveValue('');
+  await expect(page.locator('.assistant-question')).toHaveCount(1);
   expect(calls).toBe(2);
 });
 

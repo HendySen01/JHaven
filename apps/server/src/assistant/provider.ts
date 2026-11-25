@@ -16,11 +16,12 @@ export interface AssistantProvider {
     system: string,
     detailed?: boolean,
     reportUsage?: (usage: TokenUsage) => void,
+    practical?: boolean,
   ): Promise<unknown>;
 }
 
-function outputLimit(name: AssistantProviderId, detailed: boolean) {
-  return detailed ? (name === 'deepseek' ? 1024 : 768) : 192;
+function outputLimit(name: AssistantProviderId, detailed: boolean, practical = false) {
+  return detailed ? (name === 'deepseek' ? 1024 : 768) : practical ? 384 : 192;
 }
 
 export function estimateCost(
@@ -29,6 +30,7 @@ export function estimateCost(
   message: string,
   detailed: boolean,
   usage?: TokenUsage,
+  practical = false,
 ) {
   // 用公开高峰价、不依赖缓存折扣。未审核的 OpenAI 型号使用更高的占位价。
   const [inputRate, outputRate] =
@@ -41,7 +43,7 @@ export function estimateCost(
         : [30, 180];
   const input =
     usage?.prompt_tokens ?? Buffer.byteLength(system) + Buffer.byteLength(message) + 128;
-  const output = usage?.completion_tokens ?? outputLimit(provider.name, detailed);
+  const output = usage?.completion_tokens ?? outputLimit(provider.name, detailed, practical);
   return (input * inputRate + output * outputRate) / 1_000_000;
 }
 export class ProviderError extends Error {
@@ -58,9 +60,27 @@ export class ProviderError extends Error {
       | 'timeout'
       | 'unknown_provider_error',
     readonly retryAfter?: number,
+    readonly diagnostic?: OutputDiagnostic,
   ) {
     super(code);
   }
+}
+export type OutputDiagnostic = {
+  reason: string;
+  status?: number;
+  path?: string;
+  expected?: string;
+  actual?: string;
+  length?: number;
+  reasoningLength?: number;
+  finish?: string;
+};
+
+const valueType = (value: unknown) =>
+  value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+
+function invalid(diagnostic: OutputDiagnostic): never {
+  throw new ProviderError('invalid_output', undefined, diagnostic);
 }
 function retryAfter(value: string | null) {
   if (!value) return;
@@ -74,7 +94,7 @@ const chunkSchema = z.object({
   choices: z
     .array(
       z.object({
-        delta: z.object({ content: z.string().nullish() }),
+        delta: z.object({ content: z.string().nullish(), reasoning_content: z.string().nullish() }),
         finish_reason: z.string().nullable(),
       }),
     )
@@ -109,7 +129,7 @@ function chatProvider(
   return {
     name,
     model,
-    async choose(message, signal, system, detailed = false, reportUsage) {
+    async choose(message, signal, system, detailed = false, reportUsage, practical) {
       const response = await fetcher(baseUrl + '/chat/completions', {
         method: 'POST',
         redirect: 'error',
@@ -121,11 +141,11 @@ function chatProvider(
           stream_options: { include_usage: true },
           ...(name === 'deepseek'
             ? {
-                max_tokens: outputLimit(name, detailed),
+                max_tokens: outputLimit(name, detailed, practical),
                 thinking: { type: detailed ? 'enabled' : 'disabled' },
                 ...(detailed ? { reasoning_effort: 'low' } : {}),
               }
-            : { store: false, max_completion_tokens: outputLimit(name, detailed) }),
+            : { store: false, max_completion_tokens: outputLimit(name, detailed, practical) }),
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: system },
@@ -139,7 +159,13 @@ function chatProvider(
         !response.headers.get('content-type')?.includes('text/event-stream')
       ) {
         await response.body?.cancel().catch(() => undefined);
-        if (response.ok) throw new ProviderError('invalid_output');
+        if (response.ok)
+          invalid({
+            reason: 'response_not_sse',
+            status: response.status,
+            expected: 'text/event-stream',
+            actual: response.body ? 'other_content_type' : 'missing_body',
+          });
         const codes: Record<number, ProviderError['code']> = {
           401: 'authentication',
           402: 'balance',
@@ -160,14 +186,20 @@ function chatProvider(
       let buffer = '',
         output = '',
         size = 0,
-        finished = false,
-        filtered = false;
+        reasoningLength = 0,
+        finish = '';
+      const detail = () => ({
+        status: response.status,
+        length: output.length,
+        reasoningLength,
+        finish,
+      });
       try {
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
           size += value.length;
-          if (size > 192_000) throw new ProviderError('invalid_output');
+          if (size > 192_000) invalid({ ...detail(), reason: 'stream_size_limit', length: size });
           buffer += value;
           let newline = buffer.indexOf('\n');
           while (newline !== -1) {
@@ -177,32 +209,102 @@ function chatProvider(
             if (!line.startsWith('data:')) continue;
             const data = line.slice(5).trim();
             if (data === '[DONE]') {
-              if (filtered) throw new ProviderError('provider_content_filtered');
-              if (!finished) throw new ProviderError('invalid_output');
-              return JSON.parse(output) as unknown;
+              if (finish === 'content_filter') throw new ProviderError('provider_content_filtered');
+              if (finish !== 'stop')
+                invalid({
+                  ...detail(),
+                  reason: finish === 'length' ? 'completion_truncated' : 'unexpected_finish',
+                  path: 'choices.0.finish_reason',
+                  expected: 'stop',
+                  actual: finish ? 'string' : 'missing',
+                });
+              if (!output.trim())
+                invalid({
+                  ...detail(),
+                  reason: 'completion_empty',
+                  path: 'choices.0.delta.content',
+                  expected: 'nonblank JSON string',
+                  actual: 'string',
+                });
+              try {
+                return JSON.parse(output) as unknown;
+              } catch {
+                invalid({
+                  ...detail(),
+                  reason: 'completion_json',
+                  path: 'choices.0.delta.content',
+                  expected: 'valid JSON',
+                  actual: 'string',
+                });
+              }
             }
-            const frame = chunkSchema.parse(JSON.parse(data));
+            let decoded: unknown;
+            try {
+              decoded = JSON.parse(data);
+            } catch {
+              invalid({
+                ...detail(),
+                reason: 'sse_json',
+                path: 'data',
+                expected: 'valid JSON',
+                actual: 'string',
+                length: data.length,
+              });
+            }
+            const parsed = chunkSchema.safeParse(decoded);
+            if (!parsed.success) {
+              const issue = parsed.error.issues[0]!;
+              const actual = issue.path.reduce<unknown>(
+                (value, key) =>
+                  typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined,
+                decoded,
+              );
+              invalid({
+                ...detail(),
+                reason: 'sse_schema',
+                path: issue.path.join('.'),
+                expected: 'expected' in issue ? String(issue.expected) : issue.code,
+                actual: valueType(actual),
+              });
+            }
+            const frame = parsed.data;
             const usage = tokenUsage.safeParse(frame.usage);
             if (usage.success) reportUsage?.(usage.data);
             const part = frame.choices[0];
             if (!part) continue;
             output += part.delta.content ?? '';
-            if (output.length > 4096) throw new ProviderError('invalid_output');
-            if (part.finish_reason === 'content_filter') filtered = true;
-            else if (part.finish_reason && part.finish_reason !== 'stop')
-              throw new ProviderError('invalid_output');
-            finished ||= part.finish_reason === 'stop';
+            reasoningLength += part.delta.reasoning_content?.length ?? 0;
+            if (output.length > 4096)
+              invalid({
+                ...detail(),
+                reason: 'completion_size_limit',
+                path: 'choices.0.delta.content',
+              });
+            if (part.finish_reason && (!finish || part.finish_reason === 'content_filter'))
+              finish = [
+                'stop',
+                'length',
+                'content_filter',
+                'tool_calls',
+                'insufficient_system_resource',
+                'function_call',
+              ].includes(part.finish_reason)
+                ? part.finish_reason
+                : 'other';
           }
         }
-        throw new ProviderError(filtered ? 'provider_content_filtered' : 'stream_interrupted');
+        if (finish === 'content_filter') throw new ProviderError('provider_content_filtered');
+        throw new ProviderError('stream_interrupted', undefined, {
+          ...detail(),
+          reason: 'sse_missing_done',
+        });
       } catch (error) {
         if (signal.aborted) throw error;
         if (error instanceof ProviderError) throw error;
-        throw new ProviderError(
-          error instanceof SyntaxError || error instanceof z.ZodError
-            ? 'invalid_output'
-            : 'stream_interrupted',
-        );
+        throw new ProviderError('stream_interrupted', undefined, {
+          ...detail(),
+          reason: 'sse_read_error',
+        });
       } finally {
         await reader.cancel().catch(() => undefined);
         reader.releaseLock();

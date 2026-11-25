@@ -47,7 +47,8 @@ const groundedReply = z.discriminatedUnion('kind', [
     kind: z.literal('clarify'),
     text: z.string().trim().min(2).max(145).optional(),
   }),
-  z.strictObject({ kind: z.literal('chat'), text: z.string().trim().min(2).max(560) }),
+  // 普通聊天只提取文本，附带业务字段不能触发引用或操作。
+  z.object({ kind: z.literal('chat'), text: z.string().trim().min(2).max(560) }),
   z.strictObject({ kind: z.literal('unknown') }),
 ]);
 
@@ -88,9 +89,9 @@ export const asksForFacts = (text: string) =>
           clause,
         ),
     );
-const asksForPracticalHelp = (text: string, prefersChat: boolean) =>
+export const asksForPracticalHelp = (text: string, prefersChat: boolean) =>
   asksForAdvice(text, prefersChat) ||
-  /(?:怎么办|有什么办法|能帮我吗|我该怎么做|怎么(?:才|可以|能)?.{0,16}(?:睡着|入睡)|给我(?:一点|些)?建议|帮我.{0,12}(?:看看|想办法|解决))/.test(
+  /(?:怎么办|有什么(?:办法|方法)|能帮我吗|我该怎么做|怎么(?:才|可以|能)?.{0,16}(?:睡着|入睡)|给我(?:一点|些)?建议|帮我.{0,12}(?:看看|想办法|解决))/.test(
     text,
   );
 const unsolicitedDirection =
