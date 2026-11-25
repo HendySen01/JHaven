@@ -102,6 +102,20 @@ test.beforeEach(async ({ page }) => {
   await installAudioProbe(page);
 });
 
+test('默认总音量下雨声输出不再被整个目录过度衰减', async ({ page }) => {
+  await page.goto('/relax');
+  const player = page.locator('#ambient-player');
+  await player.getByRole('switch', { name: '开启微风', exact: true }).uncheck();
+  await expect(player.getByRole('slider', { name: '总音量' })).toHaveValue('45');
+  await expect(player.getByRole('slider', { name: '雨声音量', exact: true })).toHaveValue('65');
+  await player.getByRole('button', { name: '播放混音', exact: true }).click();
+  await expect(player.locator('.player-status')).toContainText('正在播放');
+  await expect.poll(async () => (await readAudioProbe(page)).rms).toBeGreaterThan(0.0015);
+  expect((await readAudioProbe(page)).active).toBe(1);
+  await player.getByRole('button', { name: '静音', exact: true }).click();
+  await expect.poll(async () => (await readAudioProbe(page)).rms).toBe(0);
+});
+
 test('声音库筛选、收藏、单独试听、默认收声选项及静音', async ({ page }) => {
   await page.goto('/relax');
   const player = page.locator('#ambient-player');

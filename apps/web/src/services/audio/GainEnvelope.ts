@@ -29,8 +29,7 @@ export class GainEnvelope {
     }
     return Math.max(0, Math.min(1, value));
   }
-  private hold() {
-    const now = this.context.currentTime;
+  private hold(now = this.context.currentTime) {
     const current = this.valueAt(now);
     this.param.cancelScheduledValues(now);
     this.param.setValueAtTime(current, now);
@@ -38,8 +37,8 @@ export class GainEnvelope {
     this.ramps = [];
     return { now, current };
   }
-  rampTo(target: number, seconds = 0.12) {
-    const { now, current } = this.hold();
+  rampTo(target: number, seconds = 0.12, at = this.context.currentTime) {
+    const { now, current } = this.hold(at);
     const value = Math.min(1, Math.max(0, Number.isFinite(target) ? target : 0));
     if (seconds <= 0) {
       this.param.setValueAtTime(value, now);

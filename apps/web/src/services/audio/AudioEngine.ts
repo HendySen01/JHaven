@@ -1,4 +1,11 @@
-import { clampVolume, copyMix, defaultAudio, parseMix, volumeToGain } from '../../domain/audio';
+import {
+  clampVolume,
+  copyMix,
+  defaultAudio,
+  masterVolumeToGain,
+  mixTrackGains,
+  parseMix,
+} from '../../domain/audio';
 import {
   TRACK_IDS,
   type AudioMix,
@@ -85,7 +92,7 @@ export class AudioEngine {
     this.masterEnvelope = new GainEnvelope(
       context,
       this.master.gain,
-      volumeToGain(this.masterVolume),
+      masterVolumeToGain(this.masterVolume),
     );
     this.fadeEnvelope = new GainEnvelope(context, this.fade.gain, 0);
     for (const id of TRACK_IDS)
@@ -164,7 +171,8 @@ export class AudioEngine {
       if (revision !== this.revision || this.intent !== 'playing' || this.disposed) return;
       if (this.context?.state !== 'running') throw new Error('浏览器尚未允许声音播放');
       for (const id of TRACK_IDS)
-        if (this.mix[id].enabled) this.tracks.get(id)!.start(this.mix[id].volume);
+        if (this.mix[id].enabled) this.tracks.get(id)!.start();
+      this.syncMixGains();
       this.status = 'playing';
       if (!this.timer.snapshot().running) {
         if (!this.timerManuallyPaused) this.timer.resume();
@@ -179,15 +187,24 @@ export class AudioEngine {
       if (timeout) clearTimeout(timeout);
     }
   }
+  private syncMixGains() {
+    if (!this.context) return;
+    const active = new Set<TrackId>();
+    for (const [id, track] of this.tracks) if (track.source) active.add(id);
+    const gains = mixTrackGains(this.mix, active);
+    // 所有进出音轨共用音频时钟和 180ms 包络。总增益在旧、新安全配比间
+    // 线性插值，快速切换或淡出重叠时也不会叠加两套满预算的声音。
+    const at = this.context.currentTime;
+    for (const [id, track] of this.tracks) {
+      if (!this.mix[id].enabled) track.fadeOff(at);
+      else if (track.source) track.setMixGain(gains.get(id) ?? 0, at);
+    }
+  }
   applyMix(value: AudioMix) {
     if (this.disposed) return;
     this.mix = copyMix(parseMix(value));
     this.error = null;
-    for (const id of TRACK_IDS) {
-      const track = this.tracks.get(id);
-      if (!this.mix[id].enabled) track?.fadeOff();
-      else if (track?.source) track.setVolume(this.mix[id].volume);
-    }
+    this.syncMixGains();
     if (!TRACK_IDS.some((id) => this.mix[id].enabled)) {
       this.stop();
       return;
@@ -204,7 +221,7 @@ export class AudioEngine {
   }
   setMasterVolume(value: number) {
     this.masterVolume = clampVolume(value);
-    this.masterEnvelope?.rampTo(volumeToGain(this.masterVolume));
+    this.masterEnvelope?.rampTo(masterVolumeToGain(this.masterVolume));
     this.emit();
   }
   pause() {

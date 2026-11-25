@@ -1,4 +1,12 @@
-import { TRACK_IDS, type AudioMix, type SoundPreset, type TrackId } from '../types/audio';
+import {
+  MIX_GAIN_BUDGET,
+  TRACK_GAIN_LIMIT,
+  TRACK_IDS,
+  TRACKS,
+  type AudioMix,
+  type SoundPreset,
+  type TrackId,
+} from '../types/audio';
 
 export const trackNotes: Partial<Record<TrackId, { aliases: string[]; description: string }>> = {
   fan: { aliases: ['电扇'], description: '桌面风扇平稳转动时的风声。' },
@@ -24,6 +32,26 @@ export function clampVolume(value: number) {
 }
 export function volumeToGain(value: number, headroom = 1) {
   return (clampVolume(value) / 100) ** 2 * headroom;
+}
+// 总音量不再对已衰减的单轨信号重复使用平方曲线。
+export function masterVolumeToGain(value: number) {
+  return clampVolume(value) / 100;
+}
+// 仅实际发声且启用的音轨占用预算，独立校准也纳入总增益上限。
+export function mixTrackGains(mix: AudioMix, active: ReadonlySet<TrackId>) {
+  const gains = new Map<TrackId, number>();
+  let total = 0;
+  for (const id of TRACK_IDS) {
+    if (!active.has(id) || !mix[id].enabled) continue;
+    const track = TRACKS[id];
+    const trim = 'playbackTrim' in track ? track.playbackTrim : 1;
+    const gain = volumeToGain(mix[id].volume, TRACK_GAIN_LIMIT * trim);
+    gains.set(id, gain);
+    total += gain;
+  }
+  const scale = total > MIX_GAIN_BUDGET ? MIX_GAIN_BUDGET / total : 1;
+  for (const [id, gain] of gains) gains.set(id, gain * scale);
+  return gains;
 }
 const legacyTrackIds = new Set<TrackId>(['rain', 'ocean', 'wind']);
 export function copyMix(mix: Partial<AudioMix>): AudioMix {

@@ -1,5 +1,3 @@
-import { volumeToGain } from '../../domain/audio';
-import { TRACK_GAIN_LIMIT, TRACKS } from '../../types/audio';
 import type { TrackId, TrackLoadStatus } from '../../types/audio';
 import { GainEnvelope } from './GainEnvelope';
 
@@ -98,12 +96,15 @@ export class AudioTrack {
     this.decoding = false;
     if (this.loadStatus === 'loading') this.loadStatus = this.buffer ? 'ready' : 'idle';
   }
-  setVolume(volume: number) {
-    const track = TRACKS[this.id];
-    const trim = 'playbackTrim' in track ? track.playbackTrim : 1;
-    this.envelope.rampTo(volumeToGain(volume, TRACK_GAIN_LIMIT * trim));
+  setMixGain(gain: number, at: number) {
+    // 重新选中正在淡出的轨道时，取消旧的释放回调。
+    if (this.cleanup) {
+      clearTimeout(this.cleanup);
+      this.cleanup = null;
+    }
+    this.envelope.rampTo(gain, 0.18, at);
   }
-  start(volume: number) {
+  start() {
     if (this.cleanup) {
       clearTimeout(this.cleanup);
       this.cleanup = null;
@@ -127,12 +128,15 @@ export class AudioTrack {
       this.startedAt = this.context.currentTime;
       this.source = source;
     }
-    this.setVolume(volume);
   }
-  fadeOff() {
+  fadeOff(at: number) {
     this.cancelLoad();
+    if (!this.source) {
+      this.releaseVoice(true);
+      return;
+    }
     if (this.cleanup) clearTimeout(this.cleanup);
-    this.envelope.rampTo(0, 0.18);
+    this.envelope.rampTo(0, 0.18, at);
     this.cleanup = setTimeout(() => {
       this.cleanup = null;
       this.releaseVoice(true);

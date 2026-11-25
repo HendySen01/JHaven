@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioEngine } from './AudioEngine';
 import { AudioTimer } from './AudioTimer';
 import { GainEnvelope } from './GainEnvelope';
-import { BUILTIN_PRESETS, copyMix, defaultAudio, volumeToGain } from '../../domain/audio';
+import {
+  BUILTIN_PRESETS,
+  copyMix,
+  defaultAudio,
+  masterVolumeToGain,
+  mixTrackGains,
+  singleTrackMix,
+  volumeToGain,
+} from '../../domain/audio';
+import { MIX_GAIN_BUDGET, TRACK_IDS, type TrackId } from '../../types/audio';
 
 // 受控 Web Audio Mock 验证控制流与节点生命周期，不能代表真实浏览器音频渲染。
 function createContext(now: () => number) {
@@ -100,6 +109,27 @@ describe('音量与单调计时', () => {
   ])('音量 %s 转为受限增益', (input, expected) => {
     expect(volumeToGain(input)).toBe(expected);
   });
+  it('总音量线性且单轨不受声音库数量影响', () => {
+    const mix = singleTrackMix('rain', 65);
+    const gains = mixTrackGains(mix, new Set(['rain']));
+    expect(gains.get('rain')).toBeCloseTo(0.12675);
+    expect(masterVolumeToGain(45)).toBe(0.45);
+    expect(masterVolumeToGain(0)).toBe(0);
+    expect(masterVolumeToGain(Infinity)).toBe(0);
+    expect(gains.get('rain')! * masterVolumeToGain(45)).toBeCloseTo(0.0570375);
+    expect(mixTrackGains(singleTrackMix('fan', 100), new Set(['fan'])).get('fan')).toBeCloseTo(
+      0.51,
+    );
+  });
+  it('所有轨满音量时包含校准系数并共享安全总增益，未加载轨不占预算', () => {
+    const mix = copyMix({});
+    for (const id of TRACK_IDS) mix[id] = { enabled: true, volume: 100 };
+    const full = mixTrackGains(mix, new Set(TRACK_IDS));
+    expect([...full.values()].reduce((sum, value) => sum + value, 0)).toBeCloseTo(MIX_GAIN_BUDGET);
+    expect(full.get('fan')! / full.get('rain')!).toBeCloseTo(1.7);
+    const partial = mixTrackGains(mix, new Set(['rain']));
+    expect([...partial]).toEqual([['rain', 0.3]]);
+  });
   it('定时按实际经过时间计算，暂停与取消不累积回调误差', () => {
     const timer = new AudioTimer(() => now);
     timer.configure(120);
@@ -136,6 +166,41 @@ describe('音量与单调计时', () => {
 });
 
 describe('引擎状态、并发和资源', () => {
+  it('动态混音切换、淡出与快速反向切换共用包络时钟', async () => {
+    const { engine, fake } = setup();
+    const mix = copyMix({});
+    for (const id of TRACK_IDS) mix[id] = { enabled: true, volume: 100 };
+    engine.applyMix(mix);
+    await engine.play();
+    now = 1000;
+    const trackGains = fake.gains.slice(2).map((node) => node.gain);
+    const gainFor = (id: TrackId) => trackGains[TRACK_IDS.indexOf(id)]!;
+    const target = (gain: (typeof trackGains)[number]) =>
+      Number(gain.linearRampToValueAtTime.mock.lastCall?.[0] ?? 0);
+    const total = () => trackGains.reduce((sum, gain) => sum + target(gain), 0);
+    expect(total()).toBeCloseTo(MIX_GAIN_BUDGET);
+
+    engine.applyMix(singleTrackMix('rain', 100));
+    await engine.play();
+    expect(target(gainFor('rain'))).toBeCloseTo(0.3);
+    expect(total()).toBeCloseTo(0.3);
+    for (const gain of trackGains)
+      expect(gain.linearRampToValueAtTime.mock.lastCall?.[1]).toBeCloseTo(1.18);
+
+    // 在旧轨尚未释放、包络尚未结束时恢复全部音轨。
+    now = 1090;
+    engine.applyMix(mix);
+    await engine.play();
+    expect(total()).toBeCloseTo(MIX_GAIN_BUDGET);
+    const heldTotal = trackGains.reduce(
+      (sum, gain) => sum + Number(gain.setValueAtTime.mock.lastCall?.[0] ?? 0),
+      0,
+    );
+    expect(heldTotal).toBeCloseTo((MIX_GAIN_BUDGET + 0.3) / 2);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(fake.sources).toHaveLength(TRACK_IDS.length);
+    expect(TRACK_IDS.every((id) => engine.snapshot().tracks[id].active)).toBe(true);
+  });
   it('定时与渐弱边界校验不破坏已有定时', async () => {
     const { engine } = setup();
     await engine.play();
