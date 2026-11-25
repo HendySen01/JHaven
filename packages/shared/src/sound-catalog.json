@@ -42,5 +42,11 @@
     "english": "Feet in Leaves",
     "category": "texture",
     "presetOptional": true
+  },
+  "crispy-squishy": {
+    "name": "脆皮捏捏",
+    "english": "Crispy Squishy",
+    "category": "texture",
+    "presetOptional": true
   }
 }

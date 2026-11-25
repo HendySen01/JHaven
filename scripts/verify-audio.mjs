@@ -7,7 +7,13 @@ const catalog = JSON.parse(
 );
 const manifest = JSON.parse(await readFile(new URL('manifest.json', base), 'utf8'));
 const ids = Object.keys(catalog);
-const maintainerApproved = new Set(['crunchy-chew', 'mouth-asmr', 'lego-rustle', 'leaf-steps']);
+const maintainerApproved = new Set([
+  'crunchy-chew',
+  'mouth-asmr',
+  'lego-rustle',
+  'leaf-steps',
+  'crispy-squishy',
+]);
 const approvedOriginals = new Map([
   ['soft-chew', 'https://freesound.org/people/89o_dev/sounds/680180/'],
   ['fan', 'https://freesound.org/people/TimBahrij/sounds/191580/'],

@@ -133,7 +133,7 @@ test('声音库筛选、收藏、单独试听、默认收声选项及静音', as
 test('当前目录的所有 WAV 在同一原生音频图解码和混合', async ({ page }) => {
   await page.goto('/relax');
   const player = page.locator('#ambient-player');
-  const count = 16;
+  const count = 17;
   const tracks = player.getByRole('switch');
   await expect(tracks).toHaveCount(count);
   const switches = await tracks.all();
@@ -159,7 +159,7 @@ test('当前目录的所有 WAV 在同一原生音频图解码和混合', async 
   await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
 });
 
-test('四条公开实录在生产预览可搜、可试听并保留收藏与音量', async ({ page }) => {
+test('五条公开实录在生产预览可搜、可试听并保留收藏与音量', async ({ page }) => {
   await page.goto('/relax');
   const search = page.getByRole('searchbox', { name: '搜索声音' });
   await page.getByLabel('声音分类').selectOption('texture');
@@ -168,6 +168,7 @@ test('四条公开实录在生产预览可搜、可试听并保留收藏与音�
     ['轻柔口腔 ASMR', 'mouth-asmr'],
     ['清脆积木翻动', 'lego-rustle'],
     ['落叶脚步声', 'leaf-steps'],
+    ['脆皮捏捏', 'crispy-squishy'],
   ];
   for (const [name, id] of tracks) {
     await search.fill(name!);
@@ -180,12 +181,17 @@ test('四条公开实录在生产预览可搜、可试听并保留收藏与音�
     await page.getByRole('button', { name: '停止试听' + name }).click();
     await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
   }
+  const crispy = page.getByRole('slider', { name: '脆皮捏捏音量' });
+  await crispy.fill('37');
+  await page.getByRole('button', { name: '收藏脆皮捏捏' }).click();
+  await search.fill('落叶脚步声');
   const leaf = page.getByRole('slider', { name: '落叶脚步声音量' });
   await leaf.fill('57');
   await page.getByRole('button', { name: '收藏落叶脚步声' }).click();
   await page.reload();
   await page.getByLabel('声音分类').selectOption('favorites');
   await expect(leaf).toHaveValue('57');
+  await expect(crispy).toHaveValue('37');
 });
 
 test('返回详情保留自定义混音，损坏或受限存储可恢复', async ({ page }) => {

@@ -1,5 +1,11 @@
 # 音频素材清单
 
+## 脆皮捏捏真实录音（2026-11-25）
+
+新增 `crispy-squishy`（脆皮捏捏），保留 `gentle-crinkle`（轻脆碎响（合成））。维护者确认原件可公开分发，未提供作者或具体许可证名称。原件 `artifacts/user-audio/脆皮捏捏.mp3` 为 48 kHz 立体声 MP3，109.272 秒。选取 61–96 秒片段，经 1 秒循环交叉淡化、去直流、RMS 调整、短时动态保护和软限峰，导出 34 秒 32 kHz 16 位单声道 PCM WAV。原件及导出哈希见静态清单。
+
+新轨归入近距离细响，`presetOptional` 保持旧预设的兼容性。当前公开音轨总数为 17。发布文件由 FFmpeg 解码及重采样后按现有处理算法导出；需要从原件重做时可用 `node scripts/prepare-user-audio.mjs --crispy-only`，浏览器解码可能产生不同采样值，须重新运行 `npm run audio:verify` 并试听。
+
 ## 六条正式接入的录音（2026-11-20）
 
 原始文件保留在忽略提交的 `artifacts/user-audio/`。导出均为 32 kHz 16 位单声道 PCM WAV。两条 CC0 替换轨使用原来的 ID 和公开 URL，旧合成文件另存于 `artifacts/user-audio-rendered/`。Sprint 9.3 维护者明确确认另外四条可公开分发。公开清单记录维护者确认，作者、具体许可证名称及授权文件未提供。各条的源与导出 SHA-256 已登记，原件与本地优化备份保留。
@@ -13,7 +19,7 @@
 | `lego-rustle`  | looking-through-lego-box-sound.mp3，48 kHz 立体声 MP3                     | 21.024 / 17.1 秒  | 维护者确认可公开分发 |
 | `leaf-steps`   | Feet in leaves.mp3，44.1 kHz 单声道 MP3                                   | 63.660 / 49.1 秒  | 维护者确认可公开分发 |
 
-两条已知来源分别为 [eating.wav](https://freesound.org/people/89o_dev/sounds/680180/) 和 [风扇实录](https://freesound.org/people/TimBahrij/sounds/191580/)。未从网络重新下载音频。Crispy Squishy 仍待真正外壳碎裂录音，`gentle-crinkle` 继续标为合成。
+两条已知来源分别为 [eating.wav](https://freesound.org/people/89o_dev/sounds/680180/) 和 [风扇实录](https://freesound.org/people/TimBahrij/sounds/191580/)。未从网络重新下载音频。当时 Crispy Squishy 仍待真正外壳碎裂录音；现已新增独立实录，`gentle-crinkle` 继续标为合成。
 
 四条 WAV 现在从 apps/web/public/audio 随生产构建打包，使用原 ID、原导出及原 URL，可从「近距离细响」分类、搜索与收藏入口使用。旧预设缺少这些轨道时默认关闭。需要重做时执行 node scripts/prepare-user-audio.mjs，可设置 PLAYWRIGHT_CHANNEL=chrome，脚本将核对源 SHA-256 后更新公开文件、清单与署名。
 

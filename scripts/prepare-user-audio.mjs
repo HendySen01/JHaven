@@ -32,6 +32,7 @@ const files = [
   ['mouth-asmr', '轻柔口腔 ASMR', 'wet-mouth-sounds-asmr.mp3', 13, 53, 1, -25],
   ['lego-rustle', '清脆积木翻动', 'looking-through-lego-box-sound.mp3', 1.05, 18.7, 0.55, -24],
   ['leaf-steps', '落叶脚步声', 'Feet in leaves.mp3', 1, 51, 0.9, -24],
+  ['crispy-squishy', '脆皮捏捏', '脆皮捏捏.mp3', 61, 96, 1, -22],
 ];
 const sha = (data) => createHash('sha256').update(data).digest('hex');
 // 已核对来源的两个公开原件。避免同名文件误进公开构建。
@@ -46,9 +47,14 @@ const browser = await chromium.launch(
 );
 const processed = [];
 const fanOnly = process.argv.includes('--fan-only');
+const crispyOnly = process.argv.includes('--crispy-only');
 try {
   const page = await browser.newPage();
-  const selected = fanOnly ? files.filter(([id]) => id === 'fan') : files;
+  const selected = crispyOnly
+    ? files.filter(([id]) => id === 'crispy-squishy')
+    : fanOnly
+      ? files.filter(([id]) => id === 'fan')
+      : files;
   for (const [id, name, filename, start, end, fade, rms, author, freesound] of selected) {
     const raw = await readFile(new URL(filename, original));
     const sourceSha256 = sha(raw);
@@ -170,7 +176,7 @@ try {
       seconds: result.samples.length / rate,
       bytes: wave.length,
       sha256: sha(wave),
-      verifiedOn: '2026-11-20',
+      verifiedOn: id === 'crispy-squishy' ? '2026-11-25' : '2026-11-20',
     };
     processed.push({ wave, data });
   }

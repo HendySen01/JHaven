@@ -308,5 +308,27 @@
     "sha256": "14de0164c1c046a9b817f126e4bf2065cb843c13d2e94b3cf9c9cfedd4c0f93f",
     "verifiedOn": "2026-11-20",
     "distribution": "maintainer-confirmed"
+  },
+  {
+    "id": "crispy-squishy",
+    "name": "脆皮捏捏",
+    "author": null,
+    "source": "脆皮捏捏.mp3",
+    "sourceFile": "脆皮捏捏.mp3",
+    "sourceSha256": "ce7a814aadad382cc9e85ae6f34a79f0a2d7e2fafb803ce44aa6ebfd92012e70",
+    "sourceSeconds": 109.272,
+    "sourceChannels": 2,
+    "inputRmsDb": -36.0,
+    "changes": "61–96 秒连续片段；1 秒交叉淡化、去直流、RMS 调整、短时动态保护和软限峰。",
+    "license": null,
+    "distribution": "maintainer-confirmed",
+    "licenseUrl": null,
+    "file": "crispy-squishy.wav",
+    "format": "PCM WAV 16-bit mono",
+    "sampleRate": 32000,
+    "seconds": 34.0,
+    "bytes": 2176044,
+    "sha256": "c6f7b8e66e2a9f389641bc0d3db9982a0cebea5aa24c768cc16f87516e02336f",
+    "verifiedOn": "2026-11-25"
   }
 ]
