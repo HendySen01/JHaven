@@ -1,5 +1,11 @@
 # 数据库
 
+## 聊天历史与 API
+
+007 新增 `chat_conversations`、`chat_messages` 和 `chat_history_settings`。会话主键绑定账户和会话 UUID，消息通过复合外键归属会话，删除会话自动级联消息。账户级事务锁串行化设置与写入，保存使用版本号保护并发内容，清空后用代次阻止旧请求恢复记录。最多 200 个会话、单会话 500 轮且单次 JSON 快照不超过 2 MiB。
+
+`/api/space/chat` 提供 GET 列表和 DELETE 全清，`/search` 以 POST 正文提交搜索词；`/:id` 使用 GET、PUT、PATCH、DELETE 分别读取、保存、改名、删除；`/settings` 使用 GET、PUT 读取与修改自动保存。使用 Cookie 会话和账户标识校验，写入与搜索校验 Origin 及 JSON 类型。历史响应禁用缓存，搜索词和消息不写日志。
+
 账户数据包括声音预设、私人睡眠日记、默认播放设置和自愿保存的放松记录。各类记录或设置可独立删除，账户级删除仍待开发。
 
 ## 约定
@@ -33,9 +39,9 @@
 
 ## 迁移与访问
 
-运行 `npm run db:migrate` 会读取 `apps/server/migrations-postgres/` 的 001–006。执行器使用独立的 `MIGRATION_DATABASE_URL`，在同一事务加 PostgreSQL advisory xact 锁，核对已应用版本是完整前缀，并以 LF 计算 SHA-256。六个迁移和 `jhaven.schema_migrations` 合计七张表。未应用迁移的 DDL 与记录一起提交，失败后整体回滚。运行时不自动迁移。
+运行 `npm run db:migrate` 会读取 `apps/server/migrations-postgres/` 的 001–007。执行器使用独立的 `MIGRATION_DATABASE_URL`，在同一事务加 PostgreSQL advisory xact 锁，核对已应用版本是完整前缀，并以 LF 计算 SHA-256。七个迁移和 `jhaven.schema_migrations` 合计十张表。未应用迁移的 DDL 与记录一起提交，失败后整体回滚。运行时不自动迁移。
 
-迁移角色拥有 `jhaven` schema 和其中对象。平台管理员可先创建 schema 并指定迁移角色为所有者。由对象所有者在六份迁移完成后显式执行 [运行权限 SQL](../apps/server/migrations-postgres/runtime-grants.sql)。`jhaven_app` 只获得 schema USAGE、业务所需读写及用户 ID 序列 USAGE，无 DDL、授权或迁移记录访问权限。保持 `jhaven` 不在 Supabase Data API 的 Exposed schemas 中，Express 从 Cookie 解析用户身份后才访问私人行。
+迁移角色拥有 `jhaven` schema 和其中对象。平台管理员可先创建 schema 并指定迁移角色为所有者。由对象所有者在所有迁移完成后显式执行 [运行权限 SQL](../apps/server/migrations-postgres/runtime-grants.sql)。`jhaven_app` 只获得 schema USAGE、业务所需读写及用户 ID 序列 USAGE，无 DDL、授权或迁移记录访问权限。保持 `jhaven` 不在 Supabase Data API 的 Exposed schemas 中，Express 从 Cookie 解析用户身份后才访问私人行。
 
 采用参数化 SQL，表名/排序字段只能来自服务端白名单。所有读、改、删同时限定 `id` 与已认证 `user_id`，不信任客户端传入的所有者 ID；日记列表按用户日期范围查询，最多 366 天，每天最多一条。测试至少覆盖用户 A 无法读改删用户 B 的每类私人资源。
 

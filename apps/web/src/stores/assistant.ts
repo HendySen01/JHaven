@@ -1,18 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
-import type { AssistantEvent, AssistantMode, AssistantProviderId } from '@jhaven/shared';
+import type { AssistantMode, AssistantProviderId, ChatTurn } from '@jhaven/shared';
 import { useAuthStore } from './auth';
 
-type Reply = Extract<AssistantEvent, { type: 'done' }>;
-type Turn = {
+type Turn = Omit<ChatTurn, 'source'> & {
   id: number;
-  question: string;
-  sentOn: string;
-  text: string;
-  source?: 'ai' | 'local' | 'fallback' | 'error';
-  result?: Reply;
-  recipient?: string;
-  note?: string;
+  source?: ChatTurn['source'];
 };
 export type AssistantBlockScope = AssistantMode | AssistantProviderId;
 export type AssistantBlock = { code: string; until?: number; reservation?: number };
@@ -21,6 +14,7 @@ export const useAssistantStore = defineStore('assistant', () => {
   const auth = useAuthStore();
   const turns = ref<Turn[]>([]);
   const draft = ref('');
+  const saved = ref<{ id: string; revision: number; lastTurnId?: number | undefined }>();
   const blocks = ref<Partial<Record<AssistantBlockScope, AssistantBlock>>>({});
   let nextId = 0;
 
@@ -40,6 +34,12 @@ export const useAssistantStore = defineStore('assistant', () => {
   function clear() {
     turns.value = [];
     draft.value = '';
+    saved.value = undefined;
+  }
+  function open(id: string, revision: number, history: ChatTurn[]) {
+    clear();
+    turns.value = history.map((turn) => ({ ...turn, id: ++nextId }));
+    saved.value = { id, revision, lastTurnId: turns.value.at(-1)?.id };
   }
 
   watch(
@@ -50,5 +50,5 @@ export const useAssistantStore = defineStore('assistant', () => {
     },
     { flush: 'sync' },
   );
-  return { turns, draft, blocks, addTurn, clear };
+  return { turns, draft, saved, blocks, addTurn, clear, open };
 });

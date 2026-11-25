@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { test } from './isolated-client.js';
 import { removeUnsupportedSafariApis } from './safari-api-probe.js';
 
 test('访客可用声音库，账户页需由服务端确认会话', async ({ page }) => {

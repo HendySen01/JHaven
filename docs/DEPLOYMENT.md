@@ -29,6 +29,12 @@ npm run preview
 
 ## Vercel 单项目
 
+### 聊天历史发布顺序
+
+先在隔离环境应用 PostgreSQL 007 并验收。正式执行须另行授权。备份目标数据库，核验实例及既有 001–006 校验和，再以迁移角色运行 `npm run db:migrate`，随后由表所有者执行 `runtime-grants.sql` 的新增授权。007 只增建三张表和索引。原服务版本继续兼容新增表。
+
+迁移和授权核验后再发布 API 与前端。使用测试账户验证历史、跨设备登录、清空确认及访问隔离，并复测 iOS 15.6 兼容性。如果需要回滚版本，保留历史表和记录，直接切回上一版应用；无需删除表。备份中的聊天内容按数据库备份保留周期清理。
+
 在导入页将 Framework Preset 设为 **Services**，Root Directory 保持仓库根目录，Node.js 选择 **24.x**。构建和输出沿用仓库根的 `vercel.json`，保持 npm workspace 的根锁文件和 `packages/shared` 可用。Vite 服务构建 `apps/web/dist`。Express 服务编译共享包，并以 `apps/server/app.ts` 作为 ESM 入口导出应用实例。 [Vercel Services 指南](https://vercel.com/kb/guide/vercel-services)
 
 `/api` 与 `/api/*` 优先转给 Express，保留原路径。浏览器继续用相对路径访问 API，Cookie 与 Origin 校验保持同源。其余路径进入 Vite 服务，先匹配真实文件，页面路径回退到 `index.html`，缺失的音频或资源返回 404。静态前端无需内部 binding、额外 API 地址或 CORS 配置。 [服务路由](https://vercel.com/docs/services/routing)

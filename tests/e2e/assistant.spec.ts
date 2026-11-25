@@ -424,7 +424,7 @@ test('发送只产生一个 AI 请求，等待期间改为本地会忽略迟到�
   await expect(page.getByLabel('今晚想聊什么')).toHaveValue('有呀有呀');
   expect(modes).toEqual(['ai']);
   await page.getByRole('button', { name: '发送', exact: true }).click();
-  await expect(page.locator('.assistant-reply-mode')).toHaveText('本地知识');
+  await expect(page.locator('.assistant-reply-mode').last()).toHaveText('本地知识');
   finish();
   await expect(page.getByText('迟到的模型答复')).toHaveCount(0);
   await page.getByLabel('今晚想聊什么').fill('呃呃呃');

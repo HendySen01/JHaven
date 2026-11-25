@@ -9,6 +9,8 @@ const messages: Record<string, string> = {
   UNAUTHENTICATED: '会话已结束，请重新登录。',
   DATABASE_UNAVAILABLE: '个人空间暂不可用，请稍后重试。',
   RATE_LIMITED: '操作过于频繁，请稍后重试。',
+  AUTO_SAVE_DISABLED: '自动保存已在其他设备关闭。',
+  PAYLOAD_TOO_LARGE: '对话过长，无法保存。当前内容仍保留在页面。',
 };
 export class SpaceError extends Error {
   constructor(
@@ -44,7 +46,7 @@ export async function spaceRequest(
         const code = result?.error?.code;
         throw new SpaceError(
           code,
-          code === 'ENTRY_CONFLICT'
+          code === 'ENTRY_CONFLICT' || code === 'HISTORY_FULL'
             ? result.error.message
             : Object.hasOwn(messages, code)
               ? messages[code]!

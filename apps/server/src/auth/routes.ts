@@ -6,6 +6,7 @@ import { AppError } from '../middleware/error-handler.js';
 import { sessionCookieName, sessionToken } from './session-cookie.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { createSpaceRouter } from '../space/routes.js';
+import { createChatHistoryRouter } from '../space/chat-history.js';
 import { createRelaxationRouter } from '../space/relaxation.js';
 import {
   accountFrom,
@@ -122,6 +123,12 @@ export function createAuthRouter({
     response.clearCookie(cookieName, cookie);
     response.status(204).end();
   });
+  router.use(
+    '/space/chat',
+    requireSession,
+    requireAccountScope,
+    createChatHistoryRouter(database, requireSameOrigin, limitRequests(120)),
+  );
   router.use(
     '/space/relaxation',
     requireSession,

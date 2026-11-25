@@ -212,3 +212,40 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+.chat-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.chat-history-controls,
+.chat-history-list {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+}
+.chat-history-controls label {
+  min-width: 0;
+}
+.chat-history-controls input:not([type='checkbox']),
+.chat-history-controls select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--page);
+  color: var(--text);
+  font: inherit;
+}
+.chat-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.chat-history-list li {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  overflow-wrap: anywhere;
+}

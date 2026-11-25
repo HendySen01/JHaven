@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { test } from './isolated-client.js';
 import { installAudioProbe, readAudioProbe } from './audio-probe.js';
 import { randomBytes } from 'node:crypto';
 

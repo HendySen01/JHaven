@@ -3,6 +3,7 @@ export * from './auth.js';
 export * from './space.js';
 export * from './relaxation.js';
 export * from './assistant.js';
+export * from './chat-history.js';
 
 export const APP_INFO = {
   name: 'JHaven',

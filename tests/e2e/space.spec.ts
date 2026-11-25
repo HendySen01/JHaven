@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { test } from './isolated-client.js';
 import { removeUnsupportedSafariApis } from './safari-api-probe.js';
 
 test('账户收藏导入冲突、默认设置、跨午夜日记与真实趋势', async ({

@@ -36,7 +36,12 @@ export function createApp({
     response.setHeader('Cache-Control', 'no-store');
     next();
   });
-  app.use(express.json({ limit: '16kb' }));
+  const standardJson = express.json({ limit: '16kb' });
+  app.use((request, response, next) => {
+    // 历史路由先检查会话和来源，再读取受限大小的聊天快照。
+    if (/^\/api\/space\/chat(?:\/|$)/i.test(request.path)) return next();
+    standardJson(request, response, next);
+  });
 
   app.get('/api/health', (request, response) => {
     if (!z.strictObject({}).safeParse(request.query).success) {

@@ -28,6 +28,8 @@ import {
   readAssistant,
 } from '../lib/assistant';
 import { withRequestDeadline } from '../lib/requestDeadline';
+import { useChatHistory } from '../composables/useChatHistory';
+import ChatHistoryPanel from '../components/ChatHistoryPanel.vue';
 
 const router = useRouter();
 const evening = useEveningStore();
@@ -37,6 +39,9 @@ const { turns, draft, blocks } = storeToRefs(conversation);
 const composing = ref(false);
 let compositionEndedAt = -Infinity;
 const active = ref(false);
+const history = useChatHistory();
+const historyOpen = ref(false);
+const { busy: historyBusy, error: historyError, notice: historyNotice } = history;
 const assistantMode = ref<AssistantMode>('local');
 const consent = computed({
   get: () => assistantMode.value === 'ai',
@@ -206,7 +211,10 @@ function stop(note = '已停止生成。') {
   request.abort();
   request = undefined;
   active.value = false;
-  if (last.value) last.value.note = note;
+  if (last.value) {
+    last.value.note = note;
+    last.value.source = 'error';
+  }
 }
 function restoreComposerFocus() {
   if (document.activeElement === stopButton.value) textarea.value?.focus({ preventScroll: true });
@@ -217,7 +225,17 @@ function reset() {
   consent.value = false;
   following.value = true;
 }
-watch(() => auth.user?.id, reset, { flush: 'sync' });
+watch(
+  () => auth.user?.id,
+  () => {
+    historyOpen.value = false;
+    reset();
+  },
+  { flush: 'sync' },
+);
+watch(active, (generating, wasGenerating) => {
+  if (!generating && wasGenerating && turns.value.length) void history.save(true);
+});
 onBeforeUnmount(() => {
   statusController.abort();
   stop();
@@ -468,9 +486,25 @@ function confirm() {
   void router.push(action.kind === 'practice' ? '/practice/' + action.id : '/relax/' + action.id);
 }
 function clearChat() {
+  if (historyBusy.value) return;
   reset();
   conversation.clear();
   textarea.value?.focus();
+}
+function canLeaveChat() {
+  const unsaved = draft.value.trim() || turns.value.at(-1)?.id !== conversation.saved?.lastTurnId;
+  return !unsaved || window.confirm('当前对话还有未保存的内容。仍要离开这段对话吗？');
+}
+function newChat() {
+  if (canLeaveChat()) clearChat();
+}
+async function openChat(id: string) {
+  if (!canLeaveChat()) return;
+  const saved = await history.open(id);
+  if (!saved || active.value) return;
+  reset();
+  conversation.open(saved.id, saved.revision, saved.turns);
+  historyOpen.value = false;
 }
 const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困，推荐个练习？'];
 </script>
@@ -486,6 +520,43 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
     </header>
     <section class="assistant-panel" aria-labelledby="chat-title">
       <h2 id="chat-title" class="assistant-sr">聊天</h2>
+      <div class="chat-history-actions">
+        <button
+          class="button button-secondary"
+          type="button"
+          :disabled="active || historyBusy"
+          @click="historyOpen = true"
+        >
+          历史记录
+        </button>
+        <button
+          class="button button-secondary"
+          type="button"
+          :disabled="active || historyBusy"
+          @click="newChat"
+        >
+          新建对话
+        </button>
+        <button
+          class="button button-secondary"
+          type="button"
+          :disabled="active || historyBusy || !turns.length"
+          @click="auth.signedIn ? history.save() : (historyOpen = true)"
+        >
+          保存对话
+        </button>
+      </div>
+      <p v-if="historyNotice" class="assistant-muted" role="status">{{ historyNotice }}</p>
+      <p v-if="historyError && !historyOpen" class="assistant-muted" role="alert">
+        {{ historyError }}
+      </p>
+      <ChatHistoryPanel
+        v-if="historyOpen"
+        :signed-in="auth.signedIn"
+        :history="history"
+        @close="historyOpen = false"
+        @open="openChat"
+      />
       <div class="assistant-mode">
         <strong role="status">{{
           configured && consent ? providerName : checking ? '助手正在连接…' : '本地知识模式'
@@ -511,7 +582,10 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
         <p>
           消息通过 JHaven 服务处理。助手不会读取账户里的睡眠日记，请勿在输入框粘贴私人内容或凭据。
         </p>
-        <p>聊天只留在当前标签页内存。刷新、清空对话或切换账号后清除。</p>
+        <p>
+          未保存的聊天只留在当前标签页。登录后手动保存，或主动开启默认关闭的自动保存，才会将对话存入
+          JHaven 账户数据库。可在历史记录中单独删除或清空全部。关闭自动保存会保留既有记录。
+        </p>
         <p v-if="providerName">
           开启 AI 模式后，本次输入和最多六轮同一供应商和模型已完成的 AI
           对话（含各条发送日期）可能发送给
@@ -728,6 +802,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
             v-if="turns.length"
             class="button button-secondary"
             type="button"
+            :disabled="historyBusy"
             @click="clearChat"
           >
             清空对话

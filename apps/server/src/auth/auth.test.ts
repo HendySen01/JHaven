@@ -114,9 +114,12 @@ integration('真实 PostgreSQL 账户集成', () => {
     }
   });
 
-  it('六份迁移可重复核验，受限角色仅能访问业务表并使用 TLS', async () => {
+  it('七份迁移可重复核验，受限角色仅能访问业务表并使用 TLS', async () => {
     const tables = [
       'auth_sessions',
+      'chat_conversations',
+      'chat_history_settings',
+      'chat_messages',
       'relaxation_sessions',
       'schema_migrations',
       'sleep_diaries',
@@ -156,7 +159,7 @@ integration('真实 PostgreSQL 账户集成', () => {
     );
     const history = 'SELECT name, checksum, applied_at FROM jhaven.schema_migrations ORDER BY name';
     const before = (await admin.query(history)).rows;
-    expect(before).toHaveLength(6);
+    expect(before).toHaveLength(7);
     await migrate(admin);
     expect((await admin.query(history)).rows).toEqual(before);
     expect(
@@ -236,6 +239,125 @@ integration('真实 PostgreSQL 账户集成', () => {
     await chat(cookieFrom(second)).expect(200);
     await chat(cookieFrom(first), 'local').expect(200);
   });
+  it('聊天历史校验来源、并发快照、自动保存授权、搜索和双账户隔离', async () => {
+    const api = request(app);
+    const first = await login(await register(api)).expect(200);
+    const second = await login(await register(api)).expect(200);
+    const headers = (account: typeof first) => ({
+      Cookie: cookieFrom(account),
+      'X-JHaven-Account': account.body.id,
+      Origin: origin,
+    });
+    const owner = headers(first);
+    const stranger = headers(second);
+    const root = '/api/space/chat';
+    const url = root + '/' + randomUUID();
+    const done = { type: 'done', actions: [], sources: [] };
+    const turns = [
+      {
+        question: '今晚说点什么',
+        sentOn: '2026-11-25',
+        text: '窗边的月亮',
+        source: 'ai',
+        recipient: 'DeepSeek · deepseek-flash',
+        result: done,
+      },
+      {
+        question: '换成本地知识',
+        sentOn: '2026-11-25',
+        text: '可以先听雨声',
+        source: 'fallback',
+        result: done,
+      },
+      {
+        question: '给我留一条记录',
+        sentOn: '2026-11-25',
+        text: '',
+        source: 'error',
+        note: '已停止生成。',
+      },
+    ];
+    const initial = { revision: 0, epoch: 0, automatic: false, turns };
+    await api.get(root).expect(401);
+    await api
+      .get(root + '/settings')
+      .set(owner)
+      .expect(200, { autoSave: false, epoch: 0 });
+    await api.put(url).set(owner).set('Origin', 'https://other.example').send(initial).expect(403);
+    await api
+      .put(url)
+      .set(owner)
+      .send({ ...initial, automatic: true })
+      .expect(409);
+    const created = await api.put(url).set(owner).send(initial).expect(200);
+    expect(created.body).toMatchObject({
+      revision: 1,
+      title: '今晚说点什么',
+      messageCount: 6,
+      providers: ['deepseek'],
+      turns,
+    });
+    await api.put(url).set(owner).send(initial).expect(200, created.body);
+    await api
+      .post(root + '/search')
+      .set(owner)
+      .send({ filter: 'mixed', search: '窗边' })
+      .expect(200)
+      .expect(({ body }) => expect(body).toHaveLength(1));
+    await api
+      .post(root + '/search')
+      .set(owner)
+      .send({ filter: 'deepseek' })
+      .expect(200)
+      .expect(({ body }) => expect(body).toHaveLength(1));
+    await api
+      .post(root + '/search')
+      .set(stranger)
+      .send({ search: '窗边' })
+      .expect(200, []);
+    await api.get(url).set(stranger).expect(404);
+    await api
+      .put(url)
+      .set(stranger)
+      .send({ ...initial, revision: 1 })
+      .expect(404);
+    await api.patch(url).set(stranger).send({ title: '不应更新' }).expect(404);
+    await api.delete(url).set(stranger).send({}).expect(404);
+    await api.patch(url).set(owner).send({ title: '夜里的话' }).expect(200);
+    await api
+      .put(root + '/settings')
+      .set(owner)
+      .send({ autoSave: true })
+      .expect(200);
+    const changed = { ...initial, revision: 1, automatic: true, turns: turns.slice(0, 2) };
+    await api
+      .put(url)
+      .set(owner)
+      .send(changed)
+      .expect(200)
+      .expect(({ body }) => expect(body).toMatchObject({ revision: 2, title: '夜里的话' }));
+    await api
+      .put(url)
+      .set(owner)
+      .send({ ...initial, revision: 1 })
+      .expect(409);
+    await api
+      .put(root + '/settings')
+      .set(owner)
+      .send({ autoSave: false })
+      .expect(200);
+    await api
+      .put(url)
+      .set(owner)
+      .send({ ...changed, revision: 2 })
+      .expect(409);
+    await api.delete(root).set(stranger).send({}).expect(200);
+    await api.get(url).set(owner).expect(200);
+    await api.delete(root).set(owner).send({}).expect(200, { autoSave: false, epoch: 1 });
+    await api.put(url).set(owner).send(initial).expect(409);
+    await api.get(url).set(owner).expect(404);
+  });
+
   it('练习记录严格校验、按账户隔离、支持重试与删除', async () => {
     const api = request(app);
     const url = '/api/space/relaxation';

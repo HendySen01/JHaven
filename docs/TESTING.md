@@ -1,5 +1,11 @@
 # 测试与验证
 
+## 聊天历史（2026-11-25）
+
+- 隔离 PostgreSQL 应用 007，核对迁移校验和及复合外键约束。API 测试覆盖双账户隔离、来源与内容筛选、幂等保存、旧版本拒绝、自动保存开关和清空代次。
+- 上次全量 Chrome 有 7 项失败。其中 3 项旧助手断言假设页面只有一条来源标签，4 项由测试共享回环 IP 触发登录频率限制。已调整断言和测试客户端隔离，生产限流未改。
+- Chrome 三档生产预览的聊天历史专项均通过。Windows WebKit 聊天历史与兼容性专项以及 Chrome 375 px 开发环境历史专项也通过。
+
 ## iOS 15.6 Safari 兼容性（2026-11-25）
 
 - 对比 Vite 8.3.8 的前端产物。原构建把源码的 `(max-width: 820px)` 压缩成 `(width<=820px)`。指定 Safari/iOS 15.6 的 JS 与 CSS 目标后，产物保留 `max-width`，端到端测试会检查所有 CSS 文件并拒绝宽度范围语法。
@@ -7,7 +13,7 @@
 - `npm run check` 通过 150 项单元与 API 测试、格式、ESLint、TypeScript、生产构建和 16 条音轨校验。 `npm run test:e2e -- --workers=5` 通过 Chrome 三档 144 项，额外检查 320、375、390、768 px 无横向溢出。
 - 使用 `PLAYWRIGHT_COMPAT_BROWSER` 分别执行 Firefox 和 Windows WebKit 全量生产预览，Firefox 48 项通过，WebKit 32 项通过、16 项原生 Web Audio 跳过。以 `PLAYWRIGHT_WEB_DEV=1` 运行移动视口的账户、空间、助手和布局专项，17 项通过、1 项生产产物断点检查按预期跳过。
 - 保留原生 `dialog`、`:has()`、`Array.at` 与 `Object.hasOwn`。WebKit Safari 15.4 已支持。视口单位加传统备用值，未发现页面依赖容器查询。 [WebKit 15.4](https://webkit.org/blog/12445/new-webkit-features-in-safari-15-4/) · [WebKit 16.4](https://webkit.org/blog/13966/webkit-features-in-safari-16-4/)
-- 真机仍需确认 iOS 15.6 普通和无痕窗口在 Wi-Fi 与蜂窝网络上的 HTTPS、账户 Cookie、助手状态和真实流式回复。另需核对安全区、地址栏展开与收起、旋转屏幕、播放和跨午夜日记。当前未联系付费供应商或生产服务。
+- 用户确认上述兼容修复已在正式环境通过 iOS 15.6 真机验收。用户未提供逐项网络、隐私窗口、旋转与音频测试记录。新增聊天历史仍需独立真机验收。
 
 ## Sprint 10.2 PostgreSQL 切换（2026-11-21）
 
