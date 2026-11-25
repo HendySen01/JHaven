@@ -5,7 +5,7 @@
     <p class="page-lead">
       声音可以给房间多一点背景。先从舒服的低音量听起，留意警报和周围重要的声音。
     </p>
-    <section>
+    <section data-page-anchor="sound-evidence-1">
       <h2>自然实录</h2>
       <p>
         自然声音研究报告了一些情绪、压力和烦扰方面的变化。JHaven
@@ -13,14 +13,14 @@
       </p>
       <a href="https://pubmed.ncbi.nlm.nih.gov/33753555/">Buxton 等，2021 年综述</a>
     </section>
-    <section>
+    <section data-page-anchor="sound-evidence-2">
       <h2>稳定背景音</h2>
       <p>
         成人听觉刺激综述的结果不一致，现有证据不足以确认持续播放白噪音或粉红噪音能改善睡眠。风扇声是可选背景音。
       </p>
       <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9163611/">Capezuti 等，2022 年系统综述</a>
     </section>
-    <section>
+    <section data-page-anchor="sound-evidence-3">
       <h2>音乐</h2>
       <p>
         一项综述发现部分成人的主观睡眠质量评分改善，客观睡眠指标仍不确定。具体曲目要独立检查动态与授权。当前声音库没有音乐。
@@ -29,7 +29,7 @@
         >Cochrane，2022 年系统综述</a
       >
     </section>
-    <section>
+    <section data-page-anchor="sound-evidence-4">
       <h2>使用边界</h2>
       <p>
         设备输出因音量设置和硬件而异。可以随时静音或停止，也可以先设定 20

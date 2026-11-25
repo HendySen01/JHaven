@@ -148,7 +148,12 @@ function resetPreferences() {
 </script>
 
 <template>
-  <section class="space-section" aria-labelledby="account-sound-heading">
+  <section
+    class="space-section"
+    aria-labelledby="account-sound-heading"
+    :data-page-recovery-loading="!ready && busy"
+    data-page-anchor="account-sounds"
+  >
     <h2 id="account-sound-heading">我的声音场景</h2>
     <p v-if="error" class="field-error" role="alert">{{ error }}</p>
     <p v-if="message" class="auth-hint" role="status">{{ message }}</p>
@@ -237,7 +242,11 @@ function resetPreferences() {
           </div>
         </form>
       </details>
-      <section class="space-section" aria-labelledby="defaults-heading">
+      <section
+        class="space-section"
+        aria-labelledby="defaults-heading"
+        data-page-anchor="account-defaults"
+      >
         <h2 id="defaults-heading">默认播放设置</h2>
         <p class="auth-hint">登录时，只有播放器空闲才会换成你的默认设置。想听时，再按播放。</p>
         <form class="space-form" @submit.prevent="savePreferences">

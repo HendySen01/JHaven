@@ -145,9 +145,10 @@ test('声音库筛选、收藏、单独试听、默认收声选项及静音', as
 });
 
 test('当前目录的所有 WAV 在同一原生音频图解码和混合', async ({ page }) => {
+  test.setTimeout(90_000);
   await page.goto('/relax');
   const player = page.locator('#ambient-player');
-  const count = 17;
+  const count = 19;
   const tracks = player.getByRole('switch');
   await expect(tracks).toHaveCount(count);
   const switches = await tracks.all();
@@ -173,7 +174,8 @@ test('当前目录的所有 WAV 在同一原生音频图解码和混合', async 
   await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
 });
 
-test('五条公开实录在生产预览可搜、可试听并保留收藏与音量', async ({ page }) => {
+test('七条公开实录在生产预览可搜、可试听并保留收藏与音量', async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto('/relax');
   const search = page.getByRole('searchbox', { name: '搜索声音' });
   await page.getByLabel('声音分类').selectOption('texture');
@@ -183,6 +185,8 @@ test('五条公开实录在生产预览可搜、可试听并保留收藏与音�
     ['清脆积木翻动', 'lego-rustle'],
     ['落叶脚步声', 'leaf-steps'],
     ['脆皮捏捏', 'crispy-squishy'],
+    ['牛排骨-牛肉拌饭吞咽声', 'beef-rice-swallow'],
+    ['火鸡面吞咽声', 'spicy-noodle-swallow'],
   ];
   for (const [name, id] of tracks) {
     await search.fill(name!);
@@ -195,6 +199,7 @@ test('五条公开实录在生产预览可搜、可试听并保留收藏与音�
     await page.getByRole('button', { name: '停止试听' + name }).click();
     await expect.poll(async () => (await readAudioProbe(page)).active).toBe(0);
   }
+  await search.fill('脆皮捏捏');
   const crispy = page.getByRole('slider', { name: '脆皮捏捏音量' });
   await crispy.fill('37');
   await page.getByRole('button', { name: '收藏脆皮捏捏' }).click();
@@ -203,6 +208,8 @@ test('五条公开实录在生产预览可搜、可试听并保留收藏与音�
   await leaf.fill('57');
   await page.getByRole('button', { name: '收藏落叶脚步声' }).click();
   await page.reload();
+  await expect(search).toHaveValue('落叶脚步声');
+  await search.fill('');
   await page.getByLabel('声音分类').selectOption('favorites');
   await expect(leaf).toHaveValue('57');
   await expect(crispy).toHaveValue('37');
@@ -393,4 +400,46 @@ test('加载中停止与挂起/恢复不产生迟到播放', async ({ page }) =>
   await expect
     .poll(() => page.evaluate(() => window.__jhavenAudioProbe.contexts[0]!.state))
     .toBe('closed');
+});
+
+test('刷新保留普通混音会话，需主动恢复，停止后不再提示', async ({ page }) => {
+  await page.goto('/relax');
+  const player = page.locator('#ambient-player');
+  await player.getByRole('slider', { name: '总音量' }).fill('37');
+  await player.getByRole('button', { name: '播放混音', exact: true }).click();
+  await expect(player.locator('.player-status')).toContainText('正在播放');
+  await player.getByRole('combobox', { name: '停止时间' }).selectOption('20');
+  await player.getByRole('button', { name: '应用定时', exact: true }).click();
+  await page.reload();
+  expect((await readAudioProbe(page)).contexts).toBe(0);
+  await expect(player.getByRole('button', { name: '继续上次播放' })).toBeVisible();
+  await player.getByRole('button', { name: '继续上次播放' }).click();
+  await expect(player.locator('.player-status')).toContainText('正在播放');
+  await expect(player.locator('.timer-remaining')).toContainText('剩余');
+  await expect(player.getByRole('slider', { name: '总音量' })).toHaveValue('37');
+  await player.getByRole('button', { name: '停止', exact: true }).click();
+  await expect(player.locator('.player-status')).toContainText('尚未播放');
+  await page.reload();
+  await expect(player.getByRole('button', { name: '继续上次播放' })).toHaveCount(0);
+});
+
+test('恢复前已经到期的会话不提示播放', async ({ page }) => {
+  await page.goto('/relax');
+  const player = page.locator('#ambient-player');
+  await player.getByRole('button', { name: '播放混音', exact: true }).click();
+  await expect(player.locator('.player-status')).toContainText('正在播放');
+  await player.getByRole('combobox', { name: '停止时间' }).selectOption('20');
+  await player.getByRole('button', { name: '应用定时', exact: true }).click();
+  await page.evaluate(() => {
+    const key = 'jhaven.audio.session.v1';
+    const raw = localStorage.getItem(key);
+    if (!raw) throw new Error('没有保存播放会话');
+    const saved = JSON.parse(raw);
+    saved.savedAt = Date.now() - 1200001;
+    saved.deadline = Date.now() - 1;
+    localStorage.setItem(key, JSON.stringify(saved));
+  });
+  await page.reload();
+  expect((await readAudioProbe(page)).contexts).toBe(0);
+  await expect(player.getByRole('button', { name: '继续上次播放' })).toHaveCount(0);
 });

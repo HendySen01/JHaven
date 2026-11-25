@@ -40,7 +40,7 @@ const labels = {
         :disabled="
           status === 'loading' ||
           status === 'stopping' ||
-          (!audio.selectedCount && !audio.auditionId)
+          (!audio.pendingRecovery && !audio.selectedCount && !audio.auditionId)
         "
         @click="audio.play"
       >
@@ -55,15 +55,17 @@ const labels = {
               ? '正在收声'
               : status === 'paused'
                 ? '继续播放'
-                : status === 'error'
-                  ? '重试播放'
-                  : '播放混音'
+                : audio.pendingRecovery
+                  ? '恢复上次混音'
+                  : status === 'error'
+                    ? '重试播放'
+                    : '播放混音'
         }}
       </button>
       <button
         class="button button-secondary"
         type="button"
-        :disabled="status === 'idle'"
+        :disabled="status === 'idle' && !audio.pendingRecovery"
         @click="audio.stop"
       >
         <Square :size="15" aria-hidden="true" />停止

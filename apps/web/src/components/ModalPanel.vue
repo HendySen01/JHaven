@@ -1,19 +1,48 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useId } from 'vue';
+import { onBeforeUnmount, onMounted, ref, useId, nextTick } from 'vue';
+import { readView, writeView, safeOffset } from '../domain/pageRecovery';
 import { X } from '@lucide/vue';
-defineProps<{ title: string; closeLabel?: string; eyebrow?: string }>();
+const props = defineProps<{
+  title: string;
+  closeLabel?: string;
+  eyebrow?: string;
+  rememberScroll?: boolean;
+}>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement>();
 const titleId = useId();
 let opener: HTMLElement | null = null;
 let previousOverflow = '';
+let restoring = false;
+function saveScroll() {
+  if (props.rememberScroll && !restoring && dialog.value)
+    writeView('device:settings-dialog', Math.max(0, dialog.value.scrollTop));
+}
+function saveOnHide() {
+  if (document.visibilityState === 'hidden') saveScroll();
+}
 onMounted(() => {
   opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   previousOverflow = document.body.style.overflow;
   document.body.style.overflow = 'hidden';
   dialog.value?.showModal();
+  if (props.rememberScroll) {
+    const top = readView('device:settings-dialog', (value) =>
+      safeOffset(value) && value >= 0 ? value : null,
+    );
+    restoring = true;
+    void nextTick().then(() => {
+      if (dialog.value?.open && top !== null) dialog.value.scrollTop = top;
+      restoring = false;
+    });
+    window.addEventListener('pagehide', saveScroll);
+    document.addEventListener('visibilitychange', saveOnHide);
+  }
 });
 onBeforeUnmount(() => {
+  saveScroll();
+  window.removeEventListener('pagehide', saveScroll);
+  document.removeEventListener('visibilitychange', saveOnHide);
   dialog.value?.close();
   document.body.style.overflow = previousOverflow;
   if (opener?.isConnected) opener.focus({ preventScroll: true });
@@ -56,6 +85,7 @@ function keepFocusInside(event: KeyboardEvent) {
       class="modal-panel"
       :aria-labelledby="titleId"
       @cancel.prevent="emit('close')"
+      @scroll.passive="saveScroll"
       @click="closeOnBackdrop"
       @keydown="keepFocusInside"
     >

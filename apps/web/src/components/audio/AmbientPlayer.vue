@@ -4,14 +4,17 @@ import { AudioLines, Trash2 } from '@lucide/vue';
 import { TRACK_IDS, TRACKS } from '../../types/audio';
 import { BUILTIN_PRESETS, trackNotes } from '../../domain/audio';
 import { useAudioEngine } from '../../composables/useAudioEngine';
+import { useAudioLibraryView } from '../../composables/useAudioLibraryView';
 import AudioTrackControl from './AudioTrackControl.vue';
 import PlayerControls from './PlayerControls.vue';
 import VolumeSlider from './VolumeSlider.vue';
 import SleepTimer from './SleepTimer.vue';
 const audio = useAudioEngine();
 const name = ref('');
-const query = ref('');
-const category = ref('all');
+const { root, query, category } = useAudioLibraryView();
+function setPlayerRoot(element: unknown) {
+  root.value = element instanceof HTMLElement ? element : null;
+}
 const visibleTracks = computed(() => {
   const search = query.value.trim().toLowerCase();
   return TRACK_IDS.filter((id) => {
@@ -29,8 +32,13 @@ function save() {
 }
 </script>
 <template>
-  <section id="ambient-player" class="ambient-player" aria-labelledby="player-title">
-    <div class="player-heading">
+  <section
+    :ref="setPlayerRoot"
+    id="ambient-player"
+    class="ambient-player"
+    aria-labelledby="player-title"
+  >
+    <div class="player-heading" data-audio-view-anchor="heading">
       <div>
         <h2 id="player-title">
           <AudioLines :size="24" aria-hidden="true" />{{ audio.currentName }}
@@ -38,6 +46,30 @@ function save() {
       </div>
       <RouterLink class="quiet-link" to="/sound-evidence">关于这些声音</RouterLink>
     </div>
+    <section v-if="audio.pendingRecovery" class="saved-presets" aria-label="上次播放会话">
+      <h3>继续上次的声音</h3>
+      <p class="audio-hint">
+        上次播放已留在这台设备。不定时或只开启一个声音也可继续；如有未结束的定时，将一并恢复。
+      </p>
+      <div class="player-buttons">
+        <button
+          type="button"
+          class="button button-primary"
+          :disabled="audio.snapshot.status === 'loading' || audio.snapshot.status === 'stopping'"
+          @click="audio.resumeSavedSession"
+        >
+          继续上次播放
+        </button>
+        <button
+          type="button"
+          class="button button-secondary"
+          :disabled="audio.snapshot.status === 'loading'"
+          @click="audio.dismissRecovery"
+        >
+          暂不恢复
+        </button>
+      </div>
+    </section>
     <div class="preset-pills" aria-label="内置声音预设">
       <button
         v-for="preset in BUILTIN_PRESETS"
@@ -60,11 +92,13 @@ function save() {
         {{ audio.masterVolume === 0 ? '取消静音' : '静音' }}
       </button>
     </div>
-    <div class="library-transport"><PlayerControls /></div>
+    <div class="library-transport">
+      <PlayerControls />
+    </div>
     <p v-if="audio.snapshot.error" class="audio-feedback" role="alert">
       {{ audio.snapshot.error }}
     </p>
-    <div class="sound-filters">
+    <div class="sound-filters" data-audio-view-anchor="filters">
       <label
         >搜索声音
         <input v-model="query" type="search" maxlength="60" placeholder="试试雨声、风扇或积木"
@@ -88,6 +122,7 @@ function save() {
         v-for="id in visibleTracks"
         :id="id"
         :key="id"
+        :data-audio-view-anchor="`track:${id}`"
         :track="audio.snapshot.tracks[id]"
         :mix="audio.mix[id]"
         :favorite="audio.favorites.includes(id)"
@@ -101,8 +136,8 @@ function save() {
     </div>
     <p v-if="!audio.selectedCount" class="audio-feedback">请至少开启一条音轨，再开始播放。</p>
     <p v-if="audio.snapshot.notice" class="audio-hint">{{ audio.snapshot.notice }}</p>
-    <SleepTimer v-if="!audio.auditionId" />
-    <section class="saved-presets" aria-labelledby="saved-title">
+    <SleepTimer v-if="!audio.auditionId" data-audio-view-anchor="timer" />
+    <section class="saved-presets" aria-labelledby="saved-title" data-audio-view-anchor="presets">
       <h3 id="saved-title">留住你喜欢的混音</h3>
       <form class="preset-save-form" @submit.prevent="save">
         <label class="sr-only" for="preset-name">自定义场景名称</label
@@ -138,7 +173,7 @@ function save() {
       <p v-else class="audio-hint">还没有自定义场景。调整音轨后，可保存到当前浏览器。</p>
       <p class="audio-hint">{{ audio.storageMessage }}</p>
     </section>
-    <p class="audio-credit">
+    <p class="audio-credit" data-audio-view-anchor="credit">
       <a href="/audio/ATTRIBUTION.txt" target="_blank" rel="noopener">声音来源与许可</a
       >。建议从较低设备音量开始，按自己的感受调整。
     </p>

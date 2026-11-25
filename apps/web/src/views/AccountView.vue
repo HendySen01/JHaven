@@ -21,7 +21,7 @@ async function logout() {
 </script>
 
 <template>
-  <div class="content-page space-page">
+  <div class="content-page space-page" :data-page-recovery-loading="checking">
     <h1 tabindex="-1">我的账户</h1>
     <p v-if="checking" class="page-lead" role="status">正在打开你的账户…</p>
     <template v-else-if="auth.user">

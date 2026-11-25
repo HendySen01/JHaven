@@ -21,6 +21,10 @@ export class AudioTimer {
     this.remaining = seconds;
     this.startedAt = null;
   }
+  restore(duration: number, remaining: number) {
+    this.configure(duration);
+    this.remaining = Math.max(0, Math.min(duration, remaining));
+  }
   resume() {
     if (this.duration > 0 && this.remaining > 0 && this.startedAt === null)
       this.startedAt = this.now();

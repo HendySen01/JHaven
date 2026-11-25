@@ -21,9 +21,22 @@ export const trackNotes: Partial<Record<TrackId, { aliases: string[]; descriptio
     aliases: ['枯叶', '脚步'],
     description: '脚步踩过落叶时的起伏碎响。',
   },
+
+  'crispy-squishy': {
+    aliases: ['脆皮捏捏', 'crispy squishy'],
+    description: '',
+  },
+  'beef-rice-swallow': {
+    aliases: ['牛排骨', '牛肉拌饭', '吞咽声'],
+    description: '',
+  },
+  'spicy-noodle-swallow': {
+    aliases: ['火鸡面', '面条', '吞咽声'],
+    description: '',
+  },
   'gentle-crinkle': {
     aliases: ['轻脆捏捏声', '脆皮捏捏', 'crispy squishy', 'wax cracking'],
-    description: '原名「轻脆捏捏声」。当前为合成碎响，脆皮捏捏实录待寻找。',
+    description: '',
   },
 };
 

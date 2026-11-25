@@ -11,6 +11,7 @@ import {
 import { spaceRequest, SpaceError } from '../lib/space';
 import { useAssistantStore } from '../stores/assistant';
 import { useAuthStore } from '../stores/auth';
+import { forgetChatViews } from '../domain/pageRecovery';
 
 export function useChatHistory() {
   const auth = useAuthStore();
@@ -146,6 +147,7 @@ export function useChatHistory() {
       run(async (request) => {
         await request('/' + id, 'DELETE', {});
         rows.value = rows.value.filter((row) => row.id !== id);
+        if (auth.user) forgetChatViews(auth.user.id, id);
         if (chat.saved?.id === id) chat.clear();
         return true;
       }),
@@ -153,6 +155,7 @@ export function useChatHistory() {
       run(async (request) => {
         state.value = chatSettings.parse(await request('', 'DELETE', {}));
         rows.value = [];
+        if (auth.user) forgetChatViews(auth.user.id);
         if (chat.saved) chat.clear();
         return true;
       }),

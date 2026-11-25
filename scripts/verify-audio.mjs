@@ -13,6 +13,13 @@ const maintainerApproved = new Set([
   'lego-rustle',
   'leaf-steps',
   'crispy-squishy',
+  'beef-rice-swallow',
+  'spicy-noodle-swallow',
+]);
+// 长录音只允许以下两个已审核 ID 使用更长的上限。
+const longTrackLimits = new Map([
+  ['beef-rice-swallow', { seconds: 248, bytes: 16 * 1024 * 1024 }],
+  ['spicy-noodle-swallow', { seconds: 105, bytes: 8 * 1024 * 1024 }],
 ]);
 const approvedOriginals = new Map([
   ['soft-chew', 'https://freesound.org/people/89o_dev/sounds/680180/'],
@@ -65,6 +72,7 @@ for (const id of ids) {
     createHash('sha256').update(data).digest('hex') !== asset.sha256
   )
     throw new Error(`音轨校验失败：${id}`);
+  const limits = longTrackLimits.get(id);
   const rate = 32000;
   const bytes = data.length - 44;
   if (
@@ -83,7 +91,8 @@ for (const id of ids) {
     bytes / (2 * rate) !== asset.seconds ||
     asset.sampleRate !== rate ||
     asset.seconds < 10 ||
-    asset.seconds > (asset.sourceFile ? 60 : 30)
+    asset.seconds > (limits?.seconds ?? (asset.sourceFile ? 60 : 30)) ||
+    data.length > (limits?.bytes ?? 8 * 1024 * 1024)
   )
     throw new Error(`音轨格式不符：${id}`);
   const frames = bytes / 2;
@@ -110,6 +119,19 @@ for (const id of ids) {
     previous = sample;
   }
   const silenceWindows = levels.filter((level) => level < -55).length;
+  // 牛肉拌饭原录音有自然的停顿：不制造人工底噪，仅允许少量短静音窗。
+  // 其他音轨仍不允许任何低于 -55 dBFS 的完整 50ms 窗。
+  let quietRun = 0;
+  let longestQuietRun = 0;
+  for (const level of [...levels, ...levels]) {
+    quietRun = level < -55 ? quietRun + 1 : 0;
+    longestQuietRun = Math.max(longestQuietRun, quietRun);
+  }
+  const quietAllowed =
+    id === 'beef-rice-swallow'
+      ? silenceWindows <= Math.floor(levels.length * 0.04) && longestQuietRun <= 20
+      : silenceWindows === 0;
+  if (!quietAllowed) throw new Error(`音轨静音间隔超出审核范围：${id}`);
   const sorted = [...levels].sort((a, b) => a - b);
   const dynamic = sorted.at(-1) - sorted[Math.floor(sorted.length / 2)];
   const rise = Math.max(
@@ -149,7 +171,6 @@ const failures = metrics.filter((m) => {
     m.maxRiseDb > (transient ? 24 : 12) ||
     (transient && m.loudRiseDb > 16) ||
     m.peakWindowOverMedianDb > (transient ? 18 : 16) ||
-    m.silenceWindows > 0 ||
     m.maxStep > 0.8 ||
     m.seam > 0.18 ||
     m.seam > m.maxStep ||

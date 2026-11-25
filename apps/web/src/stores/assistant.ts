@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 import type { AssistantMode, AssistantProviderId, ChatTurn } from '@jhaven/shared';
 import { useAuthStore } from './auth';
+import type { ReadingPosition } from '../domain/pageRecovery';
 
 type Turn = Omit<ChatTurn, 'source'> & {
   id: number;
@@ -14,6 +15,8 @@ export const useAssistantStore = defineStore('assistant', () => {
   const auth = useAuthStore();
   const turns = ref<Turn[]>([]);
   const draft = ref('');
+  // 未保存对话的阅读位置也只留在内存，与原有消息生命周期一致。
+  const readingPosition = ref<ReadingPosition>();
   const saved = ref<{ id: string; revision: number; lastTurnId?: number | undefined }>();
   const blocks = ref<Partial<Record<AssistantBlockScope, AssistantBlock>>>({});
   let nextId = 0;
@@ -34,6 +37,7 @@ export const useAssistantStore = defineStore('assistant', () => {
   function clear() {
     turns.value = [];
     draft.value = '';
+    readingPosition.value = undefined;
     saved.value = undefined;
   }
   function open(id: string, revision: number, history: ChatTurn[]) {
@@ -50,5 +54,5 @@ export const useAssistantStore = defineStore('assistant', () => {
     },
     { flush: 'sync' },
   );
-  return { turns, draft, saved, blocks, addTurn, clear, open };
+  return { turns, draft, saved, blocks, readingPosition, addTurn, clear, open };
 });

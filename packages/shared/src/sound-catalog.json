@@ -48,5 +48,17 @@
     "english": "Crispy Squishy",
     "category": "texture",
     "presetOptional": true
+  },
+  "beef-rice-swallow": {
+    "name": "牛排骨-牛肉拌饭吞咽声",
+    "english": "Beef and Rice Swallowing",
+    "category": "texture",
+    "presetOptional": true
+  },
+  "spicy-noodle-swallow": {
+    "name": "火鸡面吞咽声",
+    "english": "Spicy Noodle Swallowing",
+    "category": "texture",
+    "presetOptional": true
   }
 }

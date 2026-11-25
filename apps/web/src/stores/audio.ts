@@ -8,7 +8,20 @@ import {
   parseSavedAudio,
   singleTrackMix,
 } from '../domain/audio';
-import { TRACK_IDS, type AudioMix, type SoundPreset, type TrackId } from '../types/audio';
+import {
+  AUDIO_RECOVERY_KEY,
+  parseAudioRecovery,
+  recoveryRemaining,
+  sameAudioRecovery,
+  type AudioRecovery,
+} from '../domain/audioRecovery';
+import {
+  TRACK_IDS,
+  type AudioMix,
+  type AudioSnapshot,
+  type SoundPreset,
+  type TrackId,
+} from '../types/audio';
 import { AudioEngine } from '../services/audio/AudioEngine';
 
 export const useAudioStore = defineStore('audio', () => {
@@ -21,7 +34,7 @@ export const useAudioStore = defineStore('audio', () => {
   const presets = ref<SoundPreset[]>([]);
   const currentName = ref('雨夜');
   const currentId = ref<string | null>('rain');
-  const storageMessage = ref('混音与自定义场景仅存当前浏览器；刷新取消计时，不会自动播放。');
+  const storageMessage = ref('混音与自定义场景仅存当前浏览器；上次混音可手动恢复，不会自动播放。');
   const accountMix = ref(false);
   const accountTimerRevision = ref(0);
   const savedAccountScene = shallowRef<SoundPreset | null>(null);
@@ -40,6 +53,70 @@ export const useAudioStore = defineStore('audio', () => {
   let unsubscribe: (() => void) | null = null;
   let initialized = false;
   const snapshot = shallowRef(new AudioEngine().snapshot());
+  const pendingRecovery = shallowRef<AudioRecovery | null>(null);
+  let lastRecovery: AudioRecovery | null = null;
+  let explicitPause = false;
+  function readRecovery() {
+    try {
+      const saved = parseAudioRecovery(localStorage.getItem(AUDIO_RECOVERY_KEY));
+      if (!saved) localStorage.removeItem(AUDIO_RECOVERY_KEY);
+      return saved;
+    } catch {
+      return null;
+    }
+  }
+  function clearRecovery() {
+    pendingRecovery.value = null;
+    lastRecovery = null;
+    try {
+      localStorage.removeItem(AUDIO_RECOVERY_KEY);
+    } catch {
+      // 禁用存储不影响播放。
+    }
+  }
+  function captureRecovery(value: AudioSnapshot, paused = false) {
+    if (accountMix.value || practiceAudio.value || auditionId.value) return;
+    if (!TRACK_IDS.some((id) => mix.value[id].enabled)) return;
+    const now = Date.now();
+    const timer = value.timer;
+    if (timer.duration && timer.remaining <= 0) {
+      clearRecovery();
+      return;
+    }
+    // 正常播放计时保存绝对截止；用户主动暂停则冻结剩余时间。
+    // 系统挂起导致的 paused 不把原截止时间延长。
+    const deadline = timer.running
+      ? now + timer.remaining * 1000
+      : !paused && lastRecovery?.duration === timer.duration
+        ? lastRecovery.deadline
+        : null;
+    const session: AudioRecovery = {
+      version: 1,
+      savedAt: now,
+      mix: copyMix(mix.value),
+      masterVolume: value.masterVolume,
+      duration: timer.duration,
+      remaining: timer.remaining,
+      deadline,
+      fade: value.fadeSeconds,
+      timerPaused: timer.duration > 0 && Boolean(engine?.isTimerManuallyPaused()),
+    };
+    if (session.timerPaused) session.deadline = null;
+    pendingRecovery.value = null;
+    if (lastRecovery && sameAudioRecovery(lastRecovery, session)) return;
+    lastRecovery = session;
+    try {
+      localStorage.setItem(AUDIO_RECOVERY_KEY, JSON.stringify(session));
+    } catch {
+      // 本次播放仍正常；不承诺浏览器一定保存会话。
+    }
+  }
+  function dismissRecovery() {
+    if (!pendingRecovery.value) return;
+    clearRecovery();
+    if (snapshot.value.status === 'idle' || snapshot.value.status === 'error')
+      ensureEngine().setTimer(0, snapshot.value.fadeSeconds);
+  }
   const selectedCount = computed(() => TRACK_IDS.filter((id) => mix.value[id].enabled).length);
   function ensureEngine() {
     if (!engine) {
@@ -54,7 +131,11 @@ export const useAudioStore = defineStore('audio', () => {
           normalTimer = null;
           engine?.applyMix(mix.value);
           if (timer) engine?.setTimer(timer.duration, timer.fade);
+          return;
         }
+        if (value.status === 'playing') captureRecovery(value);
+        else if (value.status === 'paused' && lastRecovery) captureRecovery(value, explicitPause);
+        else if (value.status === 'idle' && lastRecovery) clearRecovery();
       });
     }
     return engine;
@@ -72,6 +153,7 @@ export const useAudioStore = defineStore('audio', () => {
     } catch {
       storageMessage.value = '本地声音偏好无法读取，已使用默认混音。你可以重新设置。';
     }
+    pendingRecovery.value = readRecovery();
     ensureEngine();
   }
   function identify(preferred: string | null = null) {
@@ -100,7 +182,7 @@ export const useAudioStore = defineStore('audio', () => {
           favorites: favorites.value,
         }),
       );
-      storageMessage.value = '声音偏好已保存在当前浏览器，不上传；刷新取消计时，不自动播放。';
+      storageMessage.value = '声音偏好已保存在当前浏览器，不上传；上次混音可手动恢复，不自动播放。';
       return true;
     } catch {
       storageMessage.value = '当前混音已生效，但浏览器无法保存，刷新后可能丢失。';
@@ -113,6 +195,7 @@ export const useAudioStore = defineStore('audio', () => {
     persist();
   }
   function setMix(preset: SoundPreset) {
+    dismissRecovery();
     if (auditionId.value) engine?.stop(0);
     mix.value = copyMix(preset.mix);
     currentName.value = preset.name;
@@ -127,6 +210,8 @@ export const useAudioStore = defineStore('audio', () => {
         id: currentId.value,
         name: currentName.value,
       };
+    dismissRecovery();
+    clearRecovery();
     accountMix.value = true;
     if (preset) setMix(preset);
     if (volume !== undefined) setMaster(volume);
@@ -162,6 +247,7 @@ export const useAudioStore = defineStore('audio', () => {
       timer: snapshot.value.timer.duration,
       fade: snapshot.value.fadeSeconds,
     };
+    clearRecovery();
     practiceAudio.value = true;
     return true;
   }
@@ -187,6 +273,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (preset) applyPreset(preset);
   }
   function updateTrack(id: TrackId, patch: Partial<AudioMix[TrackId]>) {
+    dismissRecovery();
     const adjustingAudition = auditionId.value === id && patch.enabled === undefined;
     if (auditionId.value && !adjustingAudition) engine?.stop(0);
     mix.value = copyMix(mix.value);
@@ -198,6 +285,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (!accountMix.value && !practiceAudio.value) persist();
   }
   function setMaster(value: number) {
+    dismissRecovery();
     ensureEngine().setMasterVolume(value);
     masterVolume.value = snapshot.value.masterVolume;
     if (masterVolume.value > 0) unmutedVolume = masterVolume.value;
@@ -215,6 +303,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
   function audition(id: TrackId) {
     if (snapshot.value.status !== 'idle') return;
+    clearRecovery();
     const player = ensureEngine();
     normalTimer = { duration: snapshot.value.timer.duration, fade: snapshot.value.fadeSeconds };
     player.applyMix(singleTrackMix(id, mix.value[id].volume));
@@ -269,15 +358,70 @@ export const useAudioStore = defineStore('audio', () => {
     formMessage.value = '已从当前场景列表移除。';
   }
   function play() {
-    return ensureEngine().play();
+    if (pendingRecovery.value) return resumeSavedSession() ?? Promise.resolve();
+    const player = ensureEngine();
+    if (
+      snapshot.value.status === 'paused' &&
+      !explicitPause &&
+      lastRecovery &&
+      lastRecovery.deadline !== null
+    ) {
+      const remaining = recoveryRemaining(lastRecovery);
+      if (remaining <= 0) {
+        stop();
+        storageMessage.value = '上次定时已结束，声音未恢复。';
+        return Promise.resolve();
+      }
+      const saved = lastRecovery;
+      player.restoreTimer(saved.duration, remaining, saved.fade, saved.timerPaused, saved.deadline);
+    }
+    explicitPause = false;
+    return player.play();
+  }
+  function resumeSavedSession() {
+    const saved = pendingRecovery.value;
+    if (!saved || accountMix.value || practiceAudio.value || auditionId.value) return;
+    if (snapshot.value.status !== 'idle' && snapshot.value.status !== 'error') return;
+    const current = parseAudioRecovery(JSON.stringify(saved));
+    if (!current) {
+      dismissRecovery();
+      storageMessage.value = '上次播放会话已过期，可以重新选择声音。';
+      return;
+    }
+    explicitPause = false;
+    const player = ensureEngine();
+    mix.value = copyMix(current.mix);
+    masterVolume.value = current.masterVolume;
+    unmutedVolume = current.masterVolume || defaultAudio().masterVolume;
+    identify();
+    player.applyMix(mix.value);
+    player.setMasterVolume(masterVolume.value);
+    player.restoreTimer(
+      current.duration,
+      recoveryRemaining(current),
+      current.fade,
+      current.timerPaused,
+      current.deadline,
+    );
+    accountTimerRevision.value++;
+    persist();
+    // 不 await，保留 Safari 的用户点击手势。
+    return player.play().then(() => {
+      if (snapshot.value.status === 'idle' && pendingRecovery.value === saved) clearRecovery();
+    });
   }
   function pause() {
+    explicitPause = true;
     ensureEngine().pause();
+    if (lastRecovery) captureRecovery(snapshot.value, true);
   }
   function stop() {
+    clearRecovery();
     ensureEngine().stop();
   }
   function setTimer(seconds: number, fade: number) {
+    dismissRecovery();
+    if (snapshot.value.status === 'paused') explicitPause = true;
     ensureEngine().setTimer(seconds, fade);
   }
   function pauseTimer() {
@@ -287,6 +431,7 @@ export const useAudioStore = defineStore('audio', () => {
     ensureEngine().resumeTimer();
   }
   function resetTimer() {
+    if (snapshot.value.status === 'paused') explicitPause = true;
     ensureEngine().resetTimer();
   }
   function tick() {
@@ -304,6 +449,9 @@ export const useAudioStore = defineStore('audio', () => {
     initial.applyMix(mix.value);
     initial.setMasterVolume(masterVolume.value);
     snapshot.value = initial.snapshot();
+    lastRecovery = null;
+    explicitPause = false;
+    pendingRecovery.value = accountMix.value || practiceAudio.value ? null : readRecovery();
   }
   return {
     mix,
@@ -314,6 +462,9 @@ export const useAudioStore = defineStore('audio', () => {
     currentName,
     currentId,
     snapshot,
+    pendingRecovery,
+    resumeSavedSession,
+    dismissRecovery,
     selectedCount,
     storageMessage,
     formMessage,

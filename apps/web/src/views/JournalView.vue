@@ -14,6 +14,12 @@ import JournalDateTime from '../components/JournalDateTime.vue';
 import { useAuthStore } from '../stores/auth';
 import { useSpaceRequests } from '../lib/space';
 import {
+  parseJournalPreference,
+  privateViewKey,
+  readView,
+  writeView,
+} from '../domain/pageRecovery';
+import {
   dateInZone,
   journalClock,
   shiftDate,
@@ -104,6 +110,7 @@ async function load(request: (path?: string) => Promise<unknown>, period = trend
   trendDays.value = period;
   trendTo.value = end;
   ready.value = true;
+  rememberRange();
 }
 async function query() {
   if (busy.value) return;
@@ -127,15 +134,28 @@ function changeTrend(period: number) {
         to: trendTo.value,
       });
       trendDays.value = period;
+      rememberRange();
     } finally {
       pendingDays.value = undefined;
     }
   });
 }
+function rememberRange() {
+  const id = auth.user?.id;
+  const range = appliedRange.value;
+  if (id && range && (trendDays.value === 7 || trendDays.value === 30))
+    writeView(privateViewKey(id, 'journal-range'), { ...range, days: trendDays.value });
+}
 watch(
   () => auth.user?.id,
   (id) => {
-    if (id) void query();
+    if (!id) return;
+    const saved = readView(privateViewKey(id, 'journal-range'), parseJournalPreference);
+    if (saved && journalRange.safeParse({ from: saved.from, to: saved.to }).success) {
+      filter.value = { from: saved.from, to: saved.to };
+      trendDays.value = saved.days;
+    }
+    void query();
   },
   { immediate: true },
 );
@@ -233,7 +253,10 @@ function remove(entry: JournalEntry) {
 }
 </script>
 <template>
-  <div class="content-page journal-page page-enter space-page">
+  <div
+    class="content-page journal-page page-enter space-page"
+    :data-page-recovery-loading="Boolean(auth.user && !ready && busy)"
+  >
     <RouterLink class="quiet-link back-link" to="/"
       ><ArrowLeft :size="16" aria-hidden="true" />回到今晚</RouterLink
     >
@@ -259,7 +282,11 @@ function remove(entry: JournalEntry) {
         <p v-show="error" class="field-error" role="alert">{{ error }}</p>
         <p v-show="!error" class="auth-hint" role="status">{{ message }}</p>
       </div>
-      <section class="space-section" aria-labelledby="diary-title">
+      <section
+        class="space-section"
+        aria-labelledby="diary-title"
+        data-page-anchor="journal-records"
+      >
         <div class="space-actions">
           <h2 id="diary-title">记录</h2>
           <button
@@ -349,6 +376,7 @@ function remove(entry: JournalEntry) {
         </form>
         <div
           class="diary-results"
+          data-page-scroll-pane
           role="region"
           aria-label="日记查询结果"
           tabindex="0"
@@ -390,7 +418,11 @@ function remove(entry: JournalEntry) {
           </p>
         </div>
       </section>
-      <section class="space-section" aria-labelledby="trends-title">
+      <section
+        class="space-section"
+        aria-labelledby="trends-title"
+        data-page-anchor="journal-trends"
+      >
         <h2 id="trends-title">睡眠趋势</h2>
         <div class="space-actions">
           <button

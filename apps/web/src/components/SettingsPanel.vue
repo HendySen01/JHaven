@@ -5,7 +5,7 @@ const settings = usePreferencesStore();
 defineEmits<{ close: [] }>();
 </script>
 <template>
-  <ModalPanel title="让这里，更像你的夜晚" @close="$emit('close')">
+  <ModalPanel remember-scroll title="让这里，更像你的夜晚" @close="$emit('close')">
     <p class="settings-intro">夜景、配色和动效，都可以按你的习惯来。</p>
     <fieldset class="palette-options">
       <legend>夜晚配色</legend>

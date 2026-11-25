@@ -96,7 +96,7 @@ function apply() {
       ><button type="button" class="quiet-link" @click="audio.setTimer(0, fade)">取消定时</button>
     </div>
     <p class="audio-hint">
-      以实际经过时间计算；暂停声音会暂停计时。渐弱最长为本次定时长度。刷新取消定时。后台与手机锁屏受浏览器限制，不能保证持续播放或准时停止。
+      以实际经过时间计算；暂停声音会暂停计时。渐弱最长为本次定时长度。重新打开后可手动恢复未结束的播放定时。后台与手机锁屏受浏览器限制，不能保证持续播放或准时停止。
     </p>
   </section>
 </template>

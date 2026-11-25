@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import HomeView from '../views/HomeView.vue';
 import { useAuthStore } from '../stores/auth';
 import { practiceId } from '@jhaven/shared';
+import { recoverPageScroll } from './pageRecovery';
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -75,8 +76,8 @@ export const router = createRouter({
       meta: { title: '页面未找到' },
     },
   ],
-  scrollBehavior(to, _from, savedPosition) {
-    return savedPosition ?? (to.hash ? { el: to.hash } : { top: 0 });
+  scrollBehavior(to, from, savedPosition) {
+    return recoverPageScroll(to, from, savedPosition);
   },
 });
 

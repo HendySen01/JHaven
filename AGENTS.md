@@ -13,7 +13,7 @@
 - `apps/web/src/components` 放可复用组件，`views` 放页面，`stores` 放跨组件状态，`lib` 放独立逻辑。
 - `apps/server/src` 放服务代码；未来按业务模块组织路由、服务和数据访问。`packages/shared` 只放两端共用契约，不引入 Node 或 DOM 专属代码。
 - Vue 使用 `<script setup lang="ts">`；优先原生语义元素、明确的 props/emits 和局部状态。所有按钮必须有真实操作。
-- 音频由应用级单一引擎管理，组件不得各自创建 Context；维护意图版本号、可取消包络及 pagehide/根卸载释放。路由切换保留播放，刷新不恢复播放或计时。详见 `docs/AUDIO_ENGINE.md`。
+- 音频由应用级单一引擎管理，组件不得各自创建 Context；维护意图版本号、可取消包络及 pagehide/根卸载释放。路由切换保留播放，刷新后普通混音可由用户主动恢复未过期的播放会话与计时，禁止自动出声。页面位置由路由统一恢复，声音偏好与私人页面状态独立，详见 `docs/AUDIO_ENGINE.md` 与 `docs/DESIGN_SYSTEM.md`。
 - 替换音轨前逐项核查作者/许可/再分发并更新 audio manifest、署名和资源文档，运行 `npm run audio:verify`。不能用 Mock 结果替代真实浏览器音频验证。
 - 界面遵循 `docs/DESIGN_SYSTEM.md`：响应式、键盘可用、可见焦点、触屏目标、减少动态效果、禁止自动播放。
 

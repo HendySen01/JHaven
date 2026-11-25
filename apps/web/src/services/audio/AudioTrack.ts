@@ -1,6 +1,12 @@
 import type { TrackId, TrackLoadStatus } from '../../types/audio';
 import { GainEnvelope } from './GainEnvelope';
 
+// 只有经过核验的两条长录音使用独立限制；其它音轨保留原有边界。
+const longTrackLimits: Partial<Record<TrackId, { seconds: number; bytes: number }>> = {
+  'beef-rice-swallow': { seconds: 248, bytes: 16 * 1024 * 1024 },
+  'spicy-noodle-swallow': { seconds: 105, bytes: 8 * 1024 * 1024 },
+};
+
 export class AudioTrack {
   buffer: AudioBuffer | null = null;
   source: AudioBufferSourceNode | null = null;
@@ -37,7 +43,8 @@ export class AudioTrack {
     this.loadStatus = 'loading';
     this.error = null;
     this.changed();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const limits = longTrackLimits[this.id];
+    const timeout = setTimeout(() => controller.abort(), limits ? 60_000 : 15_000);
     this.loadTimeout = timeout;
     this.loading = (async () => {
       try {
@@ -47,7 +54,7 @@ export class AudioTrack {
         });
         if (!response.ok) throw new Error('下载失败');
         const bytes = await response.arrayBuffer();
-        if (bytes.byteLength > 8 * 1024 * 1024 || bytes.byteLength < 44)
+        if (bytes.byteLength > (limits?.bytes ?? 8 * 1024 * 1024) || bytes.byteLength < 44)
           throw new Error('音频大小无效');
         this.decoding = true;
         // 原生解码无法取消；超时仍须结束等待，迟到的解码结果不再进入缓存或开声。
@@ -62,7 +69,11 @@ export class AudioTrack {
         });
         if (generation !== this.generation) return;
         if (controller.signal.aborted) throw new Error('音轨加载超时');
-        if (!Number.isFinite(buffer.duration) || buffer.duration <= 0 || buffer.duration > 60)
+        if (
+          !Number.isFinite(buffer.duration) ||
+          buffer.duration <= 0 ||
+          buffer.duration > (limits?.seconds ?? 60)
+        )
           throw new Error('音频解码结果无效');
         this.buffer = buffer;
         this.loadStatus = 'ready';

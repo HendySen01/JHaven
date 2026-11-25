@@ -166,6 +166,21 @@ describe('音量与单调计时', () => {
 });
 
 describe('引擎状态、并发和资源', () => {
+  it('恢复期间若原截止时间到期，不创建任何 voice', async () => {
+    const response = deferred<Response>();
+    const { engine, fake } = setup(vi.fn<typeof fetch>().mockReturnValue(response.promise));
+    engine.applyMix(singleTrackMix('rain'));
+    engine.restoreTimer(1200, 1, 15, false, Date.now() + 1000);
+    const task = engine.play();
+    await settle();
+    vi.setSystemTime(Date.now() + 1001);
+    response.resolve(new Response(new Uint8Array(100)));
+    await task;
+    expect(fake.sources).toHaveLength(0);
+    expect(engine.snapshot().status).toBe('idle');
+    expect(engine.snapshot().timer.duration).toBe(0);
+  });
+
   it('动态混音切换、淡出与快速反向切换共用包络时钟', async () => {
     const { engine, fake } = setup();
     const mix = copyMix({});
@@ -240,6 +255,29 @@ describe('引擎状态、并发和资源', () => {
     expect(fake.context.resume).toHaveBeenCalledTimes(1);
     expect(engine.snapshot().tracks.ocean.active).toBe(true);
     expect(engine.snapshot().tracks.rain.active).toBe(false);
+  });
+  it.each([
+    ['beef-rice-swallow', 246.44, 15_772_204],
+    ['spicy-noodle-swallow', 103.064, 6_596_140],
+  ] as const)('允许已审核的长录音 %s 下载与解码', async (id, duration, bytes) => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(new Uint8Array(bytes)));
+    const { engine, fake } = setup(fetcher);
+    fake.context.decodeAudioData.mockResolvedValue({ duration });
+    engine.applyMix(singleTrackMix(id));
+    await engine.play();
+    expect(engine.snapshot().status).toBe('playing');
+    expect(engine.snapshot().tracks[id].active).toBe(true);
+  });
+  it('普通音轨仍拒绝超长解码结果，长录音也受独立上限保护', async () => {
+    const { engine, fake } = setup();
+    engine.applyMix(singleTrackMix('rain'));
+    fake.context.decodeAudioData.mockResolvedValueOnce({ duration: 61 });
+    await engine.play();
+    expect(engine.snapshot().status).toBe('error');
+    engine.applyMix(singleTrackMix('beef-rice-swallow'));
+    fake.context.decodeAudioData.mockResolvedValueOnce({ duration: 249 });
+    await engine.play();
+    expect(engine.snapshot().status).toBe('error');
   });
   it('下载长时间无响应时中断并进入可重试错误', async () => {
     const fetcher = vi

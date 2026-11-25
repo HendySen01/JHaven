@@ -35,6 +35,7 @@ export class AudioEngine {
   private masterVolume = defaultAudio().masterVolume;
   private fadeSeconds = 15;
   private timerManuallyPaused = false;
+  private recoveryDeadline: number | null = null;
   private error: string | null = null;
   private notice = '';
   private revision = 0;
@@ -170,8 +171,19 @@ export class AudioEngine {
       );
       if (revision !== this.revision || this.intent !== 'playing' || this.disposed) return;
       if (this.context?.state !== 'running') throw new Error('浏览器尚未允许声音播放');
-      for (const id of TRACK_IDS)
-        if (this.mix[id].enabled) this.tracks.get(id)!.start();
+      if (this.recoveryDeadline !== null) {
+        const timer = this.timer.snapshot();
+        const remaining = Math.min(timer.remaining, (this.recoveryDeadline - Date.now()) / 1000);
+        this.recoveryDeadline = null;
+        if (remaining <= 0) {
+          this.stop(0);
+          this.notice = '上次定时已结束，声音未恢复。';
+          this.emit();
+          return;
+        }
+        this.timer.restore(timer.duration, remaining);
+      }
+      for (const id of TRACK_IDS) if (this.mix[id].enabled) this.tracks.get(id)!.start();
       this.syncMixGains();
       this.status = 'playing';
       if (!this.timer.snapshot().running) {
@@ -237,6 +249,7 @@ export class AudioEngine {
     if (this.disposed) return;
     const revision = ++this.revision;
     this.intent = target;
+    this.recoveryDeadline = null;
     this.cancelTransition();
     if (target === 'idle') {
       this.timer.cancel();
@@ -267,18 +280,36 @@ export class AudioEngine {
     this.emit();
     this.transition = setTimeout(finish, seconds * 1000 + 20);
   }
+  // 只在明确点击恢复时准备定时；绝对截止时间在解码完成前再次核对。
+  restoreTimer(
+    duration: number,
+    remaining: number,
+    fade: number,
+    paused: boolean,
+    deadline: number | null,
+  ) {
+    this.timer.restore(duration, remaining);
+    this.fadeSeconds = fade;
+    this.timerManuallyPaused = paused;
+    this.recoveryDeadline = deadline;
+    this.emit();
+  }
+  isTimerManuallyPaused() {
+    return this.timerManuallyPaused;
+  }
   setTimer(seconds: number, fadeSeconds = this.fadeSeconds) {
     if (!Number.isFinite(seconds) || (seconds !== 0 && (seconds < 6 || seconds > 10800)))
       throw new Error('定时请填写 0.1–180 分钟。');
     if (!Number.isFinite(fadeSeconds) || fadeSeconds < 1 || fadeSeconds > 120)
       throw new Error('渐弱请设置为 1–120 秒。');
+    this.recoveryDeadline = null;
     this.fadeSeconds = fadeSeconds;
     this.timerManuallyPaused = false;
     this.timer.configure(seconds);
     if (this.status === 'playing') this.timer.resume();
     this.scheduleTimer();
     this.notice = seconds
-      ? '定时将在播放时计时；暂停声音会暂停计时。刷新页面会取消。'
+      ? '定时将在播放时计时；暂停声音会暂停计时。重新打开后可手动恢复。'
       : '已取消定时，音量会柔和恢复。';
     this.emit();
   }

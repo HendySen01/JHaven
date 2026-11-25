@@ -30,6 +30,15 @@ import {
 import { withRequestDeadline } from '../lib/requestDeadline';
 import { useChatHistory } from '../composables/useChatHistory';
 import ChatHistoryPanel from '../components/ChatHistoryPanel.vue';
+import {
+  parseConversationId,
+  parseReadingPosition,
+  privateViewKey,
+  readView,
+  removeView,
+  scrollTarget,
+  writeView,
+} from '../domain/pageRecovery';
 
 const router = useRouter();
 const evening = useEveningStore();
@@ -177,12 +186,114 @@ const confirmation = ref<HTMLButtonElement>();
 const stopButton = ref<HTMLButtonElement>();
 const historyWindow = ref<HTMLElement>();
 const following = ref(true);
+let readingTimer: ReturnType<typeof setTimeout> | undefined;
+let restoringReading = false;
+let attemptedOwner: string | undefined;
+let autoRestoreCancelled = false;
+let leaving = false;
+function readingKey() {
+  const owner = auth.user?.id;
+  const saved = conversation.saved;
+  return owner && saved && saved.revision > 0 ? privateViewKey(owner, 'chat:' + saved.id) : null;
+}
+function rememberReading() {
+  clearTimeout(readingTimer);
+  readingTimer = undefined;
+  const key = readingKey();
+  const pane = historyWindow.value;
+  if (!pane || restoringReading) return;
+  const top = pane.getBoundingClientRect().top;
+  const nodes = Array.from(pane.querySelectorAll<HTMLElement>('.assistant-turn'));
+  const index = nodes.findIndex((node) => node.getBoundingClientRect().bottom > top);
+  if (index < 0 || index >= 500) return;
+  const position = {
+    top: Math.max(0, pane.scrollTop),
+    index,
+    offset: nodes[index]!.getBoundingClientRect().top - top,
+    following: following.value,
+  };
+  conversation.readingPosition = position;
+  if (key) writeView(key, position);
+}
+function queueReading() {
+  if (readingTimer === undefined && !restoringReading)
+    readingTimer = setTimeout(rememberReading, 120);
+}
+function restoreReading() {
+  const key = readingKey();
+  const pane = historyWindow.value;
+  const saved = conversation.readingPosition ?? (key ? readView(key, parseReadingPosition) : null);
+  if (!pane || !saved) return;
+  restoringReading = true;
+  following.value = saved.following;
+  if (saved.following) pane.scrollTop = pane.scrollHeight;
+  else {
+    const anchor = pane.querySelectorAll<HTMLElement>('.assistant-turn')[saved.index];
+    const anchorTop = anchor
+      ? anchor.getBoundingClientRect().top - pane.getBoundingClientRect().top
+      : null;
+    pane.scrollTop = scrollTarget(
+      saved.top,
+      saved.offset,
+      pane.scrollTop,
+      anchorTop,
+      pane.scrollHeight - pane.clientHeight,
+    );
+  }
+  restoringReading = false;
+}
+function saveReadingOnHide() {
+  if (document.visibilityState === 'hidden') rememberReading();
+}
+watch(
+  () => [auth.user?.id, conversation.saved?.id, conversation.saved?.revision] as const,
+  ([owner, id, revision], [previousOwner, previousId]) => {
+    if (!owner) return;
+    const key = privateViewKey(owner, 'last-chat');
+    if (id && revision && revision > 0) writeView(key, id);
+    else if (owner === previousOwner && previousId) removeView(key);
+  },
+  { flush: 'sync' },
+);
+// 只通过原有认证接口恢复已经主动保存的会话；不持久化未发送的草稿或未保存的消息。
+watch(
+  [() => auth.initialized, () => auth.user?.id, historyBusy, historyOpen],
+  async ([ready, owner, busy, opened]) => {
+    if (!ready || !owner || busy || attemptedOwner === owner || leaving) return;
+    attemptedOwner = owner;
+    if (opened || autoRestoreCancelled || turns.value.length || draft.value.trim() || active.value)
+      return;
+    const id = readView(privateViewKey(owner, 'last-chat'), parseConversationId);
+    if (!id) return;
+    const saved = await history.open(id);
+    if (
+      !saved ||
+      leaving ||
+      auth.user?.id !== owner ||
+      autoRestoreCancelled ||
+      historyOpen.value ||
+      turns.value.length ||
+      draft.value.trim() ||
+      active.value
+    )
+      return;
+    reset();
+    conversation.open(saved.id, saved.revision, saved.turns);
+    await nextTick();
+    if (!leaving && auth.user?.id === owner && conversation.saved?.id === id) restoreReading();
+  },
+  { immediate: true, flush: 'post' },
+);
 let recommendationTrigger: HTMLButtonElement | undefined;
 const last = computed(() => turns.value.at(-1));
 let request: AbortController | undefined;
 const statusController = new AbortController();
 
 onMounted(async () => {
+  window.addEventListener('pagehide', rememberReading);
+  document.addEventListener('visibilitychange', saveReadingOnHide);
+  await nextTick();
+  restoreReading();
   try {
     const status = await withRequestDeadline(
       4000,
@@ -228,6 +339,10 @@ function reset() {
 watch(
   () => auth.user?.id,
   () => {
+    clearTimeout(readingTimer);
+    readingTimer = undefined;
+    attemptedOwner = undefined;
+    autoRestoreCancelled = false;
     historyOpen.value = false;
     reset();
   },
@@ -237,6 +352,10 @@ watch(active, (generating, wasGenerating) => {
   if (!generating && wasGenerating && turns.value.length) void history.save(true);
 });
 onBeforeUnmount(() => {
+  leaving = true;
+  rememberReading();
+  window.removeEventListener('pagehide', rememberReading);
+  document.removeEventListener('visibilitychange', saveReadingOnHide);
   statusController.abort();
   stop();
 });
@@ -249,12 +368,16 @@ watch(
 );
 function readScrollPosition() {
   const pane = historyWindow.value;
-  if (pane) following.value = pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 48;
+  if (pane && !restoringReading) {
+    following.value = pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 48;
+    rememberReading();
+  }
 }
 function scrollToLatest() {
   const pane = historyWindow.value;
   following.value = true;
   if (pane) pane.scrollTop = pane.scrollHeight;
+  queueReading();
 }
 function returnToLatest() {
   scrollToLatest();
@@ -303,6 +426,7 @@ function handleComposerKeydown(event: KeyboardEvent) {
   void send(draft.value);
 }
 async function send(question: string, replace = false, event?: Event) {
+  autoRestoreCancelled = true;
   const mode = assistantMode.value;
   const target = mode === 'ai' ? selectedProvider.value : undefined;
   if (active.value || retryBlocked.value || !question.trim()) return;
@@ -494,6 +618,9 @@ function confirm() {
 }
 function clearChat() {
   if (historyBusy.value) return;
+  autoRestoreCancelled = true;
+  rememberReading();
+  if (auth.user) removeView(privateViewKey(auth.user.id, 'last-chat'));
   reset();
   conversation.clear();
   textarea.value?.focus();
@@ -505,19 +632,30 @@ function canLeaveChat() {
 function newChat() {
   if (canLeaveChat()) clearChat();
 }
+function showHistory() {
+  autoRestoreCancelled = true;
+  historyOpen.value = true;
+}
 async function openChat(id: string) {
   if (!canLeaveChat()) return;
+  autoRestoreCancelled = true;
+  rememberReading();
   const saved = await history.open(id);
   if (!saved || active.value) return;
   reset();
   conversation.open(saved.id, saved.revision, saved.turns);
   historyOpen.value = false;
+  await nextTick();
+  if (!leaving && conversation.saved?.id === id) restoreReading();
 }
 const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困，推荐个练习？'];
 </script>
 
 <template>
-  <div class="content-page assistant-page">
+  <div
+    class="content-page assistant-page"
+    :data-page-recovery-loading="Boolean(auth.user && historyBusy && !turns.length)"
+  >
     <header class="assistant-intro">
       <span class="assistant-symbol" aria-hidden="true"
         ><MoonStar :size="24" :stroke-width="1.4"
@@ -525,14 +663,14 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
       <h1 tabindex="-1">睡前助手</h1>
       <p class="page-lead">今晚有想聊的事吗？小事也可以。</p>
     </header>
-    <section class="assistant-panel" aria-labelledby="chat-title">
+    <section class="assistant-panel" aria-labelledby="chat-title" data-page-anchor="assistant-chat">
       <h2 id="chat-title" class="assistant-sr">聊天</h2>
       <div class="chat-history-actions">
         <button
           class="button button-secondary"
           type="button"
           :disabled="active || historyBusy"
-          @click="historyOpen = true"
+          @click="showHistory"
         >
           历史记录
         </button>
@@ -740,6 +878,7 @@ const quick = ['思绪停不下来', '白噪声有助睡眠吗？', '还不困�
           id="assistant-message"
           ref="textarea"
           v-model="draft"
+          @input="autoRestoreCancelled = true"
           rows="2"
           maxlength="400"
           :placeholder="

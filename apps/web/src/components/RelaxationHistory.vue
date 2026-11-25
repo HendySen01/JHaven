@@ -26,7 +26,12 @@ onMounted(load);
 </script>
 
 <template>
-  <section id="relaxation-history" class="space-panel" aria-labelledby="relaxation-history-title">
+  <section
+    id="relaxation-history"
+    class="space-panel"
+    aria-labelledby="relaxation-history-title"
+    :data-page-recovery-loading="busy"
+  >
     <h2 id="relaxation-history-title">放松练习记录</h2>
     <p>这里只显示你主动保存的最近 50 条练习。每条都可以删除。</p>
     <p v-if="error" role="alert">
